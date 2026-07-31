@@ -26,99 +26,6 @@
     });
   }
 
-  const sfx = {
-    ctx: null,
-    init() {
-      if (!this.ctx) {
-        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { }
-      }
-      if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
-    },
-    blip(freq, dur, vol, type) {
-      if (!this.ctx) return;
-      try {
-        const o = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        o.type = type || "square";
-        o.frequency.value = freq;
-        g.gain.setValueAtTime(vol, this.ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + dur);
-        o.connect(g);
-        g.connect(this.ctx.destination);
-        o.start();
-        o.stop(this.ctx.currentTime + dur);
-      } catch (e) { }
-    },
-    select() { this.blip(880, 0.07, 0.035); },
-    nav() { this.blip(600, 0.03, 0.022); },
-    error() { this.blip(150, 0.22, 0.05, "sawtooth"); }
-  };
-
-  function primeAudio() {
-    sfx.init();
-  }
-  window.addEventListener("pointerdown", primeAudio, { once: true });
-  window.addEventListener("keydown", primeAudio, { once: true });
-
-  const soundToggle = $("#soundToggle");
-  const ambience = {
-    built: false,
-    gain: null,
-    muted: localStorage.getItem("tq:ambience") === "off",
-    build() {
-      sfx.init();
-      if (this.built || !sfx.ctx) return;
-      try {
-        const ctx = sfx.ctx;
-        const len = ctx.sampleRate * 4;
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        const d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 2400;
-        const hum = ctx.createOscillator();
-        hum.type = "sine";
-        hum.frequency.value = 55;
-        const humG = ctx.createGain();
-        humG.gain.value = 0.05;
-        this.gain = ctx.createGain();
-        this.gain.gain.value = this.muted ? 0 : 0.05;
-        src.connect(lp);
-        lp.connect(this.gain);
-        hum.connect(humG);
-        humG.connect(this.gain);
-        this.gain.connect(ctx.destination);
-        src.start();
-        hum.start();
-        this.built = true;
-      } catch (e) { }
-    },
-    setMuted(m) {
-      this.muted = m;
-      localStorage.setItem("tq:ambience", m ? "off" : "on");
-      if (this.gain) this.gain.gain.value = m ? 0 : 0.05;
-      if (soundToggle) {
-        soundToggle.classList.toggle("off", m);
-        soundToggle.textContent = m ? "AMBIENCE: OFF" : "AMBIENCE: ON";
-      }
-    }
-  };
-
-  if (soundToggle) {
-    soundToggle.classList.toggle("off", ambience.muted);
-    soundToggle.textContent = ambience.muted ? "AMBIENCE: OFF" : "AMBIENCE: ON";
-    soundToggle.addEventListener("click", () => {
-      sfx.init();
-      if (!ambience.built) ambience.build();
-      ambience.setMuted(!ambience.muted);
-      sfx.select();
-    });
-  }
-
   const boot = $("#boot");
   const bootLog = $("#bootLog");
   const bootPrompt = $("#bootPrompt");
@@ -144,7 +51,6 @@
       boot.classList.add("done");
       document.body.classList.remove("no-scroll");
       document.body.classList.add("loaded");
-      ambience.build();
       startHeroType();
       startRecTimer();
       startFlashLoop();
@@ -174,7 +80,6 @@
 
     if (!finished) {
       bootPrompt.classList.remove("hidden");
-      sfx.nav();
     }
   }
 
@@ -214,7 +119,6 @@
       setTimeout(() => {
         if (!document.hidden) {
           flash.classList.add("go");
-          sfx.blip(80, 0.1, 0.04, "sawtooth");
           setTimeout(() => flash.classList.remove("go"), 200);
         }
         loop();
@@ -224,6 +128,22 @@
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
+  let noiseTile = null;
+  function refreshNoiseTile() {
+    if (!noiseTile) {
+      noiseTile = document.createElement("canvas");
+      noiseTile.width = 128;
+      noiseTile.height = 128;
+    }
+    const t = noiseTile.getContext("2d");
+    const img = t.createImageData(128, 128);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
+    }
+    t.putImageData(img, 0, 0);
+  }
   function initNoise() {
     if (!noiseCnv) return;
     noiseCtx = noiseCnv.getContext("2d");
@@ -234,33 +154,26 @@
     noiseCnv.width = Math.max(1, Math.floor(window.innerWidth / 2));
     noiseCnv.height = Math.max(1, Math.floor(window.innerHeight / 2));
   }
-  let noiseFrame = 0;
   function frameNoise() {
-    const w = noiseCnv.width, h = noiseCnv.height;
-    const img = noiseCtx.createImageData(w, h);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const v = (Math.random() * 255) | 0;
-      d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
+    if (noiseCtx) {
+      refreshNoiseTile();
+      noiseCtx.imageSmoothingEnabled = false;
+      noiseCtx.clearRect(0, 0, noiseCnv.width, noiseCnv.height);
+      noiseCtx.drawImage(noiseTile, 0, 0, noiseCnv.width, noiseCnv.height);
+      if (Math.random() < 0.35) {
+        noiseCtx.fillStyle = "rgba(255,255,255,0.05)";
+        noiseCtx.fillRect(0, Math.random() * noiseCnv.height, noiseCnv.width, 2 + Math.random() * 8);
+      }
     }
-    noiseCtx.putImageData(img, 0, 0);
-    noiseFrame++;
-    if (noiseFrame % 9 === 0) {
-      noiseCtx.fillStyle = "rgba(255,255,255,0.05)";
-      noiseCtx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 8);
-    }
-    setTimeout(frameNoise, 66);
+    setTimeout(frameNoise, document.hidden ? 400 : 100);
   }
   window.addEventListener("resize", sizeNoise);
 
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
-    let cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-    window.addEventListener("mousemove", (e) => { cx = e.clientX; cy = e.clientY; });
-    (function moveCursor() {
-      cursor.style.transform = "translate(" + cx + "px," + cy + "px) translate(-50%,-50%)";
-      requestAnimationFrame(moveCursor);
-    })();
+    window.addEventListener("mousemove", (e) => {
+      cursor.style.transform = "translate(" + e.clientX + "px," + e.clientY + "px) translate(-50%,-50%)";
+    });
     const hoverSel = "a, button, .term-opt, input, textarea, select, .session, .stat";
     document.addEventListener("mouseover", (e) => {
       if (e.target.closest(hoverSel)) cursor.classList.add("is-hover");
@@ -343,9 +256,6 @@
       b.className = "term-opt" + (i === activeIndex ? " active" : "");
       b.type = "button";
       b.textContent = o;
-      b.addEventListener("mouseenter", () => {
-        if (sfx.ctx) sfx.nav();
-      });
       b.addEventListener("click", () => selectOption(i));
       termOptions.appendChild(b);
     });
@@ -360,7 +270,6 @@
 
   function selectOption(i) {
     if (termBusy || !resolveOpt) return;
-    sfx.select();
     resolveOpt(i);
     resolveOpt = null;
   }
@@ -389,7 +298,6 @@
           e.preventDefault();
           sel = (sel + 1) % step.o.length;
           setActive(sel);
-          sfx.nav();
         } else if (e.key === "Enter") {
           e.preventDefault();
           selectOption(sel);
@@ -397,12 +305,10 @@
           e.preventDefault();
           sel = (sel - 1 + step.o.length) % step.o.length;
           setActive(sel);
-          sfx.nav();
         } else if (e.key === "ArrowDown" || e.key === "ArrowRight") {
           e.preventDefault();
           sel = (sel + 1) % step.o.length;
           setActive(sel);
-          sfx.nav();
         }
       };
       window.addEventListener("keydown", keyHandler);
@@ -438,7 +344,6 @@
     toDownload.className = "term-opt";
     toDownload.href = "#download";
     toDownload.textContent = "[ CONTINUE TO DOWNLOAD ]";
-    toDownload.addEventListener("click", () => { if (sfx.ctx) sfx.select(); });
     termOptions.classList.remove("hidden");
     termOptions.innerHTML = "";
     termOptions.appendChild(again);
@@ -543,6 +448,28 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 3800);
   }
+
+  const DISCORD_HANDLE = "neptunetheii";
+  const discordBtns = $$(".discord-copy");
+  discordBtns.forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      const done = () => showToast("DISCORD: " + DISCORD_HANDLE + " — COPIED");
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(DISCORD_HANDLE).then(done).catch(done);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = DISCORD_HANDLE;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy"); } catch (err) { }
+        document.body.removeChild(ta);
+        done();
+      }
+    });
+  });
 
   const PHRASES = {
     "who are you": "WE ARE A SET OF QUESTIONS.",

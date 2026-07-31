@@ -62,7 +62,7 @@ button{font-family:inherit}
 @keyframes blink{50%{opacity:0}}
 
 /* ---------- CRT overlays ---------- */
-.crt{position:fixed;inset:0;pointer-events:none;z-index:9950;animation:crt-flicker 8s infinite}
+.crt{position:fixed;inset:0;pointer-events:none;z-index:9950}
 .crt .scanlines{
   position:absolute;inset:0;
   background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.26) 2px 4px);
@@ -80,12 +80,6 @@ button{font-family:inherit}
 }
 .flash.go{animation:redflash .18s ease-out}
 @keyframes redflash{0%{opacity:1}100%{opacity:0}}
-@keyframes crt-flicker{
-  0%,100%{opacity:1}
-  3%{opacity:.96}4%{opacity:1}
-  57%{opacity:.98}58%{opacity:1}
-  89%{opacity:.95}91%{opacity:1}
-}
 
 /* ---------- Fixed HUD ---------- */
 .hud{
@@ -142,10 +136,10 @@ button{font-family:inherit}
 .nav{
   position:fixed;top:0;left:0;right:0;z-index:9900;
   display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  flex-wrap:wrap;
   padding:.8rem 1.2rem;
-  background:rgba(0,0,0,.82);
+  background:rgba(0,0,0,.92);
   border-bottom:1px solid var(--line);
-  backdrop-filter:blur(2px);
 }
 .nav-brand{
   font-family:var(--vt);font-size:1.7rem;color:var(--green);
@@ -172,14 +166,12 @@ button{font-family:inherit}
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
-.sound-toggle{
+.nav-discord{
   font-family:var(--vt);font-size:1rem;letter-spacing:.12em;line-height:1;
   color:var(--green);background:transparent;border:1px solid var(--green-dim);
   padding:.32rem .65rem;white-space:nowrap;transition:all .2s;
 }
-.sound-toggle:hover{box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
-.sound-toggle.off{color:var(--dim);border-color:var(--line-bright)}
-.sound-toggle.off:hover{box-shadow:none;text-shadow:none}
+.nav-discord:hover{box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
 
 /* ---------- Hero ---------- */
 .hero{
@@ -320,6 +312,44 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
   color:var(--green);line-height:1;text-shadow:var(--glow-green);
 }
 .stat-label{display:block;margin-top:.5rem;font-size:.62rem;letter-spacing:.18em;color:var(--dim)}
+
+/* ---------- History ---------- */
+.timeline{
+  --tl-pad:clamp(1.4rem,3vw,2.2rem);
+  position:relative;margin-left:1rem;
+  border-left:1px solid var(--line-bright);
+  display:grid;gap:2.4rem;padding-left:var(--tl-pad);
+}
+.t-entry{position:relative}
+.t-entry::before{
+  content:"";position:absolute;
+  left:calc(-1 * var(--tl-pad) - 5px);top:.45rem;
+  width:9px;height:9px;background:var(--bg);
+  border:1px solid var(--green);transform:rotate(45deg);
+}
+.t-entry-last::before{background:var(--red);border-color:var(--red);box-shadow:var(--glow-red)}
+.t-year{font-family:var(--vt);font-size:1.3rem;color:var(--green);letter-spacing:.12em;text-shadow:var(--glow-green)}
+.t-entry-last .t-year{color:var(--red);text-shadow:var(--glow-red)}
+.t-title{font-size:.72rem;letter-spacing:.18em;color:#e0e0e0;margin:.35rem 0 .5rem}
+.t-body p{font-size:.86rem;color:#a8a8a8;max-width:60ch}
+
+/* ---------- Concerns ---------- */
+.concerns{border:1px solid var(--line);background:var(--panel)}
+.concern{border-bottom:1px solid var(--line)}
+.concern:last-child{border-bottom:0}
+.concern summary{
+  list-style:none;display:flex;align-items:baseline;gap:.8rem;
+  font-family:var(--vt);font-size:1.3rem;letter-spacing:.08em;color:#dcdcdc;
+  padding:1.05rem 1.4rem;transition:color .2s;user-select:none;
+}
+.concern summary::-webkit-details-marker{display:none}
+.concern summary::before{content:"[ + ]";color:var(--green);font-size:1rem;width:2.4em;flex:none}
+.concern[open] summary::before{content:"[ - ]";color:var(--red)}
+.concern summary:hover,.concern[open] summary{color:var(--green)}
+.concern-body{
+  padding:0 1.4rem 1.2rem 3.4rem;font-size:.85rem;color:#b4b4b4;line-height:1.85;
+  border-left:2px solid var(--line-bright);margin-left:1.4rem;
+}
 
 /* ---------- Sessions ---------- */
 .sessions-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem}
@@ -462,6 +492,12 @@ footer{padding:3rem var(--pad) 4rem;text-align:center;color:var(--dim)}
 }
 footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a8a;margin-bottom:.4rem}
 .footer-tag{color:var(--red);text-shadow:var(--glow-red)}
+.footer-discord{
+  font-family:var(--vt);font-size:1.1rem;letter-spacing:.12em;color:var(--green);
+  background:transparent;border:1px solid var(--line-bright);padding:.5rem 1.1rem;
+  margin-top:1.1rem;transition:all .2s;
+}
+.footer-discord:hover{color:var(--cyan);border-color:var(--cyan);box-shadow:0 0 14px rgba(0,216,255,.22);text-shadow:0 0 12px rgba(0,216,255,.35)}
 .footer-dim{font-family:var(--mono);font-size:.62rem;color:#3d3d3d;letter-spacing:.08em;margin-top:1.2rem}
 
 /* ---------- Toast ---------- */
@@ -484,7 +520,7 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 @media(max-width:920px){
   .about-grid,.download-grid{grid-template-columns:1fr}
   .sessions-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}
-  .nav-status{display:none}
+  .nav-status,.nav-discord{display:none}
   .hud-tr{display:none}
 }
 @media(max-width:600px){
