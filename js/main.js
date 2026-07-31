@@ -49,7 +49,6 @@
         o.stop(this.ctx.currentTime + dur);
       } catch (e) { }
     },
-    type() { this.blip(rand(280, 1500), 0.02, 0.018); },
     select() { this.blip(880, 0.07, 0.035); },
     nav() { this.blip(600, 0.03, 0.022); },
     error() { this.blip(150, 0.22, 0.05, "sawtooth"); }
@@ -61,6 +60,65 @@
   window.addEventListener("pointerdown", primeAudio, { once: true });
   window.addEventListener("keydown", primeAudio, { once: true });
 
+  const soundToggle = $("#soundToggle");
+  const ambience = {
+    built: false,
+    gain: null,
+    muted: localStorage.getItem("tq:ambience") === "off",
+    build() {
+      sfx.init();
+      if (this.built || !sfx.ctx) return;
+      try {
+        const ctx = sfx.ctx;
+        const len = ctx.sampleRate * 4;
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 2400;
+        const hum = ctx.createOscillator();
+        hum.type = "sine";
+        hum.frequency.value = 55;
+        const humG = ctx.createGain();
+        humG.gain.value = 0.05;
+        this.gain = ctx.createGain();
+        this.gain.gain.value = this.muted ? 0 : 0.05;
+        src.connect(lp);
+        lp.connect(this.gain);
+        hum.connect(humG);
+        humG.connect(this.gain);
+        this.gain.connect(ctx.destination);
+        src.start();
+        hum.start();
+        this.built = true;
+      } catch (e) { }
+    },
+    setMuted(m) {
+      this.muted = m;
+      localStorage.setItem("tq:ambience", m ? "off" : "on");
+      if (this.gain) this.gain.gain.value = m ? 0 : 0.05;
+      if (soundToggle) {
+        soundToggle.classList.toggle("off", m);
+        soundToggle.textContent = m ? "AMBIENCE: OFF" : "AMBIENCE: ON";
+      }
+    }
+  };
+
+  if (soundToggle) {
+    soundToggle.classList.toggle("off", ambience.muted);
+    soundToggle.textContent = ambience.muted ? "AMBIENCE: OFF" : "AMBIENCE: ON";
+    soundToggle.addEventListener("click", () => {
+      sfx.init();
+      if (!ambience.built) ambience.build();
+      ambience.setMuted(!ambience.muted);
+      sfx.select();
+    });
+  }
+
   const boot = $("#boot");
   const bootLog = $("#bootLog");
   const bootPrompt = $("#bootPrompt");
@@ -69,10 +127,9 @@
     ["INITIALIZING THE QUESTION GAME v1.0.0", ""],
     ["CONNECTING TO LOCAL ENVIRONMENT METRICS ...", ""],
     ["READING HARDWARE PROFILE ... OK", ""],
-    ["MOUNTING PERSISTENT MEMORY FILE ... OK", ""],
+    ["CALIBRATING INPUT PROTOCOL ... OK", ""],
     ["SCANNING SESSION ARCHIVE ...", ""],
-    ["ENCOUNTERS FOUND: 1", ""],
-    ["ANSWERS RETAINED: 0", ""],
+    ["SESSION 001 READY.", ""],
     ["", ""],
     ["THIS IS NOT THE FIRST TIME WE HAVE SPOKEN.", "red"],
     ["ARE YOU SITTING COMFORTABLY?", "red"]
@@ -87,6 +144,7 @@
       boot.classList.add("done");
       document.body.classList.remove("no-scroll");
       document.body.classList.add("loaded");
+      ambience.build();
       startHeroType();
       startRecTimer();
       startFlashLoop();
@@ -108,7 +166,7 @@
       const span = document.createElement("div");
       if (cls) span.className = cls;
       bootLog.appendChild(span);
-      if (line) await typeNode(span, line, 24, () => sfx.type());
+      if (line) await typeNode(span, line, 24);
       else await sleep(500);
       await sleep(180);
       if (!bootLog.contains(skipHint)) bootLog.appendChild(skipHint);
@@ -125,7 +183,7 @@
     "IT REMEMBERS. DO YOU?",
     "ANSWER HONESTLY.",
     "THERE IS NO SKIP BUTTON.",
-    "YOU WERE NEXT."
+    "IT IS WAITING."
   ];
 
   async function startHeroType() {
@@ -134,7 +192,7 @@
     for (;;) {
       for (const phrase of HERO_PHRASES) {
         heroType.textContent = "";
-        await typeNode(heroType, phrase, 46, () => sfx.type());
+        await typeNode(heroType, phrase, 46);
         await sleep(2600);
       }
     }
@@ -228,15 +286,14 @@
 
   const tickerTrack = $("#tickerTrack");
   const TICKER_ITEMS = [
-    "THIS IS NOT THE FIRST TIME WE HAVE SPOKEN",
     "ARE YOU SITTING COMFORTABLY?",
-    "THERE IS NO SKIP",
-    "WE HAVE IT ALL",
     "ANSWER TRUTHFULLY",
+    "THE ROOM IS GETTING COLDER",
+    "DO YOU HEAR THAT SCRATCHING?",
     "THE GAME REMEMBERS. DO YOU?",
-    "ESCAPING IS NOT AS EASY AS YOU THINK",
-    "YOU WERE NEXT",
-    "ANSWERS CARRY FORWARD"
+    "PLAY WITH HEADPHONES",
+    "THERE IS SOMETHING IN THE ROOM WITH YOU",
+    "THE QUESTIONS NEVER END"
   ];
   function buildTicker() {
     if (!tickerTrack) return;
@@ -323,7 +380,7 @@
     await addLine("term-meta", "> TRANSMISSION 001 — PREVIEW MODE — ANSWER TRUTHFULLY.", 26);
 
     for (const step of SCRIPT) {
-      await addLine("", "> " + step.q, 40, () => sfx.type());
+      await addLine("", "> " + step.q, 40);
       showOptions(step.o, 0);
       let sel = 0;
       const choice = promptChoice();
@@ -359,13 +416,13 @@
       ansLine.innerHTML = '<span class="term-q">&gt; </span><span class="term-answer">[ ' + step.o[idx] + " ]</span>";
       termLines.appendChild(ansLine);
 
-      await addLine("", "> " + step.r[idx], 36, () => sfx.type());
+      await addLine("", "> " + step.r[idx], 36);
       await sleep(1100);
     }
 
     termStatus.textContent = "TRANSMISSION END";
-    await addLine("", "THE PREVIEW ENDS HERE. THE FULL SESSION HAS 100 QUESTIONS.", 32, () => sfx.type());
-    await addLine("", "IT REMEMBERS EVERYTHING.", 32, () => sfx.type());
+    await addLine("", "THE PREVIEW ENDS HERE. THE FULL SESSION HAS 100 QUESTIONS.", 32);
+    await addLine("", "IT HEARS EVERYTHING.", 32);
 
     const note = document.createElement("div");
     note.className = "term-line";

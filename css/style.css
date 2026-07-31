@@ -172,6 +172,15 @@ button{font-family:inherit}
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+.sound-toggle{
+  font-family:var(--vt);font-size:1rem;letter-spacing:.12em;line-height:1;
+  color:var(--green);background:transparent;border:1px solid var(--green-dim);
+  padding:.32rem .65rem;white-space:nowrap;transition:all .2s;
+}
+.sound-toggle:hover{box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
+.sound-toggle.off{color:var(--dim);border-color:var(--line-bright)}
+.sound-toggle.off:hover{box-shadow:none;text-shadow:none}
+
 /* ---------- Hero ---------- */
 .hero{
   min-height:100vh;
@@ -475,7 +484,8 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 @media(max-width:920px){
   .about-grid,.download-grid{grid-template-columns:1fr}
   .sessions-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}
-  .nav-status,.hud-tr{display:none}
+  .nav-status{display:none}
+  .hud-tr{display:none}
 }
 @media(max-width:600px){
   .hud{display:none}

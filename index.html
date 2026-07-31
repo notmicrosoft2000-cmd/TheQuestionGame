@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="The Question Game — a psychological Q&A experience by Neptune Productions. It asks. You answer. It remembers.">
+  <meta name="description" content="The Question Game — a text-based horror experience by Neptune Productions. It asks. You answer. Try to escape before the questions end.">
   <meta name="theme-color" content="#000000">
   <title>THE QUESTION GAME — by Neptune Productions</title>
   <link rel="icon" type="image/png" href="windowq.png">
@@ -57,13 +57,14 @@
       <a href="#download" class="nav-cta">DOWNLOAD</a>
     </nav>
     <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
+    <button id="soundToggle" class="sound-toggle" type="button" aria-label="Toggle ambient sound">AMBIENCE: ON</button>
   </header>
 
   <main>
     <section class="hero" id="top">
       <div class="hero-meta">
         <span>NEPTUNE PRODUCTIONS [C]</span>
-        <span>ENCOUNTERS: 1 · PERSISTENT MEMORY ENABLED</span>
+        <span>TEXT-BASED HORROR EXPERIENCE</span>
       </div>
 
       <div class="hero-badge"><span class="led"></span> BUILD v1.0.0 — WINDOWS</div>
@@ -78,7 +79,7 @@
         <a class="btn btn-ghost" href="#sessions">[ VIEW SESSIONS ]</a>
       </div>
 
-      <div class="hero-hint">[ TAB ] CYCLE &nbsp;·&nbsp; [ ENTER ] CONFIRM &nbsp;·&nbsp; ANSWERS CARRY FORWARD</div>
+      <div class="hero-hint">[ TAB ] CYCLE &nbsp;·&nbsp; [ ENTER ] CONFIRM &nbsp;·&nbsp; PLAY WITH HEADPHONES</div>
     </section>
 
     <div class="ticker" aria-hidden="true">
@@ -93,14 +94,14 @@
       <div class="about-grid">
         <div class="about-copy reveal">
           <p>This is not a quiz. It is a set of questions, and a quiet observer sitting behind them.</p>
-          <p>Answer truthfully. Your answers, your response times, and your hesitations are recorded into a persistent local file that survives between sessions. The longer you play, the more it knows.</p>
-          <p class="dim">Nothing leaves your machine. Everything stays. That is the point.</p>
-          <p class="about-quote">"This is not the first time we've spoken."</p>
+          <p>You sit down. It starts typing. One question at a time, until it is finished with you.</p>
+          <p class="dim">A text-based horror experience. Nothing leaves your machine.</p>
+          <p class="about-quote">"Are you sitting comfortably?"</p>
         </div>
         <div class="stats reveal">
-          <div class="stat"><span class="stat-num">100+</span><span class="stat-label">QUESTIONS PER SESSION</span></div>
-          <div class="stat"><span class="stat-num">03</span><span class="stat-label">SESSIONS. NO FOURTH.</span></div>
-          <div class="stat"><span class="stat-num">01</span><span class="stat-label">PERSISTENT MEMORY FILE</span></div>
+          <div class="stat"><span class="stat-num">100+</span><span class="stat-label">QUESTIONS TO ANSWER</span></div>
+          <div class="stat"><span class="stat-num">01</span><span class="stat-label">QUESTION AT A TIME</span></div>
+          <div class="stat"><span class="stat-num">00</span><span class="stat-label">SKIP BUTTONS</span></div>
           <div class="stat"><span class="stat-num">∞</span><span class="stat-label">IT WATCHES YOU PLAY</span></div>
         </div>
       </div>
@@ -111,36 +112,36 @@
         <h2 class="section-title"><span class="red">&gt;</span> THE SESSIONS</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Three runs. It remembers every answer between them.</p>
+      <p class="section-sub reveal">A descent in three parts. Best experienced in the dark, with headphones.</p>
 
       <div class="sessions-grid">
         <article class="session reveal">
           <div class="session-head">
             <span class="session-code">SESSION 01</span>
-            <span class="session-status ok">AVAILABLE</span>
+            <span class="session-status ok">BEGIN</span>
           </div>
-          <h3 class="session-name">THE FIRST TIME</h3>
+          <h3 class="session-name">A QUIET START</h3>
           <ul class="session-points">
-            <li>~100 questions. No skip. No fast-forward.</li>
-            <li>It learns your favorite color. Your location. Your hesitations.</li>
-            <li>By the end, your name is in its databases.</li>
+            <li>You answer. It listens.</li>
+            <li>The room gets colder.</li>
+            <li>The questions stop being polite.</li>
           </ul>
-          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">100% COMPLETE</span></div>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">PART ONE</span></div>
           <p class="session-login">ARE YOU SITTING COMFORTABLY?</p>
         </article>
 
         <article class="session reveal">
           <div class="session-head">
             <span class="session-code">SESSION 02</span>
-            <span class="session-status warn">RETURNING USERS</span>
+            <span class="session-status warn">CONTINUES</span>
           </div>
-          <h3 class="session-name">IT REMEMBERS</h3>
+          <h3 class="session-name">IT FINDS YOU</h3>
           <ul class="session-points">
-            <li>The wallpaper is your color now.</li>
-            <li>It quotes your own answers back at you. The camera activates.</li>
-            <li>The main menu only says: .... &nbsp;... &nbsp;Leave.</li>
+            <li>You came back. It knows you did.</li>
+            <li>The questions remember your answers.</li>
+            <li>Something sits with you now.</li>
           </ul>
-          <div class="session-progress"><span class="bar" style="--w:60%"></span><span class="bar-label">ANSWERS CARRY OVER</span></div>
+          <div class="session-progress"><span class="bar" style="--w:60%"></span><span class="bar-label">PART TWO</span></div>
           <p class="session-login">WHY DID YOU COME BACK?</p>
         </article>
 
@@ -149,14 +150,14 @@
             <span class="session-code">SESSION 03</span>
             <span class="session-status danger">FINAL</span>
           </div>
-          <h3 class="session-name">THE INTERFACE BREAKS</h3>
+          <h3 class="session-name">THE DARKNESS FINDS ITS VOICE</h3>
           <ul class="session-points">
-            <li>The window shakes. Then other windows shake.</li>
-            <li>It opens your pictures. It opens your webcam.</li>
-            <li>There is an ending. There is no fourth session.</li>
+            <li>The questions begin to answer themselves.</li>
+            <li>There is something behind the static.</li>
+            <li>You are not the first. You will not be the last.</li>
           </ul>
-          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">NO FOURTH SESSION</span></div>
-          <p class="session-login">THIS FILE WILL NOT OPEN AGAIN.</p>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">PART THREE</span></div>
+          <p class="session-login">THERE IS SOMETHING IN THE ROOM WITH YOU.</p>
         </article>
       </div>
     </section>
@@ -212,22 +213,22 @@
           </div>
 
           <div class="release-warn">
-            THIS SOFTWARE INTERACTS WITH YOUR LOCAL ENVIRONMENT.<br>
-            During play it may modify your wallpaper, move windows, access your webcam, and open files from your Pictures folder.
-            It does not transmit your data. Run at your own discretion.
+            THIS IS A WORK OF INTERACTIVE HORROR FICTION.<br>
+            It contains mature themes and moments designed to unsettle you. Nothing you answer is transmitted anywhere.
+            If you are easily disturbed, do not play alone — and do not play at night.
           </div>
         </div>
 
         <aside class="side reveal">
           <h3 class="side-title">IN THIS BUILD</h3>
           <ul class="feature-list">
-            <li><span class="mark">▸</span> 100+ first-session questions</li>
-            <li><span class="mark">▸</span> Three-session narrative arc</li>
-            <li><span class="mark">▸</span> Persistent local memory</li>
-            <li><span class="mark">▸</span> Procedural audio &amp; VHS effects</li>
-            <li><span class="mark">▸</span> Webcam moments</li>
-            <li><span class="mark">▸</span> Desktop-level intrusions</li>
-            <li><span class="mark">▸</span> A real ending</li>
+            <li><span class="mark">▸</span> 100+ questions</li>
+            <li><span class="mark">▸</span> Three-part narrative</li>
+            <li><span class="mark">▸</span> Text-based — keyboard only</li>
+            <li><span class="mark">▸</span> Atmospheric procedural audio</li>
+            <li><span class="mark">▸</span> VHS / static visual treatment</li>
+            <li><span class="mark">▸</span> It remembers what you tell it</li>
+            <li><span class="mark">▸</span> No data leaves your machine</li>
           </ul>
           <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
           <ul class="feature-list">
@@ -235,7 +236,7 @@
             <li><span class="mark">▸</span> Screen — 800×600, resizable</li>
             <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER)</li>
             <li><span class="mark">▸</span> Network — Optional</li>
-            <li><span class="mark">▸</span> Camera — Used in certain moments</li>
+            <li><span class="mark">▸</span> Camera — Not required to play</li>
             <li><span class="mark">▸</span> Storage — ~70 MB</li>
           </ul>
         </aside>
@@ -246,7 +247,7 @@
   <footer>
     <div class="footer-line"></div>
     <p>NEPTUNE PRODUCTIONS [C] — THE QUESTION GAME v1.0.0</p>
-    <p class="footer-tag">YOUR ANSWERS ARE REMEMBERED.</p>
+    <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>
   </footer>
 
