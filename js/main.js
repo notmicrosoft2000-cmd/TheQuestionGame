@@ -359,6 +359,11 @@
     return b + " B";
   }
 
+  const ASSET_LABELS = [
+    [/thequestiongame\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
+    [/macos\.dmg$/i, "macOS — APP BUNDLE"]
+  ];
+
   function assetRow(asset, recommended) {
     const row = document.createElement("div");
     row.className = "asset-row";
@@ -366,11 +371,15 @@
     info.className = "asset-info";
     const name = document.createElement("div");
     name.className = "asset-name";
-    name.textContent = asset.name;
+    let label = null;
+    for (const [re, text] of ASSET_LABELS) {
+      if (re.test(asset.name)) { label = text; break; }
+    }
+    name.textContent = label || asset.name;
     info.appendChild(name);
     const meta = document.createElement("div");
     meta.className = "asset-meta";
-    meta.textContent = fmtSize(asset.size) + " · " + new Date(asset.updated_at || asset.created_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
+    meta.textContent = asset.name + " · " + fmtSize(asset.size) + " · " + new Date(asset.updated_at || asset.created_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
     info.appendChild(meta);
     row.appendChild(info);
     const btn = document.createElement("a");
@@ -384,6 +393,11 @@
       const badge = document.createElement("span");
       badge.className = "asset-badge";
       badge.textContent = "RECOMMENDED";
+      name.appendChild(badge);
+    } else if (/macos\.dmg$/i.test(asset.name)) {
+      const badge = document.createElement("span");
+      badge.className = "asset-badge";
+      badge.textContent = "MACOS";
       name.appendChild(badge);
     }
     return row;

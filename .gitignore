@@ -4,3 +4,10 @@ TheQuestionGame.exe
 # Python build/runtime artifacts
 __pycache__/
 *.py[cod]
+
+# Mac build artifacts (py2app + hdiutil, produced by build-mac.yml)
+dist/
+build/
+*.dmg
+*.icns
+icon.iconset/

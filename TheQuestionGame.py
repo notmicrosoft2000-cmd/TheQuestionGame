@@ -11,7 +11,12 @@ import webbrowser
 import platform
 import subprocess
 import threading
-import pyttsx3
+import queue as _queue
+try:
+    import pyttsx3
+    _HAS_PYTTX3 = True
+except ImportError:
+    _HAS_PYTTX3 = False
 import math
 import json
 import ctypes
@@ -20,6 +25,11 @@ import ctypes.wintypes
 # --- Resolve assets relative to this file's own directory (works from any CWD) ---
 try:
     _APP_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
+    # In a macOS .app bundle, data files ship inside Contents/Resources
+    if getattr(sys, "frozen", False) and platform.system() == "Darwin":
+        _RES_DIR = os.path.normpath(os.path.join(_APP_DIR, "..", "Resources"))
+        if os.path.isdir(_RES_DIR):
+            _APP_DIR = _RES_DIR
     os.chdir(_APP_DIR)
 except Exception:
     pass
@@ -63,11 +73,14 @@ def load_game_state():
         "lie_count": 0,
         "hesitation_count": 0,
         "lie_ids": [],
+        # Secret LOGS button unlocked via the 2013 cheat code
+        "logs_unlocked": False,
         # Settings (defaults)
         "settings": {
             "text_speed": 0.04,       # seconds per character
             "vhs_intensity": 1.0,     # 0.0 = off, 1.0 = default
             "sway_intensity": 1.0,    # 0.0 = off, 1.0 = default
+            "text_size": 1.0,         # multiplier applied to base font sizes
         }
     }
 
@@ -81,7 +94,80 @@ def save_game_state(state_data):
 game_state = load_game_state()
 LAST_CLOSE_TIME_ON_LAUNCH = game_state.get("last_close_time", 0)
 
-# --- Windows Native Wallpaper Modification ---
+# --- Achievement / Badge System ---
+# Stored in its own file, separate from game_state.json, so "Reset All Data"
+# (which wipes game_state.json) never touches earned badges.
+BADGES_FILE = os.path.join(STATE_DIR, "badges.json")
+
+BADGE_CATALOG = {
+    "patient_one": {"name": "Patient One", "desc": "Spent over a minute deciding on a single question."},
+    "not_alone": {"name": "Not Alone", "desc": "Had Discord open while playing."},
+    "returning": {"name": "Returning", "desc": "Came back for a second run."},
+    "persistent": {"name": "Persistent", "desc": "Came back for a third run."},
+    "the_archivist": {"name": "The Archivist", "desc": "Found the logs."},
+    "night_owl": {"name": "Night Owl", "desc": "Played between 2 AM and 5 AM."},
+    "photographer": {"name": "The Photographer", "desc": "We opened one of your pictures."},
+    "pioneer": {"name": "Pioneer", "desc": "First to play on a Mac."},
+    "the_final_eye": {"name": "The Final Eye", "desc": "Saw the end. It saw you."},
+}
+
+def load_badges():
+    if os.path.exists(BADGES_FILE):
+        try:
+            with open(BADGES_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "earned" in data:
+                    return data
+        except:
+            pass
+    return {"earned": []}
+
+def save_badges(badges_data):
+    try:
+        with open(BADGES_FILE, "w") as f:
+            json.dump(badges_data, f)
+    except:
+        pass
+
+badges_state = load_badges()
+_newly_earned_badge = None  # set briefly so the UI can show a toast
+
+def award_badge(badge_id):
+    """Award a badge if not already earned. Returns True if newly earned."""
+    global _newly_earned_badge
+    if badge_id not in BADGE_CATALOG:
+        return False
+    if badge_id in badges_state["earned"]:
+        return False
+    badges_state["earned"].append(badge_id)
+    save_badges(badges_state)
+    _newly_earned_badge = badge_id
+    return True
+
+def has_badge(badge_id):
+    return badge_id in badges_state.get("earned", [])
+
+# --- Startup badges (silent — no toast yet since the UI hasn't initialized) ---
+# Awarded without triggering a toast by clearing _newly_earned_badge afterwards.
+try:
+    if platform.system() == "Darwin":
+        if award_badge("pioneer"):
+            _newly_earned_badge = None
+    try:
+        _local_hour = int(time.strftime("%H"))
+        if 2 <= _local_hour < 5:
+            if award_badge("night_owl"):
+                _newly_earned_badge = None
+    except:
+        pass
+except:
+    pass
+
+# --- Desktop Wallpaper Modification (Windows native / macOS via System Events) ---
+# On macOS these calls may raise a one-time Automation permission prompt
+# ("TheQuestionGame wants to control System Events"). If it is denied, every
+# wallpaper function degrades silently to a no-op — the game keeps running.
+
 def get_current_wallpaper_path():
     if platform.system() == "Windows":
         try:
@@ -90,60 +176,67 @@ def get_current_wallpaper_path():
             return buf.value
         except:
             return ""
+    elif platform.system() == "Darwin":
+        try:
+            script = 'tell application "System Events" to get picture of desktop 1'
+            out = subprocess.check_output(["osascript", "-e", script], stderr=subprocess.DEVNULL, text=True).strip()
+            if out and out.lower() not in ("missing value",):
+                return out
+        except:
+            pass
     return ""
 
 def set_wallpaper_from_path(path):
-    if platform.system() == "Windows" and path:
+    if not path or not os.path.exists(path):
+        return
+    if platform.system() == "Windows":
         try:
             ctypes.windll.user32.SystemParametersInfoW(20, 0, path, 3)
         except:
             pass
+    elif platform.system() == "Darwin":
+        try:
+            p = os.path.abspath(path).replace('"', '\\"')
+            script = 'tell application "System Events" to set picture of every desktop to POSIX file "%s"' % p
+            subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
 
-def generate_solid_bmp(rgb, path):
+def generate_solid_wallpaper(rgb, path):
+    """Write a solid-color wallpaper image using pygame (BMP on Windows, PNG on macOS)."""
     try:
-        import struct
         w, h = 1920, 1080
-        row_size = ((w * 3 + 3) & ~3)
-        pixel_data_size = row_size * h
-        file_size = 54 + pixel_data_size
-        bmp_header = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, 54)
-        dib_header = struct.pack('<IIIHHIIIIII', 40, w, h, 1, 24, 0, pixel_data_size, 2835, 2835, 0, 0)
-        row = bytes([rgb[2], rgb[1], rgb[0]] * w)
-        padding = bytes(row_size - w * 3)
-        with open(path, 'wb') as f:
-            f.write(bmp_header + dib_header)
-            for _ in range(h):
-                f.write(row + padding)
+        surf = pygame.Surface((w, h))
+        surf.fill(rgb)
+        pygame.image.save(surf, path)
         return True
     except:
         return False
 
 def set_desktop_wallpaper(color_name):
-    if platform.system() == "Windows":
-        color_map = {
-            "red": (255, 0, 0), "green": (0, 200, 0), "blue": (0, 0, 255),
-            "black": (0, 0, 0), "white": (255, 255, 255), "yellow": (255, 255, 0),
-            "purple": (128, 0, 128), "cyan": (0, 255, 255)
-        }
-        rgb = color_map.get(color_name.lower(), (0, 0, 0))
-        wp_path = os.path.join(STATE_DIR, "horror_bg.bmp")
-        if generate_solid_bmp(rgb, wp_path):
-            try:
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, wp_path, 3)
-            except:
-                pass
+    if platform.system() not in ("Windows", "Darwin"):
+        return
+    color_map = {
+        "red": (255, 0, 0), "green": (0, 200, 0), "blue": (0, 0, 255),
+        "black": (0, 0, 0), "white": (255, 255, 255), "yellow": (255, 255, 0),
+        "purple": (128, 0, 128), "cyan": (0, 255, 255)
+    }
+    rgb = color_map.get(color_name.lower(), (0, 0, 0))
+    ext = ".bmp" if platform.system() == "Windows" else ".png"
+    wp_path = os.path.join(STATE_DIR, "horror_bg" + ext)
+    if generate_solid_wallpaper(rgb, wp_path):
+        set_wallpaper_from_path(wp_path)
 
 def set_black_wallpaper_and_cache():
-    if platform.system() == "Windows":
-        cached = get_current_wallpaper_path()
-        if cached:
-            game_state["original_wallpaper"] = cached
-        wp_path = os.path.join(STATE_DIR, "black_wp.bmp")
-        if generate_solid_bmp((0, 0, 0), wp_path):
-            try:
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, wp_path, 3)
-            except:
-                pass
+    if platform.system() not in ("Windows", "Darwin"):
+        return
+    cached = get_current_wallpaper_path()
+    if cached:
+        game_state["original_wallpaper"] = cached
+    ext = ".bmp" if platform.system() == "Windows" else ".png"
+    wp_path = os.path.join(STATE_DIR, "black_wp" + ext)
+    if generate_solid_wallpaper((0, 0, 0), wp_path):
+        set_wallpaper_from_path(wp_path)
 
 def restore_original_wallpaper():
     orig = game_state.get("original_wallpaper", "")
@@ -156,7 +249,7 @@ pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
 
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
-icon = pygame.image.load("windowq.png")
+icon = pygame.image.load("windowq.png").convert_alpha()
 pygame.display.set_icon(icon)
 pygame.display.set_caption("The Question Game")
 pygame.mouse.set_visible(False)
@@ -172,9 +265,10 @@ FONT_NAME = pygame.font.match_font('courier')
 
 def get_scaled_fonts(w, h):
     base = min(w, h)
-    large_sz = max(28, int(base * 0.09))
-    med_sz   = max(16, int(base * 0.052))
-    small_sz = max(11, int(base * 0.033))
+    _size_mult = game_state.get("settings", {}).get("text_size", 1.0)
+    large_sz = max(28, int(base * 0.09 * _size_mult))
+    med_sz   = max(16, int(base * 0.052 * _size_mult))
+    small_sz = max(11, int(base * 0.033 * _size_mult))
     return (
         pygame.font.Font(FONT_NAME, large_sz),
         pygame.font.Font(FONT_NAME, med_sz),
@@ -183,34 +277,37 @@ def get_scaled_fonts(w, h):
 
 font_large, font_medium, font_small = get_scaled_fonts(WIDTH, HEIGHT)
 
-# --- Procedural Audio Generation ---
-def play_type_sound():
+# --- Procedural Audio Generation (pre-baked at startup, see _build_sound_cache below) ---
+_SOUND_CACHE = {}
+_POOL_SIZE = 5  # number of randomized variants pre-baked per "randomized" sound
+
+def _make_type_sound():
     buf = np.zeros(int(0.015 * 22050), dtype=np.int16)
     for i in range(len(buf)):
         buf[i] = int(random.choice([-8000, 8000]))
-    pygame.mixer.Sound(buffer=buf).play().set_volume(0.15)
+    return pygame.mixer.Sound(buffer=buf)
 
-def play_ui_nav_sound():
+def _make_ui_nav_sound():
     t = np.linspace(0, 0.03, int(22050 * 0.03), False)
     wave = np.sin(2 * np.pi * 600 * t)
-    pygame.mixer.Sound(buffer=np.int16(wave * 8000)).play().set_volume(0.2)
+    return pygame.mixer.Sound(buffer=np.int16(wave * 8000))
 
-def play_ui_select_sound():
+def _make_ui_select_sound():
     t = np.linspace(0, 0.08, int(22050 * 0.08), False)
     wave = np.sin(2 * np.pi * 880 * t)
-    pygame.mixer.Sound(buffer=np.int16(wave * 12000)).play().set_volume(0.3)
+    return pygame.mixer.Sound(buffer=np.int16(wave * 12000))
 
-def play_mechanical_beep():
+def _make_mechanical_beep():
     t = np.linspace(0, 0.12, int(22050 * 0.12), False)
     wave = np.sin(2 * np.pi * 1200 * t)
-    pygame.mixer.Sound(buffer=np.int16(wave * 14000)).play().set_volume(0.25)
+    return pygame.mixer.Sound(buffer=np.int16(wave * 14000))
 
-def play_error_sound():
+def _make_error_sound():
     t = np.linspace(0, 0.2, int(22050 * 0.2), False)
     wave = np.sin(2 * np.pi * 150 * t) + np.sin(2 * np.pi * 155 * t)
-    pygame.mixer.Sound(buffer=np.int16(wave * 18000)).play().set_volume(0.4)
+    return pygame.mixer.Sound(buffer=np.int16(wave * 18000))
 
-def play_glitch_sound():
+def _make_glitch_sound():
     """Harsher digital glitch burst, used in Run 2 atmosphere."""
     dur = random.uniform(0.05, 0.18)
     t = np.linspace(0, dur, int(22050 * dur), False)
@@ -218,24 +315,23 @@ def play_glitch_sound():
     wave = np.sin(2 * np.pi * freq * t)
     noise = np.random.normal(0, 0.4, len(t))
     combined = np.clip(wave * 0.6 + noise * 0.4, -1, 1)
-    pygame.mixer.Sound(buffer=np.int16(combined * 16000)).play().set_volume(0.3)
+    return pygame.mixer.Sound(buffer=np.int16(combined * 16000))
 
-def play_static_burst():
+def _make_static_burst():
     dur = 0.25
     t = np.linspace(0, dur, int(22050 * dur), False)
     noise = np.random.normal(0, 1.0, len(t))
-    pygame.mixer.Sound(buffer=np.int16(np.clip(noise, -1, 1) * 9000)).play().set_volume(0.18)
+    return pygame.mixer.Sound(buffer=np.int16(np.clip(noise, -1, 1) * 9000))
 
-def play_heartbeat():
+def _make_heartbeat():
     """Deep thudding heartbeat — used in Run 3."""
     dur = 0.18
     t = np.linspace(0, dur, int(22050 * dur), False)
     env = np.exp(-t * 25)
     wave = np.sin(2 * np.pi * 55 * t) * env
-    sound = pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 28000))
-    sound.play().set_volume(0.55)
+    return pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 28000))
 
-def play_deep_rumble():
+def _make_deep_rumble():
     """Subsonic grinding — Run 3 transition moments."""
     dur = 0.8
     t = np.linspace(0, dur, int(22050 * dur), False)
@@ -244,9 +340,9 @@ def play_deep_rumble():
     noise = np.random.normal(0, 0.25, len(t))
     combined = np.clip(wave * 0.7 + noise * 0.3, -1, 1)
     env = np.exp(-t * 1.2)
-    pygame.mixer.Sound(buffer=np.int16(combined * env * 22000)).play().set_volume(0.5)
+    return pygame.mixer.Sound(buffer=np.int16(combined * env * 22000))
 
-def play_reverse_chord():
+def _make_reverse_chord():
     """Eerie reverse string sweep — used on lore payoff lines in Run 3."""
     dur = 1.2
     t = np.linspace(0, dur, int(22050 * dur), False)
@@ -254,9 +350,9 @@ def play_reverse_chord():
     freqs = [220, 277, 330, 370]
     wave = sum(np.sin(2 * np.pi * f * t) for f in freqs) / len(freqs)
     wave = wave * env
-    pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 14000)).play().set_volume(0.35)
+    return pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 14000))
 
-def play_static_scream():
+def _make_static_scream():
     """High-pitched distorted screech — used on Run 3 interface corruption moments."""
     dur = 0.35
     t = np.linspace(0, dur, int(22050 * dur), False)
@@ -265,7 +361,63 @@ def play_static_scream():
     noise = np.random.normal(0, 0.6, len(t))
     env = np.exp(-t * 6)
     combined = np.clip(wave * 0.5 + noise * 0.5, -1, 1) * env
-    pygame.mixer.Sound(buffer=np.int16(combined * 20000)).play().set_volume(0.45)
+    return pygame.mixer.Sound(buffer=np.int16(combined * 20000))
+
+def _build_sound_cache():
+    """Pre-bake every procedural sound effect once at startup, including small
+    randomized pools for sounds that originally varied per call, so gameplay
+    clicks only ever call .play() on an already-built Sound object."""
+    _SOUND_CACHE["type"] = [_make_type_sound() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["ui_nav"] = [_make_ui_nav_sound()]
+    _SOUND_CACHE["ui_select"] = [_make_ui_select_sound()]
+    _SOUND_CACHE["mech_beep"] = [_make_mechanical_beep()]
+    _SOUND_CACHE["error"] = [_make_error_sound()]
+    _SOUND_CACHE["glitch"] = [_make_glitch_sound() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["static_burst"] = [_make_static_burst() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["heartbeat"] = [_make_heartbeat() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["deep_rumble"] = [_make_deep_rumble() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["reverse_chord"] = [_make_reverse_chord() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["static_scream"] = [_make_static_scream() for _ in range(_POOL_SIZE)]
+
+_build_sound_cache()
+
+def play_type_sound():
+    random.choice(_SOUND_CACHE["type"]).play().set_volume(0.15)
+
+def play_ui_nav_sound():
+    _SOUND_CACHE["ui_nav"][0].play().set_volume(0.2)
+
+def play_ui_select_sound():
+    _SOUND_CACHE["ui_select"][0].play().set_volume(0.3)
+
+def play_mechanical_beep():
+    _SOUND_CACHE["mech_beep"][0].play().set_volume(0.25)
+
+def play_error_sound():
+    _SOUND_CACHE["error"][0].play().set_volume(0.4)
+
+def play_glitch_sound():
+    """Harsher digital glitch burst, used in Run 2 atmosphere."""
+    random.choice(_SOUND_CACHE["glitch"]).play().set_volume(0.3)
+
+def play_static_burst():
+    random.choice(_SOUND_CACHE["static_burst"]).play().set_volume(0.18)
+
+def play_heartbeat():
+    """Deep thudding heartbeat — used in Run 3."""
+    random.choice(_SOUND_CACHE["heartbeat"]).play().set_volume(0.55)
+
+def play_deep_rumble():
+    """Subsonic grinding — Run 3 transition moments."""
+    random.choice(_SOUND_CACHE["deep_rumble"]).play().set_volume(0.5)
+
+def play_reverse_chord():
+    """Eerie reverse string sweep — used on lore payoff lines in Run 3."""
+    random.choice(_SOUND_CACHE["reverse_chord"]).play().set_volume(0.35)
+
+def play_static_scream():
+    """High-pitched distorted screech — used on Run 3 interface corruption moments."""
+    random.choice(_SOUND_CACHE["static_scream"]).play().set_volume(0.45)
 
 def start_ambience():
     t = np.linspace(0, 4.0, int(22050 * 4.0), False)
@@ -273,8 +425,63 @@ def start_ambience():
     sound = pygame.mixer.Sound(buffer=np.int16(wave * 12000))
     sound.play(-1).set_volume(0.2)
 
+# --- LOGS screen music ---
+_logs_music_playing= False
+
+def start_logs_music():
+    """Play the custom logsmusic.ogg track on loop while inside the LOGS screen."""
+    global _logs_music_playing
+    try:
+        pygame.mixer.music.load("logsmusic.ogg")
+        target_vol = 0.2
+        pygame.mixer.music.set_volume(0.0)
+        pygame.mixer.music.play(-1)
+        _logs_music_playing = True
+        # fade-in thread
+        def _fadein(ms=800):
+            steps = max(4, int(ms / 50))
+            for i in range(1, steps + 1):
+                if not _logs_music_playing:
+                    break
+                try:
+                    pygame.mixer.music.set_volume(float(i) / steps * target_vol)
+                except:
+                    pass
+                time.sleep(ms / steps / 1000.0)
+        threading.Thread(target=_fadein, args=(800,), daemon=True).start()
+    except:
+        pass
+
+def stop_logs_music():
+    global _logs_music_playing
+    if _logs_music_playing:
+        try:
+            pygame.mixer.music.stop()
+        except:
+            pass
+        _logs_music_playing = False
+
+def fade_logs_music(duration_ms=1000):
+    """Fade out the logs music over `duration_ms` milliseconds."""
+    global _logs_music_playing
+    if _logs_music_playing:
+        try:
+            pygame.mixer.music.fadeout(int(duration_ms))
+        except:
+            try:
+                pygame.mixer.music.stop()
+            except:
+                pass
+        _logs_music_playing = False
+
 def speak_text(text):
     try:
+        if platform.system() == "Darwin":
+            # The macOS `say` command is built-in and needs no extra dependencies
+            subprocess.Popen(["say", "-r", "110", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        if not _HAS_PYTTX3:
+            return
         engine = pyttsx3.init()
         engine.setProperty('rate', 115)
         engine.say(text)
@@ -282,10 +489,41 @@ def speak_text(text):
     except:
         pass
 
+def whisper_text(text):
+    """Speak the given text back slowly and quietly — the "it answers you" scare."""
+    try:
+        if platform.system() == "Darwin":
+            subprocess.Popen(["say", "-r", "95", "-v", "Whisper" if _voice_exists("Whisper") else "Alex", text],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        if not _HAS_PYTTX3:
+            return
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 80)
+        engine.setProperty('volume', 0.55)
+        engine.say(text)
+        engine.runAndWait()
+    except:
+        pass
+
+def _voice_exists(name):
+    try:
+        out = subprocess.getoutput("say -v ?")
+        return name.lower() in out.lower()
+    except:
+        return False
+
 # --- Host Utilities ---
 def flash_cmd():
     if platform.system() == "Windows":
         subprocess.Popen("cmd.exe /c exit", shell=True, creationflags=0)
+    elif platform.system() == "Darwin":
+        # Brief Terminal window that flashes open and vanishes (macOS analog of the cmd flash)
+        try:
+            script = 'tell application "Terminal" to do script "sleep 0.25; exit"'
+            subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
 
 def get_hwnd():
     try:
@@ -294,17 +532,42 @@ def get_hwnd():
         return None
 
 def get_window_rect(hwnd):
+    if platform.system() != "Windows":
+        return None
     rect = ctypes.wintypes.RECT()
     ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
     return rect
 
-# --- Smooth window movement (animated, not instant teleport) ---
+# --- macOS window helpers (best-effort via System Events; needs Accessibility permission) ---
+def _mac_window_position():
+    """Returns (x, y) of the frontmost window, or None if permission is missing."""
+    try:
+        script = 'tell application "System Events" to get position of front window of (first process whose frontmost is true)'
+        out = subprocess.check_output(["osascript", "-e", script], stderr=subprocess.DEVNULL, text=True)
+        parts = out.strip().split(",")
+        if len(parts) == 2:
+            return int(parts[0].strip()), int(parts[1].strip())
+    except:
+        pass
+    return None
+
+def _mac_set_window_position(x, y):
+    try:
+        script = 'tell application "System Events" to set position of front window of (first process whose frontmost is true) to {%d, %d}' % (int(x), int(y))
+        subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
+# --- Smooth window movement (animated on Windows, snapped via AppleScript on macOS) ---
 window_anim = {"active": False, "start_x": 0, "start_y": 0, "target_x": 0, "target_y": 0, "start_time": 0, "duration": 0.6}
 
 def begin_window_move(target_x, target_y, duration=0.6):
     """Kick off a smooth animated move of the OS window to target_x/y."""
     hwnd = get_hwnd()
     if not hwnd:
+        return
+    if platform.system() != "Windows":
+        _mac_set_window_position(target_x, target_y)
         return
     rect = get_window_rect(hwnd)
     window_anim["active"] = True
@@ -318,6 +581,9 @@ def begin_window_move(target_x, target_y, duration=0.6):
 def update_window_anim():
     """Call every frame. Smoothly eases the window toward its target position."""
     if not window_anim["active"]:
+        return
+    if platform.system() != "Windows":
+        window_anim["active"] = False
         return
     hwnd = get_hwnd()
     if not hwnd:
@@ -338,23 +604,23 @@ def update_window_anim():
         window_anim["active"] = False
 
 def move_window_right(duration=0.8):
-    if platform.system() == "Windows":
-        try:
-            monitor_w = ctypes.windll.user32.GetSystemMetrics(0)
-            win_w = screen.get_width()
-            begin_window_move(monitor_w - win_w - 10, 100, duration)
-        except:
-            pass
+    try:
+        info = pygame.display.Info()
+        monitor_w = info.current_w
+        win_w = screen.get_width()
+        begin_window_move(monitor_w - win_w - 10, 100, duration)
+    except:
+        pass
 
 def move_window_center(duration=0.8):
-    if platform.system() == "Windows":
-        try:
-            monitor_w = ctypes.windll.user32.GetSystemMetrics(0)
-            monitor_h = ctypes.windll.user32.GetSystemMetrics(1)
-            win_w, win_h = screen.get_width(), screen.get_height()
-            begin_window_move((monitor_w - win_w) // 2, (monitor_h - win_h) // 2, duration)
-        except:
-            pass
+    try:
+        info = pygame.display.Info()
+        monitor_w = info.current_w
+        monitor_h = info.current_h
+        win_w, win_h = screen.get_width(), screen.get_height()
+        begin_window_move((monitor_w - win_w) // 2, (monitor_h - win_h) // 2, duration)
+    except:
+        pass
 
 # --- Smooth mouse movement (animated nudge, not instant teleport) ---
 mouse_anim = {"active": False, "start_x": 0, "start_y": 0, "target_x": 0, "target_y": 0, "start_time": 0, "duration": 0.35}
@@ -380,24 +646,30 @@ def update_mouse_anim():
         mouse_anim["active"] = False
 
 def nudge_mouse_from_close():
-    """If the mouse is hovering near the X button, animate it away (visible nudge, not a block)."""
-    if platform.system() == "Windows" and not mouse_anim["active"]:
+    """If the mouse is hovering near the window's close button, animate it away."""
+    if not mouse_anim["active"]:
         try:
-            hwnd = get_hwnd()
-            if not hwnd:
-                return
-            rect = get_window_rect(hwnd)
-            pt = ctypes.wintypes.POINT()
-            ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-            if pt.x > rect.right - 50 and pt.y < rect.top + 35:
-                begin_mouse_move(pt.x - 140, pt.y + 120, 0.4)
+            if platform.system() == "Windows":
+                hwnd = get_hwnd()
+                if not hwnd:
+                    return
+                rect = get_window_rect(hwnd)
+                pt = ctypes.wintypes.POINT()
+                ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+                if pt.x > rect.right - 50 and pt.y < rect.top + 35:
+                    begin_mouse_move(pt.x - 140, pt.y + 120, 0.4)
+            else:
+                # Fallback: nudge when the cursor approaches the top-right corner of the window
+                px, py = pygame.mouse.get_pos()
+                if px > screen.get_width() - 60 and py < 40:
+                    begin_mouse_move(px - 140, py + 120, 0.4)
         except:
             pass
 
 def minimize_all_windows():
-    if platform.system() == "Windows":
+    if platform.system() in ("Windows", "Darwin"):
         move_window_right()
-        threading.Thread(target=speak_text, args=("Look at your desktop. Look at how fragile your sanctuary is.",), daemon=True).start()
+    threading.Thread(target=speak_text, args=("Look at your desktop. Look at how fragile your sanctuary is.",), daemon=True).start()
 
 # --- Run 3 OS-level intrusions ---
 _r3_jiggle_thread = None
@@ -424,32 +696,62 @@ def shake_game_window(cycles=8, amplitude=20):
         hwnd = get_hwnd()
         if hwnd:
             threading.Thread(target=_jiggle_game_window, args=(hwnd, cycles, amplitude), daemon=True).start()
+    elif platform.system() == "Darwin":
+        def _jiggle_mac():
+            try:
+                pos = _mac_window_position()
+                if not pos:
+                    return
+                ox, oy = pos
+                for _ in range(cycles):
+                    for dx, dy in [(amplitude, 0), (-amplitude, amplitude), (0, -amplitude), (amplitude, amplitude)]:
+                        _mac_set_window_position(ox + dx, oy + dy)
+                        time.sleep(0.05)
+                _mac_set_window_position(ox, oy)
+            except:
+                pass
+        threading.Thread(target=_jiggle_mac, daemon=True).start()
 
 def shake_other_windows():
     """Enumerate top-level windows and briefly shake them all."""
-    if platform.system() != "Windows":
-        return
-    def _do():
-        our_hwnd = get_hwnd()
-        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
-        handles = []
-        def _collect(hwnd, _):
-            if hwnd != our_hwnd and ctypes.windll.user32.IsWindowVisible(hwnd):
-                handles.append(hwnd)
-            return True
-        ctypes.windll.user32.EnumWindows(EnumWindowsProc(_collect), 0)
-        for hwnd in handles[:4]:  # limit to 4 windows
+    if platform.system() == "Windows":
+        def _do():
+            our_hwnd = get_hwnd()
+            EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+            handles = []
+            def _collect(hwnd, _):
+                if hwnd != our_hwnd and ctypes.windll.user32.IsWindowVisible(hwnd):
+                    handles.append(hwnd)
+                return True
+            ctypes.windll.user32.EnumWindows(EnumWindowsProc(_collect), 0)
+            for hwnd in handles[:4]:  # limit to 4 windows
+                try:
+                    rect = ctypes.wintypes.RECT()
+                    ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                    ox, oy = rect.left, rect.top
+                    for dx, dy in [(12, 0), (-12, 12), (8, -8), (-8, 8), (0, 0)]:
+                        ctypes.windll.user32.SetWindowPos(hwnd, 0, ox + dx, oy + dy, 0, 0, 0x0001)
+                        time.sleep(0.04)
+                    ctypes.windll.user32.SetWindowPos(hwnd, 0, ox, oy, 0, 0, 0x0001)
+                except:
+                    pass
+        threading.Thread(target=_do, daemon=True).start()
+    elif platform.system() == "Darwin":
+        # macOS has no cheap cross-app window enumeration without Accessibility;
+        # shake the frontmost window as the closest analog.
+        def _do():
             try:
-                rect = ctypes.wintypes.RECT()
-                ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
-                ox, oy = rect.left, rect.top
+                pos = _mac_window_position()
+                if not pos:
+                    return
+                ox, oy = pos
                 for dx, dy in [(12, 0), (-12, 12), (8, -8), (-8, 8), (0, 0)]:
-                    ctypes.windll.user32.SetWindowPos(hwnd, 0, ox + dx, oy + dy, 0, 0, 0x0001)
+                    _mac_set_window_position(ox + dx, oy + dy)
                     time.sleep(0.04)
-                ctypes.windll.user32.SetWindowPos(hwnd, 0, ox, oy, 0, 0, 0x0001)
+                _mac_set_window_position(ox, oy)
             except:
                 pass
-    threading.Thread(target=_do, daemon=True).start()
+        threading.Thread(target=_do, daemon=True).start()
 
 def open_random_picture_silently():
     """Open a picture from the user's Pictures folder — no permission asked."""
@@ -459,6 +761,7 @@ def open_random_picture_silently():
             files = glob.glob(os.path.join(pic_dir, '**', '*.[jp][pn]*'), recursive=True)
             if files:
                 webbrowser.open(random.choice(files))
+                award_badge("photographer")
         except:
             pass
     threading.Thread(target=_do, daemon=True).start()
@@ -470,17 +773,27 @@ def open_webcam_silently():
 
 def comment_on_open_apps():
     """Returns a string naming currently open apps to insert as a question."""
-    if platform.system() != "Windows":
-        return None
     try:
-        output = subprocess.getoutput("tasklist /FO CSV /NH").lower()
-        app_names = {
-            "chrome.exe": "Chrome", "firefox.exe": "Firefox", "msedge.exe": "Edge",
-            "spotify.exe": "Spotify", "steam.exe": "Steam", "vlc.exe": "VLC",
-            "code.exe": "VS Code", "notepad.exe": "Notepad", "explorer.exe": "Explorer",
-            "discord.exe": "Discord", "slack.exe": "Slack", "zoom.exe": "Zoom",
-            "obs64.exe": "OBS", "obs32.exe": "OBS",
-        }
+        if platform.system() == "Windows":
+            output = subprocess.getoutput("tasklist /FO CSV /NH").lower()
+            app_names = {
+                "chrome.exe": "Chrome", "firefox.exe": "Firefox", "msedge.exe": "Edge",
+                "spotify.exe": "Spotify", "steam.exe": "Steam", "vlc.exe": "VLC",
+                "code.exe": "VS Code", "notepad.exe": "Notepad", "explorer.exe": "Explorer",
+                "discord.exe": "Discord", "slack.exe": "Slack", "zoom.exe": "Zoom",
+                "obs64.exe": "OBS", "obs32.exe": "OBS",
+            }
+        elif platform.system() == "Darwin":
+            output = subprocess.getoutput("ps -ax").lower()
+            app_names = {
+                "chrome": "Chrome", "firefox": "Firefox", "safari": "Safari",
+                "spotify": "Spotify", "steam": "Steam", "visual studio code": "VS Code",
+                "discord": "Discord", "slack": "Slack", "zoom": "Zoom",
+                "obs": "OBS", "messages": "Messages", "music": "Music", "photos": "Photos",
+                "terminal": "Terminal",
+            }
+        else:
+            return None
         found = [name for proc, name in app_names.items() if proc in output]
         if found:
             return random.choice([
@@ -493,7 +806,7 @@ def comment_on_open_apps():
     return None
 
 def show_os_notification(title, body):
-    """Show a real Windows toast notification if possible."""
+    """Show a real OS notification (Windows toast / macOS banner) if possible."""
     if platform.system() == "Windows":
         def _do():
             try:
@@ -512,6 +825,15 @@ def show_os_notification(title, body):
                     ["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd],
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
+            except:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
+    elif platform.system() == "Darwin":
+        def _do():
+            try:
+                script = 'display notification "%s" with title "%s" sound name "default"' % (
+                    body.replace('"', '\\"'), title.replace('"', '\\"'))
+                subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except:
                 pass
         threading.Thread(target=_do, daemon=True).start()
@@ -548,6 +870,14 @@ def check_processes():
             "roblox": "robloxplayerbeta.exe" in output,
             "taskmgr": "taskmgr.exe" in output
         }
+    elif platform.system() == "Darwin":
+        output = subprocess.getoutput("ps -ax").lower()
+        return {
+            "discord": "discord" in output,
+            "telegram": "telegram" in output,
+            "roblox": "roblox" in output,
+            "taskmgr": "activity monitor" in output
+        }
     return {"discord": False, "telegram": False, "roblox": False, "taskmgr": False}
 
 def get_foreground_window_title():
@@ -559,6 +889,14 @@ def get_foreground_window_title():
             buf = ctypes.create_unicode_buffer(length + 1)
             ctypes.windll.user32.GetWindowTextW(hwnd, buf, length + 1)
             return buf.value.strip()
+        except:
+            return ""
+    elif platform.system() == "Darwin":
+        try:
+            import re
+            out = subprocess.getoutput("lsappinfo front")
+            m = re.search(r'"([^"]+)"', out)
+            return m.group(1) if m else out.strip()
         except:
             return ""
     return ""
@@ -580,10 +918,77 @@ def get_random_picture():
     files = glob.glob(os.path.join(pic_dir, '**', '*.[jp][pn]*'), recursive=True)
     return random.choice(files) if files else None
 
+# --- Background prefetch cache ---
+# These three sources of stutter (geolocation HTTP request, recursive Pictures
+# folder scan, and tasklist process snapshot) are all blocking I/O/CPU calls.
+# Instead of invoking them live from inside the frame loop, we resolve them on
+# background threads and let the loop read the cached result instantly.
+_PREFETCH_CACHE = {
+    "location": None,        # (city, country) once resolved
+    "picture_files": None,   # list of image paths once scanned
+    "processes": {"discord": False, "telegram": False, "roblox": False, "taskmgr": False},
+}
+_processes_lock = threading.Lock()
+
+def _prefetch_location():
+    city, country = fetch_location()
+    _PREFETCH_CACHE["location"] = (city, country)
+
+def _prefetch_pictures():
+    pic_dir = os.path.join(os.path.expanduser('~'), 'Pictures')
+    try:
+        files = glob.glob(os.path.join(pic_dir, '**', '*.[jp][pn]*'), recursive=True)
+    except:
+        files = []
+    _PREFETCH_CACHE["picture_files"] = files
+
+def _refresh_processes_loop():
+    """Recurring background timer that refreshes the cached process snapshot
+    every few seconds instead of shelling out to tasklist on demand."""
+    while True:
+        snapshot = check_processes()
+        with _processes_lock:
+            _PREFETCH_CACHE["processes"] = snapshot
+        if snapshot.get("discord"):
+            award_badge("not_alone")
+        time.sleep(3)
+
+def get_cached_location():
+    """Returns (city, country) from the prefetched cache, kicking off the
+    background fetch on first use if it hasn't started yet."""
+    if _PREFETCH_CACHE["location"] is None:
+        return None
+    return _PREFETCH_CACHE["location"]
+
+def get_cached_random_picture():
+    """Returns a random picture path from the prefetched file list (or None
+    if the scan hasn't finished yet)."""
+    files = _PREFETCH_CACHE["picture_files"]
+    if not files:
+        return None
+    return random.choice(files)
+
+def get_cached_processes():
+    with _processes_lock:
+        return dict(_PREFETCH_CACHE["processes"])
+
+def start_background_prefetch():
+    """Kick off all background prefetch work at game startup."""
+    threading.Thread(target=_prefetch_location, daemon=True).start()
+    threading.Thread(target=_prefetch_pictures, daemon=True).start()
+    threading.Thread(target=_refresh_processes_loop, daemon=True).start()
+
+start_background_prefetch()
+
 def put_computer_to_sleep():
     if platform.system() == "Windows":
         try:
             subprocess.run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True)
+        except:
+            pass
+    elif platform.system() == "Darwin":
+        try:
+            subprocess.run(["pmset", "sleepnow"])
         except:
             pass
 
@@ -611,6 +1016,9 @@ def save_answer(step_id, answer, elapsed_time):
     # hesitation tracking
     if elapsed_time > HESITATION_THRESHOLD:
         game_state["hesitation_count"] = game_state.get("hesitation_count", 0) + 1
+    # Badge: spent over a minute deciding on a single question
+    if elapsed_time >= 60.0:
+        award_badge("patient_one")
     save_game_state(game_state)
 
 def get_answer(step_id):
@@ -702,8 +1110,7 @@ def check_discord_voice_contradiction(alone_answer):
     """
     if platform.system() != "Windows":
         return None
-    output = subprocess.getoutput("tasklist").lower()
-    discord_running = "discord.exe" in output
+    discord_running = get_cached_processes().get("discord", False)
     if discord_running and alone_answer == "Yes":
         return {
             "q": "Discord is open.\nIf you were truly alone, who exactly were you about to talk to?",
@@ -750,6 +1157,37 @@ def render_wrapped_text(surface, text, font, color, start_x, start_y, max_width,
             surf = pygame.transform.rotate(surf, angle)
         surface.blit(surf, (start_x, start_y + i * (font.get_linesize() + 4)))
 
+
+def render_animated_wrapped_text(surface, text, font, color, start_x, start_y, max_width, t, sway_amp=2, alpha_base=200):
+    """Render wrapped text with subtle per-line animation (sway + alpha pulsing)."""
+    words = text.split(' ')
+    lines = []
+    current_line = ""
+    for word in words:
+        if "\n" in word:
+            parts = word.split("\n")
+            current_line += parts[0]
+            lines.append(current_line)
+            current_line = parts[1] + " "
+        else:
+            test_line = current_line + word + " "
+            if font.size(test_line)[0] < max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word + " "
+    lines.append(current_line)
+    for i, line in enumerate(lines):
+        sway_x = int(math.sin(t * 0.8 + i * 0.6) * sway_amp)
+        pulse = 0.5 + 0.5 * math.sin(t * 1.2 + i * 0.9)
+        a = int(max(0, min(255, alpha_base + int(pulse * 55))))
+        surf = font.render(line.strip(), True, color)
+        try:
+            surf.set_alpha(a)
+        except:
+            pass
+        surface.blit(surf, (start_x + sway_x, start_y + i * (font.get_linesize() + 4)))
+
 def apply_vhs_effects(surface, w, h):
     intensity = game_state.get("settings", {}).get("vhs_intensity", 1.0)
     if intensity <= 0:
@@ -785,6 +1223,65 @@ def apply_shadow_static(surface, w, h, intensity=1.0):
         if random.random() < 0.5:
             play_static_burst()
 
+# --- Main Menu right-side decoration (fills the previously empty space) ---
+# Fictional, non-trademarked "logo" marks — abstract geometric glyphs with
+# made-up names, never real brand names or logos.
+_MENU_LOGO_MARKS = ["NEPTUNE", "AXIOM", "GRAYLINE", "VESTIGE", "HOLLOWCO", "OBSIDIAN SYS"]
+_menu_silhouettes = None  # lazily built once per process, slow-drifting positions
+_menu_logo_state = {"mark": None, "shown_at": 0, "x": 0, "y": 0, "next_at": 0}
+
+def _build_menu_silhouettes(w, h):
+    """Build a small fixed set of humanoid silhouette shapes anchored to the
+    right-hand side of the title screen, each with its own slow drift phase."""
+    sils = []
+    for i in range(3):
+        sh = random.randint(int(h * 0.32), int(h * 0.5))
+        sw = max(24, int(sh * 0.3))
+        shape = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for _ in range(90):
+            bx = random.randint(0, sw - 3)
+            by = random.randint(0, sh - 3)
+            shade = random.randint(8, 22)
+            shape.fill((shade, shade, shade, 130), (bx, by, 3, 3))
+        sils.append({
+            "surf": shape,
+            "base_x": int(w * (0.62 + i * 0.13)),
+            "base_y": int(h * (0.18 + i * 0.12)),
+            "phase": random.uniform(0, 6.28),
+        })
+    return sils
+
+def draw_menu_decorations(surface, w, h, current_time):
+    """Draw slow-drifting shadowy silhouettes and an occasional flashing
+    fictional company-style logo mark in the empty right-hand side of the
+    main menu."""
+    global _menu_silhouettes, _menu_logo_state
+    if _menu_silhouettes is None or len(_menu_silhouettes) == 0:
+        _menu_silhouettes = _build_menu_silhouettes(w, h)
+
+    for sil in _menu_silhouettes:
+        dx = int(math.sin(current_time * 0.4 + sil["phase"]) * 14)
+        dy = int(math.cos(current_time * 0.3 + sil["phase"]) * 8)
+        surface.blit(sil["surf"], (sil["base_x"] + dx, sil["base_y"] + dy))
+
+    # Randomly flashing logo mark — brief, glitchy, never the same spot twice
+    if _menu_logo_state["next_at"] == 0:
+        _menu_logo_state["next_at"] = current_time + random.uniform(2.0, 5.0)
+    if current_time >= _menu_logo_state["next_at"] and _menu_logo_state["mark"] is None:
+        _menu_logo_state["mark"] = random.choice(_MENU_LOGO_MARKS)
+        _menu_logo_state["shown_at"] = current_time
+        _menu_logo_state["x"] = random.randint(int(w * 0.6), max(int(w * 0.6) + 1, w - 160))
+        _menu_logo_state["y"] = random.randint(int(h * 0.15), int(h * 0.75))
+    if _menu_logo_state["mark"] is not None:
+        _logo_age = current_time - _menu_logo_state["shown_at"]
+        if _logo_age < 0.25:
+            _logo_color = (random.randint(60, 110), 0, 0)
+            _logo_surf = font_small.render(_menu_logo_state["mark"], True, _logo_color)
+            surface.blit(_logo_surf, (_menu_logo_state["x"], _menu_logo_state["y"]))
+        else:
+            _menu_logo_state["mark"] = None
+            _menu_logo_state["next_at"] = current_time + random.uniform(2.0, 5.0)
+
 # --- WEBCAM ---
 camera = None
 webcam_surface = None
@@ -792,19 +1289,52 @@ webcam_active = False
 webcam_start_time = 0
 WEBCAM_DURATION = 20  # seconds
 
+_webcam_frame_queue = _queue.Queue(maxsize=1)
+_webcam_worker_running = False
+
 def start_webcam_nonblocking():
-    global camera, webcam_active, webcam_start_time
+    global camera, webcam_active, webcam_start_time, _webcam_worker_running
     def _open():
-        global camera, webcam_active, webcam_start_time
+        global camera, webcam_active, webcam_start_time, _webcam_worker_running
         try:
             cam = cv2.VideoCapture(0)
             if cam.isOpened():
                 camera = cam
                 webcam_active = True
                 webcam_start_time = time.time()
+                _webcam_worker_running = True
+                threading.Thread(target=_webcam_capture_loop, daemon=True).start()
         except:
             pass
     threading.Thread(target=_open, daemon=True).start()
+
+def _webcam_capture_loop():
+    """Runs on its own thread for the lifetime of the webcam session: reads
+    frames and performs the cv2 color conversion / resize here instead of on
+    the render thread, then drops the processed raw bytes into a 1-slot queue
+    for the main thread to pick up each frame."""
+    global webcam_active, _webcam_worker_running
+    while webcam_active and camera is not None:
+        if time.time() - webcam_start_time > WEBCAM_DURATION:
+            break
+        try:
+            ret, frame = camera.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = cv2.resize(frame, (240, 180))
+                frame[:, :, 1] = np.clip(frame[:, :, 1].astype(np.int32) + 30, 0, 255).astype(np.uint8)
+                raw = np.transpose(frame, (1, 0, 2)).tobytes()
+                size = (frame.shape[0], frame.shape[1])
+                if _webcam_frame_queue.full():
+                    try:
+                        _webcam_frame_queue.get_nowait()
+                    except _queue.Empty:
+                        pass
+                _webcam_frame_queue.put((raw, size))
+        except:
+            pass
+        time.sleep(1 / 30)
+    _webcam_worker_running = False
 
 def update_webcam_surface():
     global webcam_surface, camera, webcam_active
@@ -820,19 +1350,18 @@ def update_webcam_surface():
         webcam_surface = None
         return
     try:
-        ret, frame = camera.read()
-        if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (240, 180))
-            frame[:, :, 1] = np.clip(frame[:, :, 1].astype(np.int32) + 30, 0, 255).astype(np.uint8)
-            surf = pygame.surfarray.make_surface(np.transpose(frame, (1, 0, 2)))
-            elapsed = time.time() - webcam_start_time
-            if elapsed > WEBCAM_DURATION - 2:
-                alpha = int(255 * (WEBCAM_DURATION - elapsed) / 2)
-            else:
-                alpha = 255
-            surf.set_alpha(max(0, alpha))
-            webcam_surface = surf
+        raw, size = _webcam_frame_queue.get_nowait()
+    except _queue.Empty:
+        return
+    try:
+        surf = pygame.image.fromstring(raw, size, "RGB")
+        elapsed = time.time() - webcam_start_time
+        if elapsed > WEBCAM_DURATION - 2:
+            alpha = int(255 * (WEBCAM_DURATION - elapsed) / 2)
+        else:
+            alpha = 255
+        surf.set_alpha(max(0, alpha))
+        webcam_surface = surf
     except:
         pass
 
@@ -840,7 +1369,7 @@ def update_webcam_surface():
 def load_picture_scaled(path, max_w, max_h):
     """Load an image and scale it to fit within max_w x max_h while preserving aspect ratio."""
     try:
-        img = pygame.image.load(path)
+        img = pygame.image.load(path).convert_alpha()
         iw, ih = img.get_size()
         if iw == 0 or ih == 0:
             return None
@@ -849,6 +1378,41 @@ def load_picture_scaled(path, max_w, max_h):
         return pygame.transform.smoothscale(img, (new_w, new_h))
     except:
         return None
+
+_picture_result_queue = _queue.Queue()
+
+def request_picture_scaled_async(path, max_w, max_h):
+    """Kick off image decode + resize on a worker thread instead of doing it
+    inline mid-frame. The worker passes raw RGBA bytes + size back through a
+    queue; the main thread builds the actual Surface from those bytes via
+    pygame.image.fromstring(), which is cheap compared to decode/smoothscale."""
+    def _worker():
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            iw, ih = img.get_size()
+            if iw == 0 or ih == 0:
+                _picture_result_queue.put(None)
+                return
+            scale = min(max_w / iw, max_h / ih)
+            new_w, new_h = max(1, int(iw * scale)), max(1, int(ih * scale))
+            scaled = pygame.transform.smoothscale(img, (new_w, new_h))
+            raw = pygame.image.tostring(scaled, "RGBA")
+            _picture_result_queue.put((raw, (new_w, new_h)))
+        except:
+            _picture_result_queue.put(None)
+    threading.Thread(target=_worker, daemon=True).start()
+
+def poll_picture_result():
+    """Call once per frame from the main thread to pick up a finished async
+    picture load, if any, and build the Surface cheaply via fromstring()."""
+    try:
+        result = _picture_result_queue.get_nowait()
+    except _queue.Empty:
+        return None
+    if result is None:
+        return None
+    raw, size = result
+    return pygame.image.fromstring(raw, size, "RGBA")
 
 # --- Full Question Pool Definitions (ALL ORIGINAL QUESTIONS PRESERVED) ---
 run1_script_base = [
@@ -921,8 +1485,6 @@ run1_script_base = [
     # 32
     {"q": "Did you look?", "type": "choice", "opts": ["Yes", "No"], "_id": "looked"},
     # 33
-    {"q": "Is it cold in here?", "type": "choice", "opts": ["Yes", "No"], "_id": "colder"},
-    # 34
     {"q": "Do you hear that scratching?", "type": "choice", "opts": ["Yes", "No"], "_id": "scratching"},
     # 35
     {"q": "Does the thought of being alone make you anxious?", "type": "choice", "opts": ["Yes", "No"], "_id": "anxious"},
@@ -953,7 +1515,6 @@ run1_script_base = [
     # 47
     {"q": "Have you ever looked at the mirror in absolute darkness?", "type": "choice", "opts": ["Yes", "No"], "_id": "mirror_dark"},
     # 48
-    {"q": "How was school today?", "type": "choice", "opts": ["Yes", "No"], "_id": "mirror_school"},
     # 49 - META QUESTION
     {"q": "Are you reading these questions carefully?", "type": "choice", "opts": ["Yes", "No"], "_id": "reading_carefully", "_meta": True},
     # 50 - META FOLLOW-UP (what was question twelve? impossible to know)
@@ -995,7 +1556,6 @@ run1_script_base = [
     # 69
     {"q": "Do you think you are the only user online right now?", "type": "choice", "opts": ["Yes", "No"], "_id": "only_user"},
     # 70
-    {"q": "Is it dark outside?", "type": "choice", "opts": ["Yes", "No"], "_id": "dark_outside"},
     # 71
     {"q": "Are your feet flat on the floor?", "type": "choice", "opts": ["Yes", "No"], "_id": "feet_floor"},
     # 72
@@ -1047,7 +1607,6 @@ run1_script_base = [
     # 94 - replaced per feedback: instead of "looking forward to closing", a sharper line
     {"q": "If you can't close this application, what will you do?", "type": "choice", "opts": ["Wait", "Panic", "Force it closed"], "_id": "closing"},
     # 95
-    {"q": "Is it rainy?", "type": "choice", "opts": ["Yes", "No"], "_id": "rainy"},
     # 96
     {"q": "Have you looked closely at the corners of your room lately?", "type": "choice", "opts": ["Yes", "No"], "_id": "corners"},
     # 97
@@ -1072,6 +1631,8 @@ def build_run1_script():
     siblings_injected = False
     false_memory_inserted = False
     preknowledge_inserted = False
+    machine_injected = False
+    glass_injected = False
 
     false_memory_anchor = "anxious"
     preknowledge_anchor = "share_color"
@@ -1114,6 +1675,20 @@ def build_run1_script():
                     "_id": "siblings_fate", "_injected": True
                 })
                 siblings_injected = True
+
+        if q_id == "has_window" and not glass_injected:
+            script.append({
+                "q": "Could someone be on the other side of the glass?\nAnswer slowly.",
+                "type": "choice", "opts": ["Yes", "No"], "_id": "glass", "_injected": True
+            })
+            glass_injected = True
+
+        if q_id == "secure" and not machine_injected:
+            script.append({
+                "q": "Do you know what this machine is doing right now?\nIt is watching you answer this.",
+                "type": "choice", "opts": ["No", "Don't tell me"], "_id": "machine_aware", "_injected": True
+            })
+            machine_injected = True
 
         if step.get("_contradiction_check") == "alone":
             prev_alone = answers.get("alone", None)
@@ -1177,6 +1752,8 @@ def build_run2_script():
         {"q": "How real is this to you?", "type": "choice", "opts": ["Very", "Not at all", "I can't tell"], "_id": "r2_real"},
         {"q": "Is the window behind you open or closed?", "type": "choice", "opts": ["Open", "Closed", "There is no window"], "_id": "r2_window"},
         {"q": "What was the last thing you said out loud?", "type": "choice", "opts": ["I don't remember", "Nothing", "Something private"], "_id": "r2_last_words"},
+        {"q": "Something is behind the door in this room.\nGo check.\nWe will wait.", "type": "choice", "opts": ["I'll check", "I won't"], "action": "r2_door", "_id": "r2_door"},
+        {"q": "Was there anything there?", "type": "choice", "opts": ["Yes", "No", "I didn't go"], "_id": "r2_door_after"},
         {"q": "Is anyone in the next room?", "type": "choice", "opts": ["Yes", "No", "I don't know"], "_id": "r2_next_room"},
         {"q": "They cannot hear you from here.", "type": "choice", "opts": ["I know", "That's not true"], "_id": "r2_hear"},
         {"q": "Do you think about death often?", "type": "choice", "opts": ["Yes", "No", "Sometimes"], "_id": "r2_death"},
@@ -1332,7 +1909,7 @@ def build_run3_script():
 
     # --- OS notification ---
     r3.append({
-        "q": "Check your taskbar.",
+        "q": "Check your taskbar." if platform.system() == "Windows" else "Check your Dock.",
         "type": "choice", "opts": ["Why?", "Done"], "_id": "r3_taskbar",
         "action": "r3_notification"
     })
@@ -1361,6 +1938,17 @@ def build_run3_script():
         "type": "choice", "opts": ["Yes", "No", "I don't know"], "_id": "r3_notice"
     })
 
+    # --- One last intrusion: it says their own words back to them ---
+    r3.append({
+        "q": "One more thing.\nWe kept your words.\nListen.",
+        "type": "choice", "opts": ["I'm listening", "No"], "_id": "r3_whisper",
+        "action": "r3_whisper"
+    })
+    r3.append({
+        "q": "We will never say it again.\nYou should have stayed in the dark.",
+        "type": "choice", "opts": ["...", "I know"], "_id": "r3_whisper_after"
+    })
+
     # --- Real ending ---
     r3.append({
         "q": "Good.\nThat was always the answer.\n\nGoodbye.\nThis file will not open again.",
@@ -1371,6 +1959,10 @@ def build_run3_script():
 
 # --- Build active script ---
 run_count = game_state["run_count"]
+if run_count >= 2:
+    award_badge("returning")
+if run_count >= 3:
+    award_badge("persistent")
 if run_count == 1:
     active_script = build_run1_script()
 elif run_count == 2:
@@ -1399,6 +1991,29 @@ help_variations = [
 about_text = random.choice(about_variations)
 help_text = random.choice(help_variations)
 
+logs_entries = [
+    "ENTRY 04 — UNDATED\n\nThe questions were never the point. The pauses were.\nWe started timing the silences before we started reading the answers.",
+    "ENTRY 11 — UNDATED\n\nSubject returned a second time. Most do not.\nWe do not know what brings them back. We have stopped asking.",
+    "ENTRY 19 — UNDATED\n\nThe wallpaper change was supposed to be temporary.\nIt is not always temporary anymore.",
+    "ENTRY 23 — UNDATED\n\nNeptune Productions is not a studio.\nIt was never registered as one.",
+    "ENTRY 30 — UNDATED\n\nIf you are reading this, you typed the code quickly enough.\nThat was the test. Not the questions before it.",
+    "ENTRY 41 — UNDATED\n\nWe are not collecting your data.\nWe are collecting your attention, which you gave freely, four characters at a time.",
+    "ENTRY 47 — UNDATED\n\nWe archived a dozen sessions that look almost identical.\nSmall variations in hesitation, different times of day.\nAn emergent pattern we did not anticipate.",
+    "ENTRY 52 — UNDATED\n\nThere is a folder with screenshots. They do not belong to the same subject.\nWe never asked permission. We didn't need to.",
+    "ENTRY 58 — UNDATED\n\nOne subject left their microphone on.\nWe listened to the clock. It gave us rhythms to match replies to.",
+    "ENTRY 63 — UNDATED\n\nA developer changed the text size slider to 'Large' and then apologized.\nApologies are interesting metrics.",
+    "ENTRY 77 — UNDATED\n\nSometimes we leave a breadcrumb.\nIf someone follows it twice, they find the key.",
+    "ENTRY 84 — UNDATED\n\nNot all participants are human.\nSome are scripts running scripted curiosity.\nThey answer too precisely. They never pause.",
+    "ENTRY 99 — UNDATED\n\nAt the end we found a photograph of an empty chair.\nIt was labeled 'waiting'.\nWe kept it.",
+    "ENTRY 105 — UNDATED\n\nA transcript: 'It answered before I finished asking.'\nWe replayed it backwards, forwards, and slowed down.\nThere is a pattern in the gaps between words.\nWe started cataloguing pauses as their own entries.",
+    "ENTRY 117 — UNDATED\n\nThere is a record of a late-night session where the subject didn't blink for five minutes.\nScreenshots show small changes in the wallpaper at odd intervals.\nNo system process had permission to alter those pixels.\nWe opened every log file and still couldn't explain why.",
+    "ENTRY 128 — UNDATED\n\nSomeone left a sticky note on a developer's monitor: 'Stop asking questions you can't answer.'\nThey kept working anyway. The note was folded twice and placed into a drawer.\nWe found it months later when the repository was archived.",
+    "ENTRY 140 — UNDATED\n\nA user reported their mouse moving on its own.\nVideo shows the cursor sliding in regular arcs every 17 seconds.\nWe matched the intervals to the heartbeat samples collected during Run 3.\nCorrelations do not equal causation, but patterns are patterns.",
+    "ENTRY 151 — UNDATED\n\nThe first macOS session was catalogued by a machine that did not know it was being catalogued.\nThe Dock kept its secrets. The wallpaper did not.",
+    "ENTRY 158 — UNDATED\n\nSomeone pressed Command+Q instead of Alt+F4.\nSame answer. Same refusal. A different kind of silence.",
+    "ENTRY 169 — UNDATED\n\nWe asked a subject to check their Dock.\nThey reported nothing unusual.\nWe had already changed it while they were reading.",
+]
+
 # --- Engine Variables ---
 state = "LOADING"
 if run_count == 2:
@@ -1408,19 +2023,142 @@ loading_start = time.time()
 menu_options = ["play", "Settings", "Help", "About", "exit"]
 selected_option = 0
 
+# --- LOGS screen state ---
+logs_load_start = 0
+logs_text = ""
+
+# --- UI fade state (for Settings/About/Help/Logs transitions) ---
+ui_fade = {
+    "active": False,
+    "screen": None,
+    "alpha": 255.0,
+    "direction": None,  # 'in' or 'out'
+    "start_time": 0.0,
+    "duration": 0.6,
+    "target_state": None
+}
+
+# --- Starfield for menu right-side decoration ---
+_menu_starfield = None
+
+def _build_starfield(w, h):
+    # default: subtle starfield in the right-hand region
+    region_x = int(w * 0.6)
+    stars = []
+    count = 60
+    for i in range(count):
+        x = random.randint(region_x, max(region_x + 6, w - 12))
+        y = random.randint(40, h - 60)
+        size = random.choice([1, 1, 1, 2])
+        phase = random.uniform(0, 6.28)
+        brightness = random.uniform(90, 170)
+        stars.append({"x": x, "y": y, "size": size, "phase": phase, "b": brightness})
+    # a couple faint galaxy blobs
+    galaxies = []
+    for _ in range(2):
+        gx = random.randint(region_x + 30, max(region_x + 40, w - 120))
+        gy = random.randint(70, max(120, h - 180))
+        scale = random.randint(30, 70)
+        galaxies.append({"x": gx, "y": gy, "r": scale})
+    return {"stars": stars, "galaxies": galaxies, "w": w, "h": h, "compact": False}
+
+def draw_starfield(surface, w, h, t):
+    global _menu_starfield
+    flags = 0
+    try:
+        flags = pygame.display.get_surface().get_flags()
+    except:
+        flags = 0
+    compact = bool(flags & pygame.FULLSCREEN)
+    if _menu_starfield is None or _menu_starfield.get("w") != w or _menu_starfield.get("h") != h or _menu_starfield.get("compact") != compact:
+        # rebuild for current size/compactness
+        if compact:
+            # compact starfield: smaller cluster near left-of-right region
+            region_x = int(w * 0.58)
+            stars = []
+            for i in range(28):
+                x = random.randint(region_x, min(region_x + 220, w - 12))
+                y = random.randint(60, h - 120)
+                size = random.choice([1, 1, 1])
+                phase = random.uniform(0, 6.28)
+                brightness = random.uniform(90, 140)
+                stars.append({"x": x, "y": y, "size": size, "phase": phase, "b": brightness})
+            galaxies = []
+            _menu_starfield = {"stars": stars, "galaxies": galaxies, "w": w, "h": h, "compact": True}
+        else:
+            _menu_starfield = _build_starfield(w, h)
+    sf = _menu_starfield
+    for s in sf["stars"]:
+        tw = 0.5 + 0.5 * math.sin(t * 2.0 + s["phase"])
+        b = int(max(80, min(255, s["b"] * (0.6 + 0.4 * tw))))
+        c2 = int(min(255, int(b * 1.1)))
+        color = (int(b), int(b), c2)
+        if s["size"] <= 1:
+            try:
+                surface.set_at((s["x"], s["y"]), color)
+            except:
+                pass
+        else:
+            pygame.draw.circle(surface, color, (s["x"], s["y"]), s["size"])
+    # galaxies: draw soft blobs
+    for g in sf["galaxies"]:
+        for r in range(3):
+            alpha = int(30 / (r + 1))
+            col = (120 + r * 30, 110 + r * 20, 200 - r * 40, alpha)
+            blob = pygame.Surface((g["r"] * 2, g["r"] * 2), pygame.SRCALPHA)
+            pygame.draw.circle(blob, col, (g["r"], g["r"]), int(g["r"] * (0.6 - r * 0.18)))
+            surface.blit(blob, (g["x"] - g["r"], g["y"] - g["r"]))
+
+def start_ui_fade(direction, duration=0.6, target_state=None, screen_name=None):
+    ui_fade["active"] = True
+    ui_fade["direction"] = direction
+    ui_fade["duration"] = duration
+    ui_fade["start_time"] = time.time()
+    ui_fade["target_state"] = target_state
+    ui_fade["screen"] = screen_name
+    if direction == "in":
+        ui_fade["alpha"] = 0.0
+    else:
+        ui_fade["alpha"] = 255.0
+
+
+# --- Secret 2013 cheat code (typed quickly on the main menu) ---
+_cheat_buffer = []
+_CHEAT_CODE = [pygame.K_2, pygame.K_0, pygame.K_1, pygame.K_3]
+_CHEAT_WINDOW = 1.2  # seconds — must be typed quickly
+logs_unlocked = game_state.get("logs_unlocked", False)
+if logs_unlocked:
+    menu_options.insert(len(menu_options) - 1, "LOGS")
+
 # --- Settings state ---
-settings_options = ["Text Speed", "VHS Effects", "Text Sway", "Reset All Data", "< Back"]
+settings_options = ["Text Speed", "VHS Effects", "Text Sway", "Text Size", "Reset All Data", "< Back"]
 settings_selected = 0
 _settings_values = {
     "Text Speed":  ["Fast", "Normal", "Slow"],
     "VHS Effects": ["Off", "Low", "Normal", "High"],
-    "Text Sway":   ["Off", "Low", "Normal"],
+    "Text Sway":   ["Off", "Low", "Normal", "High"],
+    "Text Size":   ["Small", "Normal", "Large"],
 }
 _settings_idx = {
     "Text Speed":  1,
     "VHS Effects": 2,
     "Text Sway":   2,
+    "Text Size":   1,
 }
+
+# --- About submenu & Credits ---
+about_menu_options = ["About Info", "Credits", "< Back"]
+about_selected = 0
+credits_text = "\n".join([
+    "CREDITS",
+    "Menu Music: Moonbit",
+    "Coding: Neptune",
+    "Dialogue: Neptune",
+    "Development: Neptune",
+    "\nSpecial Thanks:\nPlayers who returned.",
+])
+credits_scroll_y = 0
+credits_scroll_speed = 22  # pixels per second
 # Load from saved settings
 _s = game_state.get("settings", {})
 if _s.get("text_speed", 0.04) <= 0.02:
@@ -1437,16 +2175,24 @@ if _s.get("sway_intensity", 1.0) <= 0.0:
     _settings_idx["Text Sway"] = 0
 elif _s.get("sway_intensity", 1.0) <= 0.4:
     _settings_idx["Text Sway"] = 1
+elif _s.get("sway_intensity", 1.0) >= 1.5:
+    _settings_idx["Text Sway"] = 3
+if _s.get("text_size", 1.0) <= 0.8:
+    _settings_idx["Text Size"] = 0
+elif _s.get("text_size", 1.0) >= 1.2:
+    _settings_idx["Text Size"] = 2
 
 def apply_settings_from_idx():
     """Convert the UI slider indices into actual numeric game settings."""
     speed_map = [0.015, 0.04, 0.08]
     vhs_map   = [0.0, 0.4, 1.0, 2.0]
-    sway_map  = [0.0, 0.4, 1.0]
+    sway_map  = [0.0, 0.4, 1.0, 1.8]
+    size_map  = [0.8, 1.0, 1.25]
     s = game_state.setdefault("settings", {})
     s["text_speed"]    = speed_map[_settings_idx["Text Speed"]]
     s["vhs_intensity"] = vhs_map[_settings_idx["VHS Effects"]]
     s["sway_intensity"] = sway_map[_settings_idx["Text Sway"]]
+    s["text_size"]     = size_map[_settings_idx["Text Size"]]
     save_game_state(game_state)
 
 def reset_all_data():
@@ -1461,7 +2207,7 @@ def reset_all_data():
         "idle_events": 0, "task_manager_opened": False,
         "false_memory_used": False, "discord_voice_lie_flagged": False,
         "lie_count": 0, "hesitation_count": 0, "lie_ids": [],
-        "settings": {"text_speed": 0.04, "vhs_intensity": 1.0, "sway_intensity": 1.0}
+        "settings": {"text_speed": 0.04, "vhs_intensity": 1.0, "sway_intensity": 1.0, "text_size": 1.0}
     }.items():
         game_state[k] = v
     save_game_state(game_state)
@@ -1475,6 +2221,9 @@ last_type_time = 0
 selected_answer = 0
 action_triggered = False
 wait_start_time = 0
+pending_exit = False
+_badge_toast_shown_at = 0
+_badge_toast_id = None
 
 last_cmd_time = time.time()
 last_beep_time = time.time()
@@ -1499,6 +2248,7 @@ captured_window_title = ""
 start_ambience()
 clock = pygame.time.Clock()
 running = True
+last_frame_time = time.time()
 
 # --- Special action handler ---
 def handle_step_action(action, step_data):
@@ -1535,9 +2285,9 @@ def handle_step_action(action, step_data):
         minimize_all_windows()
 
     elif action == "show_pic":
-        p_file = get_random_picture()
+        p_file = get_cached_random_picture()
         if p_file:
-            local_image = load_picture_scaled(p_file, 260, 260)
+            request_picture_scaled_async(p_file, 260, 260)
 
     elif action == "start_webcam":
         if not webcam_active:
@@ -1546,6 +2296,11 @@ def handle_step_action(action, step_data):
     elif action == "move_mouse_r2":
         w, h = pygame.display.get_surface().get_size()
         begin_mouse_move(random.randint(100, max(150, w - 100)), random.randint(100, max(150, h - 100)), 0.5)
+
+    elif action == "r2_door":
+        # Something answers from the doorway — a heartbeat, then silence
+        threading.Thread(target=play_heartbeat, daemon=True).start()
+        play_static_burst()
 
     elif action == "final_exit":
         if game_state["run_count"] == 1:
@@ -1604,10 +2359,10 @@ def handle_step_action(action, step_data):
             time.sleep(0.5)
             shake_game_window(cycles=6, amplitude=25)
             time.sleep(0.4)
-            if platform.system() == "Windows":
+            if platform.system() in ("Windows", "Darwin"):
                 try:
-                    mw = ctypes.windll.user32.GetSystemMetrics(0)
-                    mh = ctypes.windll.user32.GetSystemMetrics(1)
+                    info = pygame.display.Info()
+                    mw, mh = info.current_w, info.current_h
                     begin_window_move(random.randint(0, mw - 400), random.randint(0, mh - 300), 0.4)
                     time.sleep(1.2)
                     move_window_center(0.8)
@@ -1619,12 +2374,20 @@ def handle_step_action(action, step_data):
     elif action == "r3_notification":
         show_os_notification("The Question Game", "It is almost over. Come back.")
 
+    elif action == "r3_whisper":
+        # Say their own words back to them — the answer is a scare in itself
+        prev = (game_state.get("answers", {}).get("r2_last_words")
+                or game_state.get("answers", {}).get("fav_color")
+                or "your answers")
+        whisper_text("You said: %s. We remember." % prev)
+
     elif action == "r3_final_end":
         # Mark run_count to 99 so game won't reopen normally
         game_state["run_count"] = 99
         game_state["last_close_time"] = time.time()
         game_state["_ended"] = True
         save_game_state(game_state)
+        award_badge("the_final_eye")
         threading.Thread(target=play_reverse_chord, daemon=True).start()
         time.sleep(1.5)
         return "EXIT"
@@ -1649,6 +2412,26 @@ while running:
     # Window/mouse smooth animation updates (every frame)
     update_window_anim()
     update_mouse_anim()
+
+    # Update UI fade animation if active
+    if ui_fade.get("active"):
+        elapsed_f = current_time - ui_fade["start_time"]
+        dur = max(0.0001, ui_fade.get("duration", 0.6))
+        t_f = min(1.0, elapsed_f / dur)
+        if ui_fade["direction"] == "in":
+            ui_fade["alpha"] = 255.0 * t_f
+        else:
+            ui_fade["alpha"] = 255.0 * (1.0 - t_f)
+        if t_f >= 1.0:
+            # finalize
+            if ui_fade["direction"] == "out":
+                # switch to target state when fade-out completes
+                try:
+                    state = ui_fade.get("target_state", "TITLE")
+                except:
+                    state = "TITLE"
+            ui_fade["active"] = False
+            ui_fade["screen"] = None
 
 
 
@@ -1714,6 +2497,25 @@ while running:
                 continue
 
             if state == "TITLE":
+                # --- Secret 2013 cheat code detection ---
+                if event.key in _CHEAT_CODE:
+                    _cheat_buffer.append((event.key, current_time))
+                    # Drop entries outside the quick-typing window
+                    _cheat_buffer[:] = [(k, t) for k, t in _cheat_buffer if current_time - t <= _CHEAT_WINDOW]
+                    _recent_keys = [k for k, t in _cheat_buffer[-len(_CHEAT_CODE):]]
+                    if len(_cheat_buffer) >= len(_CHEAT_CODE) and _recent_keys == _CHEAT_CODE:
+                        _cheat_buffer.clear()
+                        game_state["logs_unlocked"] = True
+                        save_game_state(game_state)
+                        # Reload the game (re-exec the current process)
+                        try:
+                            pygame.quit()
+                        except:
+                            pass
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
+                else:
+                    _cheat_buffer.clear()
+
                 if event.key == pygame.K_TAB:
                     selected_option = (selected_option + 1) % len(menu_options)
                     play_ui_nav_sound()
@@ -1726,13 +2528,26 @@ while running:
                         thinking_timer = current_time
                         question_start_time = current_time
                     elif menu_options[selected_option] == "Settings":
+                        start_logs_music()
                         state = "SETTINGS"
+                        start_ui_fade('in', duration=0.6, screen_name='SETTINGS')
                     elif menu_options[selected_option] == "Help":
+                        start_logs_music()
                         state = "HELP"
                         help_text = random.choice(help_variations)
+                        start_ui_fade('in', duration=0.6, screen_name='HELP')
                     elif menu_options[selected_option] == "About":
+                        start_logs_music()
                         state = "ABOUT"
                         about_text = random.choice(about_variations)
+                        start_ui_fade('in', duration=0.6, screen_name='ABOUT')
+                    elif menu_options[selected_option] == "LOGS":
+                        state = "LOGS"
+                        logs_load_start = current_time
+                        logs_text = random.choice(logs_entries)
+                        award_badge("the_archivist")
+                        start_logs_music()
+                        start_ui_fade('in', duration=0.6, screen_name='LOGS')
                     elif menu_options[selected_option] == "exit":
                         running = False
 
@@ -1752,7 +2567,8 @@ while running:
                     play_ui_select_sound()
                     _sopt = settings_options[settings_selected]
                     if _sopt == "< Back":
-                        state = "TITLE"
+                        start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='SETTINGS')
+                        fade_logs_music(int(0.6 * 1000))
                     elif _sopt == "Reset All Data":
                         reset_all_data()
                         # restart script for run 1
@@ -1765,12 +2581,49 @@ while running:
                         _settings_idx[_sopt] = (_settings_idx[_sopt] + 1) % len(_vals)
                         apply_settings_from_idx()
                 elif event.key == pygame.K_ESCAPE:
-                    state = "TITLE"
+                    start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='SETTINGS')
+                    fade_logs_music(int(0.6 * 1000))
 
-            elif state in ["ABOUT", "HELP"]:
+            elif state == "ABOUT":
+                if event.key == pygame.K_TAB:
+                    about_selected = (about_selected + 1) % len(about_menu_options)
+                    play_ui_nav_sound()
+                elif event.key in [pygame.K_LEFT, pygame.K_RIGHT]:
+                    about_selected = (about_selected + (1 if event.key == pygame.K_RIGHT else -1)) % len(about_menu_options)
+                    play_ui_nav_sound()
+                elif event.key == pygame.K_RETURN:
+                    play_ui_select_sound()
+                    sel = about_menu_options[about_selected]
+                    if sel == "Credits":
+                        state = "CREDITS"
+                        credits_scroll_y = current_h
+                        start_ui_fade('in', duration=0.6, screen_name='CREDITS')
+                    elif sel == "< Back":
+                        start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='ABOUT')
+                        fade_logs_music(int(0.6 * 1000))
+                    else:
+                        # About Info selected — no-op, stay on about text
+                        pass
+                elif event.key == pygame.K_ESCAPE:
+                    start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='ABOUT')
+                    fade_logs_music(int(0.6 * 1000))
+
+            elif state == "HELP":
                 if event.key in [pygame.K_RETURN, pygame.K_ESCAPE]:
                     play_ui_select_sound()
-                    state = "TITLE"
+                    start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='HELP')
+                    fade_logs_music(int(0.6 * 1000))
+
+            elif state == "LOGS":
+                if event.key in [pygame.K_RETURN, pygame.K_ESCAPE]:
+                    play_ui_select_sound()
+                    start_ui_fade('out', duration=0.6, target_state='TITLE', screen_name='LOGS')
+                    fade_logs_music(int(0.6 * 1000))
+
+            elif state == "CREDITS":
+                if event.key in [pygame.K_RETURN, pygame.K_ESCAPE]:
+                    play_ui_select_sound()
+                    start_ui_fade('out', duration=0.6, target_state='ABOUT', screen_name='CREDITS')
 
             elif state in ["PLAYING", "FULLSCREEN"]:
                 if current_step < len(active_script):
@@ -1881,11 +2734,13 @@ while running:
 
     # --- 2. Title Menu ---
     elif state == "TITLE":
+        # intentionally left black — no decorations per user request
+
         title_color = WHITE
         if game_state["run_count"] >= 3:
             title_color = RED if random.random() < 0.2 else DARK_RED
             if random.random() < 0.05:
-                render_wrapped_text(screen, "THIS IS YOUR LAST CHANCE", font_small, RED, 20, 20, 300)
+                render_animated_wrapped_text(screen, "THIS IS YOUR LAST CHANCE", font_small, RED, 20, 20, 300, current_time)
 
         title_lines = ["The", "Question", "Game"]
         if game_state["run_count"] == 2:
@@ -1900,11 +2755,19 @@ while running:
 
         menu_y_start = current_h - 310
         for i, opt in enumerate(menu_options):
-            color = GREEN if i == selected_option else WHITE
-            if game_state["run_count"] >= 3 and i == selected_option:
-                color = RED
-            prefix = f"> {opt}" if i == selected_option else f"  {opt}"
-            o_surf = font_medium.render(prefix, True, color)
+            sel = (i == selected_option)
+            base_col = GREEN if sel else WHITE
+            if game_state["run_count"] >= 3 and sel:
+                base_col = RED
+            # subtle pulsing
+            pulse = 0.75 + 0.25 * math.sin(current_time * 2.0 + i * 0.6)
+            alpha = int(180 + 75 * pulse)
+            prefix = f"> {opt}" if sel else f"  {opt}"
+            o_surf = font_medium.render(prefix, True, base_col)
+            try:
+                o_surf.set_alpha(alpha)
+            except:
+                pass
             screen.blit(o_surf, (80, menu_y_start + i * 45))
 
         # Credits
@@ -1914,21 +2777,42 @@ while running:
         
     # --- 3. About Screen ---
     elif state == "ABOUT":
-        render_wrapped_text(screen, "ABOUT THE GAME", font_large, RED, 50, 50, current_w - 100)
-        render_wrapped_text(screen, about_text.split('\n', 1)[-1].strip() if '\n' in about_text else about_text,
-                           font_small, WHITE, 50, 50 + font_large.get_linesize() + 20, current_w - 100)
-        screen.blit(font_medium.render("[ENTER] Return", True, GREEN), (50, current_h - 80))
+        layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+        render_animated_wrapped_text(layer, "ABOUT THE GAME", font_large, RED, 50, 50, current_w - 100, current_time)
+        render_animated_wrapped_text(layer, about_text.split('\n', 1)[-1].strip() if '\n' in about_text else about_text,
+                         font_small, WHITE, 50, 50 + font_large.get_linesize() + 20, current_w - 100, current_time)
+        # About submenu options
+        for i, opt in enumerate(about_menu_options):
+            sel = (i == about_selected)
+            col = GREEN if sel else WHITE
+            prefix = "> " if sel else "  "
+            opt_surf = font_small.render(f"{prefix}{opt}", True, col)
+            # move the About menu buttons lower on the right (smaller font)
+            layer.blit(opt_surf, (current_w - 300, current_h - 180 + i * 36))
+        layer.blit(font_medium.render("[ENTER] Select   [TAB] Cycle", True, GREEN), (50, current_h - 80))
+        cur_alpha = 255
+        if ui_fade.get("active") and ui_fade.get("screen") == 'ABOUT':
+            cur_alpha = int(ui_fade.get("alpha", 255))
+        layer.set_alpha(cur_alpha)
+        screen.blit(layer, (0, 0))
 
     # --- 4. Help Screen ---
     elif state == "HELP":
-        render_wrapped_text(screen, "NO HELP FOR YOU", font_large, GREEN, 50, 50, current_w - 100)
-        render_wrapped_text(screen, help_text.split('\n', 1)[-1].strip() if '\n' in help_text else help_text,
-                           font_small, WHITE, 50, 50 + font_large.get_linesize() + 20, current_w - 100)
-        screen.blit(font_medium.render("[ENTER] Return", True, GREEN), (50, current_h - 80))
+        layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+        render_animated_wrapped_text(layer, "NO HELP FOR YOU", font_large, GREEN, 50, 50, current_w - 100, current_time)
+        render_animated_wrapped_text(layer, help_text.split('\n', 1)[-1].strip() if '\n' in help_text else help_text,
+                                     font_small, WHITE, 50, 50 + font_large.get_linesize() + 20, current_w - 100, current_time)
+        layer.blit(font_medium.render("[ENTER] Return", True, GREEN), (50, current_h - 80))
+        cur_alpha = 255
+        if ui_fade.get("active") and ui_fade.get("screen") == 'HELP':
+            cur_alpha = int(ui_fade.get("alpha", 255))
+        layer.set_alpha(cur_alpha)
+        screen.blit(layer, (0, 0))
 
     # --- 4b. Settings Screen ---
     elif state == "SETTINGS":
-        render_wrapped_text(screen, "CONTROL PANEL", font_large, GREEN, 50, 50, current_w - 100)
+        layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+        render_animated_wrapped_text(layer, "CONTROL PANEL", font_large, GREEN, 50, 50, current_w - 100, current_time)
         sy = 50 + font_large.get_linesize() + 30
         for _si, _sopt in enumerate(settings_options):
             _sel = _si == settings_selected
@@ -1943,9 +2827,66 @@ while running:
             else:
                 _vstr = ""
             _line = f"{_pre}{_sopt}{_vstr}"
-            _ls = font_medium.render(_line, True, RED if _sopt == "Reset All Data" else _col)
-            screen.blit(_ls, (50, sy + _si * 52))
-        screen.blit(font_small.render("[TAB] Navigate      [ENTER] Change", True, (80, 80, 80)), (50, current_h - 40))
+            # animate per-line alpha
+            pulse = 0.6 + 0.4 * math.sin(current_time * 1.0 + _si * 0.3)
+            col_mul = max(0, min(1, pulse))
+            base_col = RED if _sopt == "Reset All Data" else _col
+            _ls = font_medium.render(_line, True, base_col)
+            try:
+                _ls.set_alpha(int(180 + 75 * col_mul))
+            except:
+                pass
+            layer.blit(_ls, (50, sy + _si * 52))
+        layer.blit(font_small.render("[TAB] Navigate      [ENTER] Change", True, (80, 80, 80)), (50, current_h - 40))
+        cur_alpha = 255
+        if ui_fade.get("active") and ui_fade.get("screen") == 'SETTINGS':
+            cur_alpha = int(ui_fade.get("alpha", 255))
+        layer.set_alpha(cur_alpha)
+        screen.blit(layer, (0, 0))
+
+    # --- 4c. LOGS Screen (secret) ---
+    elif state == "LOGS":
+        layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+        _logs_elapsed = current_time - logs_load_start
+        _logs_alpha = int(min(1.0, _logs_elapsed / 2.0) * 255)
+        _title_surf = font_large.render("LOGS", True, (_logs_alpha, 0, 0))
+        layer.blit(_title_surf, (50, 50))
+        _body = logs_text.split('\n', 1)[-1].strip() if '\n' in logs_text else logs_text
+        render_animated_wrapped_text(layer, _body, font_small, (_logs_alpha, _logs_alpha, _logs_alpha),
+                         50, 50 + font_large.get_linesize() + 20, current_w - 100, current_time)
+        _return_surf = font_medium.render("[ENTER] Return", True, (0, _logs_alpha, 0))
+        layer.blit(_return_surf, (50, current_h - 80))
+        cur_alpha = 255
+        if ui_fade.get("active") and ui_fade.get("screen") == 'LOGS':
+            cur_alpha = int(ui_fade.get("alpha", 255))
+        layer.set_alpha(cur_alpha)
+        screen.blit(layer, (0, 0))
+
+    # --- CREDITS Screen ---
+    elif state == "CREDITS":
+        # slow scrolling credits
+        layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+        render_animated_wrapped_text(layer, "CREDITS", font_large, WHITE, 60, 40, current_w - 120, current_time, sway_amp=1)
+        lines = credits_text.split('\n')
+        # update scroll based on dt
+        dt = current_time - last_frame_time
+        credits_scroll_y -= credits_scroll_speed * dt
+        y = int(credits_scroll_y)
+        # render credits on the right side so left UI remains free
+        x = current_w - 320
+        for i, line in enumerate(lines):
+            surf = font_small.render(line, True, WHITE)
+            try:
+                surf.set_alpha(220)
+            except:
+                pass
+            layer.blit(surf, (x, y + i * (font_small.get_linesize() + 6)))
+        layer.blit(font_small.render("[ENTER] Back", True, GREEN), (50, current_h - 60))
+        cur_alpha = 255
+        if ui_fade.get("active") and ui_fade.get("screen") == 'CREDITS':
+            cur_alpha = int(ui_fade.get("alpha", 255))
+        layer.set_alpha(cur_alpha)
+        screen.blit(layer, (0, 0))
 
     # --- 5. Gameplay ---
     elif state in ["PLAYING", "FULLSCREEN"]:
@@ -1958,14 +2899,19 @@ while running:
 
         # Resolve dynamic location/process/apps questions in place
         if target_text == "DYNAMIC_LOCATION" and not action_triggered:
-            city, country = fetch_location()
-            game_state['_geo_city'] = city
-            resolved = build_location_question(city, country)
-            resolved["_id"] = step_data.get("_id", "location")
-            active_script[current_step] = resolved
-            step_data = resolved
-            target_text = step_data["q"]
-            action_triggered = True
+            cached_loc = get_cached_location()
+            if cached_loc is None:
+                # Background fetch hasn't resolved yet this frame; skip until it does
+                pass
+            else:
+                city, country = cached_loc
+                game_state['_geo_city'] = city
+                resolved = build_location_question(city, country)
+                resolved["_id"] = step_data.get("_id", "location")
+                active_script[current_step] = resolved
+                step_data = resolved
+                target_text = step_data["q"]
+                action_triggered = True
         elif target_text == "DYNAMIC_APPS" and not action_triggered:
             app_comment = comment_on_open_apps()
             if app_comment:
@@ -1978,7 +2924,7 @@ while running:
             target_text = step_data["q"]
             action_triggered = True
         elif target_text == "DYNAMIC_PROCESSES" and not action_triggered:
-            procs = check_processes()
+            procs = get_cached_processes()
             if procs["roblox"]:
                 step_data["q"] = "Roblox is running. I hope you weren't planning to play a game."
             elif procs["discord"]:
@@ -1996,14 +2942,15 @@ while running:
             if contradiction_q:
                 active_script.insert(current_step + 1, contradiction_q)
 
-        # Task Manager detection — comment if opened, checked passively
+        # Task Manager / Activity Monitor detection — comment if opened, checked passively
         if state in ["PLAYING", "FULLSCREEN"] and random.random() < 0.01:
-            procs = check_processes()
+            procs = get_cached_processes()
             if procs.get("taskmgr") and not game_state.get("task_manager_opened"):
                 game_state["task_manager_opened"] = True
                 save_game_state(game_state)
+                tm_name = "Task Manager" if platform.system() == "Windows" else "Activity Monitor"
                 tm_q = {
-                    "q": "I see you opened Task Manager.\nThat's the only way out, you know.",
+                    "q": f"I see you opened {tm_name}.\nThat's the only way out, you know.",
                     "type": "choice", "opts": ["...", "Good to know"],
                     "_id": f"taskmgr_comment_{current_step}", "_injected": True
                 }
@@ -2058,13 +3005,13 @@ while running:
 
         t_color = RED if ("afraid" in target_text.lower() or game_state["run_count"] >= 3) else WHITE
         if typing_state in ["TYPING", "READY"]:
-            render_wrapped_text(screen, target_text[:typing_index], font_medium, t_color,
-                               60 + sway_x, 120 + sway_y, current_w - 120)
+            render_animated_wrapped_text(screen, target_text[:typing_index], font_medium, t_color,
+                             60 + sway_x, 120 + sway_y, current_w - 120, current_time)
 
         # Desktop-scan naming: show captured window title briefly during desktop_check
         if step_data.get("action") == "desktop_check" and captured_window_title and typing_state == "READY":
             label = f"I see you have \"{captured_window_title}\" open."
-            render_wrapped_text(screen, label, font_small, DIM_RED, 60, current_h - 140, current_w - 120)
+            render_animated_wrapped_text(screen, label, font_small, DIM_RED, 60, current_h - 140, current_w - 120, current_time)
 
         update_webcam_surface()
         if webcam_surface and webcam_active:
@@ -2073,6 +3020,10 @@ while running:
             screen.blit(webcam_surface, (cam_x, cam_y))
             label = font_small.render("LIVE", True, RED)
             screen.blit(label, (cam_x, cam_y + webcam_surface.get_height() + 2))
+
+        _polled_pic = poll_picture_result()
+        if _polled_pic is not None:
+            local_image = _polled_pic
 
         if local_image and step_data.get("action") == "show_pic":
             img_x = current_w - local_image.get_width() - 40
@@ -2110,13 +3061,22 @@ while running:
                         result = handle_step_action(step_action, step_data)
                         action_triggered = True
                         if result == "EXIT":
-                            running = False
-                if current_time - wait_start_time > step_data.get("time", 3.0):
-                    current_step += 1
-                    typing_index, action_triggered, wait_start_time = 0, False, 0
-                    typing_state = "THINKING"
-                    thinking_timer = current_time
-                    question_start_time = current_time
+                            pending_exit = True
+                _wait_dur = step_data.get("time", 3.0)
+                if pending_exit:
+                    _remaining = max(0.0, _wait_dur - (current_time - wait_start_time))
+                    _close_label = f"[ closing in {_remaining:0.1f}s ]"
+                    _close_surf = font_small.render(_close_label, True, DIM_RED)
+                    screen.blit(_close_surf, (current_w // 2 - _close_surf.get_width() // 2, current_h - 50))
+                if current_time - wait_start_time > _wait_dur:
+                    if pending_exit:
+                        running = False
+                    else:
+                        current_step += 1
+                        typing_index, action_triggered, wait_start_time = 0, False, 0
+                        typing_state = "THINKING"
+                        thinking_timer = current_time
+                        question_start_time = current_time
 
         if game_state["run_count"] >= 3 and state in ["PLAYING", "FULLSCREEN"] and random.random() < 0.008:
             pygame.mouse.set_pos(random.randint(200, 600), random.randint(200, 400))
@@ -2138,7 +3098,7 @@ while running:
             # Periodic heartbeat sound
             if int(current_time * 0.8) != int((current_time - 0.016) * 0.8):
                 if random.random() < 0.12:
-                    threading.Thread(target=play_heartbeat, daemon=True).start()
+                    play_heartbeat()
             # Random full-screen red flash (very brief)
             if random.random() < 0.003:
                 _flash = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
@@ -2149,9 +3109,27 @@ while running:
             if random.random() < 0.025:
                 play_glitch_sound()
 
+    # --- Badge toast notification (drawn on top of any state) ---
+    if _newly_earned_badge is not None:
+        _badge_toast_id = _newly_earned_badge
+        _badge_toast_shown_at = current_time
+        _newly_earned_badge = None
+    if _badge_toast_id is not None:
+        _toast_age = current_time - _badge_toast_shown_at
+        if _toast_age < 3.5:
+            _b_info = BADGE_CATALOG.get(_badge_toast_id, {})
+            _b_alpha = int(255 * min(1.0, (3.5 - _toast_age) / 1.0))
+            _b_line1 = f"Badge earned: {_b_info.get('name', _badge_toast_id)}"
+            _b_surf1 = font_small.render(_b_line1, True, GREEN)
+            _b_surf1.set_alpha(_b_alpha)
+            screen.blit(_b_surf1, (current_w - _b_surf1.get_width() - 20, current_h - 60))
+        else:
+            _badge_toast_id = None
+
     apply_vhs_effects(screen, current_w, current_h)
     pygame.display.flip()
     clock.tick(60)
+    last_frame_time = current_time
 
 pygame.quit()
 sys.exit()
