@@ -502,6 +502,24 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
   border:1px solid #5c4000;background:rgba(255,176,0,.04);
   font-size:.72rem;letter-spacing:.06em;color:#d8b45a;line-height:1.6;
 }
+.release-winget{
+  margin:0 1.8rem 1.2rem;padding:.9rem 1rem;
+  border:1px solid var(--green-dim);background:#050505;
+}
+.winget-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.winget-head .tag{margin-bottom:0}
+.winget-copy{
+  font-family:var(--vt);font-size:.85rem;letter-spacing:.12em;color:var(--green);
+  border:1px solid var(--green);background:transparent;padding:.3rem .8rem;cursor:pointer;
+  transition:all .2s;
+}
+.winget-copy:hover{background:rgba(0,220,0,.1);box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
+.winget-cmd{
+  margin-top:.7rem;padding:.7rem .9rem;border:1px solid var(--line);background:#000;
+  font-family:var(--vt);font-size:.95rem;color:#e0e0e0;letter-spacing:.04em;white-space:nowrap;overflow-x:auto;
+}
+.winget-cmd::before{content:"> ";color:var(--green)}
+.winget-note{font-size:.64rem;color:var(--dim);letter-spacing:.1em;margin-top:.6rem;line-height:1.6}
 .release-warn{
   margin:0 1.8rem 1.8rem;padding:.9rem 1rem;
   border:1px solid var(--dark-red);background:rgba(200,0,0,.05);
