@@ -17,6 +17,13 @@ import json
 import ctypes
 import ctypes.wintypes
 
+# --- Resolve assets relative to this file's own directory (works from any CWD) ---
+try:
+    _APP_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
+    os.chdir(_APP_DIR)
+except Exception:
+    pass
+
 # --- Persistence Layer (AppData, not the run directory) ---
 def get_appdata_dir():
     """Returns a hidden-ish persistent storage dir in %APPDATA% (Windows) or ~/.local/share (other)."""
