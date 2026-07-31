@@ -52,19 +52,40 @@
   <div class="scare" id="scare" aria-hidden="true">HELLO</div>
 
   <header class="nav" id="nav">
-    <a class="nav-brand" href="#top">TQG<span class="blink">_</span></a>
+    <a class="nav-brand" href="#home">TQG<span class="blink">_</span></a>
     <nav class="nav-links">
       <a href="#about">ABOUT</a>
       <a href="#history">HISTORY</a>
       <a href="#sessions">SESSIONS</a>
       <a href="#concerns">CONCERNS</a>
+      <a href="#transmission">TRANSMISSION</a>
+      <a href="#dev">THE DEV</a>
       <a href="#download" class="nav-cta">DOWNLOAD</a>
     </nav>
-    <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
+    <div class="nav-right">
+      <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation">[ NAV ]</button>
+    </div>
   </header>
 
+  <nav class="side-panel" id="sidePanel" aria-label="Site navigation">
+    <div class="side-head"><span class="red">&gt;</span> NAVIGATION</div>
+    <div class="side-links">
+      <a class="side-link" href="#home">HOME</a>
+      <a class="side-link" href="#about">ABOUT</a>
+      <a class="side-link" href="#history">HISTORY</a>
+      <a class="side-link" href="#sessions">SESSIONS</a>
+      <a class="side-link" href="#concerns">CONCERNS</a>
+      <a class="side-link" href="#transmission">TRANSMISSION</a>
+      <a class="side-link" href="#preview">SESSION PREVIEW</a>
+      <a class="side-link" href="#dev">THE DEV</a>
+      <a class="side-link" href="#download">DOWNLOAD</a>
+    </div>
+    <div class="side-foot">NEPTUNE PRODUCTIONS [C]</div>
+  </nav>
+
   <main>
-    <section class="hero" id="top">
+    <section class="hero view active" id="home" data-view="home">
       <div class="hero-meta">
         <span>NEPTUNE PRODUCTIONS [C]</span>
         <span>TEXT-BASED HORROR EXPERIENCE</span>
@@ -89,7 +110,7 @@
       <div class="ticker-track" id="tickerTrack"></div>
     </div>
 
-    <section class="section" id="about">
+    <section class="section view" id="about" data-view="about">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> ABOUT THE EXPERIENCE</h2>
         <div class="section-line"></div>
@@ -98,7 +119,7 @@
         <div class="about-copy reveal">
           <p>This is not a quiz. It is a set of questions, and a quiet observer sitting behind them.</p>
           <p>You sit down. It starts typing. One question at a time, until it is finished with you.</p>
-          <p class="dim">A text-based horror experience. Nothing leaves your machine.</p>
+          <p class="dim">A text-based horror experience. The game itself sends nothing from your machine.</p>
           <p class="about-quote">"Are you sitting comfortably?"</p>
         </div>
         <div class="stats reveal">
@@ -110,7 +131,7 @@
       </div>
     </section>
 
-    <section class="section" id="history">
+    <section class="section view" id="history" data-view="history">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> HISTORY</h2>
         <div class="section-line"></div>
@@ -163,7 +184,7 @@
       </div>
     </section>
 
-    <section class="section" id="sessions">
+    <section class="section view" id="sessions" data-view="sessions">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> THE SESSIONS</h2>
         <div class="section-line"></div>
@@ -218,64 +239,71 @@
       </div>
     </section>
 
-    <section class="section" id="concerns">
+    <section class="section view" id="concerns" data-view="concerns">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> ADDRESSING CONCERNS</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">You have questions. So does it.</p>
+      <p class="section-sub reveal">Because the game is meant to unsettle you, here is exactly what it does — and does not — do.</p>
 
       <div class="concerns reveal">
         <details class="concern" open>
           <summary>IS THIS A VIRUS?</summary>
-          <div class="concern-body">No. It is a program that asks questions and renders text. Everything else you feel is a reaction, not an infection.</div>
+          <div class="concern-body">No. The full source is public on GitHub for anyone to read. The game is a single program that runs only while you play it. It does not install anything, modify other software, or register itself to start with your system.</div>
         </details>
         <details class="concern">
-          <summary>DOES IT USE MY CAMERA?</summary>
-          <div class="concern-body">It does not need to see you. It knows when you lie. It always knows.</div>
+          <summary>DOES IT USE MY CAMERA OR MICROPHONE?</summary>
+          <div class="concern-body">No. The game never activates a camera or microphone on either platform. The macOS app declares a camera permission in its app bundle (an Apple requirement for any app that ships an Info.plist), but the permission is never requested or used. The Windows build has no camera or microphone code at all.</div>
         </details>
         <details class="concern">
           <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
-          <div class="concern-body">No data leaves your machine. Your privacy remains enclosed. That is the fiction — and it is also a promise.</div>
+          <div class="concern-body">No. The game makes no network requests. Everything you type is stored only in a local save file on your own machine, and the game can be played with your network fully disconnected. Nothing is uploaded, transmitted, or sent to the developer.</div>
         </details>
         <details class="concern">
-          <summary>CAN I STOP PLAYING?</summary>
-          <div class="concern-body">You can always close the window. The questions, however, have already been asked. They tend to linger.</div>
+          <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
+          <div class="concern-body">A short list of scripted effects: it plays audio, briefly moves or shakes its own window, can change your desktop wallpaper, and may show a full-screen flash. These are timed events inside the fiction. It cannot lock you out, delete files, or control anything outside its own window and the two effects above. Effects are per-session and do not persist after you quit.</div>
         </details>
         <details class="concern">
-          <summary>IS NEPTUNE PRODUCTIONS REAL?</summary>
-          <div class="concern-body">A fictional studio for a fictional product. The discomfort, unfortunately, is real.</div>
+          <summary>IS IT SAFE TO PLAY?</summary>
+          <div class="concern-body">It is designed to startle you: sudden sounds, flashes, and screen changes. Do not play if you have photosensitive epilepsy or are prone to panic reactions, and do not play while driving, working, or in a context where being startled is a hazard. There is no real danger — but you should decide for yourself, with the lights on first.</div>
         </details>
         <details class="concern">
-          <summary>WHAT IS IT, REALLY?</summary>
-          <div class="concern-body">A set of questions, and a quiet observer sitting behind them. It is very good at waiting.</div>
+          <summary>HOW DO I UNINSTALL IT?</summary>
+          <div class="concern-body">Windows: delete the folder you unzipped — nothing else was installed. macOS: delete The Question Game.app from Applications, and delete the folder ~/Library/Application Support/TheQuestionGame if you also want your local answers gone. That is the entire uninstall process.</div>
+        </details>
+        <details class="concern">
+          <summary>WHERE DO I REPORT A BUG OR A PROBLEM?</summary>
+          <div class="concern-body">Open an issue on the GitHub repository (linked in THE DEV section). Bug reports are read and answered. If the game did something you did not expect on your system, that is exactly what we want to hear about.</div>
         </details>
       </div>
     </section>
 
-    <section class="section" id="signal">
+    <section class="section view" id="transmission" data-view="transmission">
       <div class="section-head reveal">
-        <h2 class="section-title"><span class="red">&gt;</span> SIGNAL INTERCEPT</h2>
+        <h2 class="section-title"><span class="red">&gt;</span> LIVE TRANSMISSION</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">The signal reads keystrokes. Whatever you type, it hears.</p>
+      <p class="section-sub reveal">Type anything. The entity answers — in one sentence, by live AI.</p>
 
       <div class="signal-box reveal">
         <label class="signal-label" for="typeIn">> TRANSMIT A SIGNAL_</label>
         <div class="signal-row">
           <span class="signal-prompt">&gt;</span>
-          <input id="typeIn" class="type-in" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Enter a signal" placeholder="...">
+          <input id="typeIn" class="type-in" type="text" maxlength="120" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Enter a signal" placeholder="...">
+          <button id="signalSend" class="signal-send" type="button">SEND</button>
         </div>
-        <p class="signal-hint">TYPING ANYWHERE WORKS. TOUCH USERS: TAP THE LINE ABOVE TO OPEN THE KEYBOARD.</p>
+        <div class="ai-log hidden" id="aiLog"></div>
+        <p class="signal-hint">PRESS ENTER OR SEND. IT ALWAYS ANSWERS IN ONE SENTENCE.</p>
+        <p class="signal-disclosure">WHAT YOU TYPE HERE IS SENT TO A THIRD-PARTY AI SERVICE (GROQ) AND IS NOT STORED OR LOGGED BY THIS SITE. IT IS THE ONLY PLACE THIS SITE SENDS TEXT. THE GAME ITSELF SENDS NOTHING.</p>
       </div>
     </section>
 
-    <section class="section" id="transmission">
+    <section class="section view" id="preview" data-view="preview">
       <div class="section-head reveal">
-        <h2 class="section-title"><span class="red">&gt;</span> LIVE TRANSMISSION</h2>
+        <h2 class="section-title"><span class="red">&gt;</span> SESSION PREVIEW</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">A preview of the interrogation. Answer honestly.</p>
+      <p class="section-sub reveal">A scripted preview of the game's interrogation. Answer honestly.</p>
 
       <div class="terminal reveal" id="term">
         <div class="terminal-bar">
@@ -290,7 +318,36 @@
       </div>
     </section>
 
-    <section class="section" id="download">
+    <section class="section view" id="dev" data-view="dev">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE DEV</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Behind the entity: one person, building strange software at night.</p>
+
+      <div class="dev-grid">
+        <div class="about-copy reveal">
+          <p>Neptune Productions is a single developer. The Question Game is a hobby project made for people who like to be unsettled on purpose.</p>
+          <p>The fiction on this page is fiction. The code is real, open source, and does exactly what the <a href="#concerns">CONCERNS</a> section says — no more, no less.</p>
+          <p class="dim">Found a bug? Saw the game do something it should not? That is the best kind of message to send.</p>
+        </div>
+
+        <div class="dev-card reveal">
+          <h3 class="dev-card-title">CONTACT</h3>
+          <ul class="dev-list">
+            <li><span class="mark">▸</span> Discord — <button class="discord-copy dev-copy" type="button" title="Copy Discord handle">neptunetheii [COPY]</button></li>
+            <li><span class="mark">▸</span> GitHub — <a href="https://github.com/notmicrosoft2000-cmd" target="_blank" rel="noopener">notmicrosoft2000-cmd</a></li>
+            <li><span class="mark">▸</span> Repository — <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame" target="_blank" rel="noopener">thequestiongame</a></li>
+          </ul>
+
+          <h3 class="dev-card-title mt">SUGGESTION INBOX</h3>
+          <p class="dev-note">Ideas, scare ideas, bug reports, or requests for mercy — all read. It opens a prefilled form on GitHub.</p>
+          <a class="btn btn-primary" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/issues/new?title=%5BSUGGESTION%5D+&amp;body=%0A%0A---%0A%0AType%20your%20suggestion%20above.%20If%20this%20is%20a%20bug%20report%2C%20include%20your%20platform%20and%20what%20happened.%0A" target="_blank" rel="noopener">[ OPEN THE INBOX ]</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section view" id="download" data-view="download">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
@@ -347,7 +404,7 @@
 
           <div class="release-warn">
             THIS IS A WORK OF INTERACTIVE HORROR FICTION.<br>
-            It contains mature themes and moments designed to unsettle you. Nothing you answer is transmitted anywhere.
+            It contains mature themes and moments designed to unsettle you. The game itself transmits nothing — your answers stay on your machine.
             If you are easily disturbed, do not play alone — and do not play at night.
           </div>
         </div>
@@ -361,7 +418,7 @@
             <li><span class="mark">▸</span> Atmospheric procedural audio</li>
             <li><span class="mark">▸</span> VHS / static visual treatment</li>
             <li><span class="mark">▸</span> It remembers what you tell it</li>
-            <li><span class="mark">▸</span> No data leaves your machine</li>
+            <li><span class="mark">▸</span> The game sends nothing from your machine</li>
           </ul>
           <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
           <ul class="feature-list">
@@ -387,6 +444,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="js/config.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

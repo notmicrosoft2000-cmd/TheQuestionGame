@@ -213,6 +213,53 @@
     });
   });
 
+  /* ---------- Views & navigation ---------- */
+  function setPanel(open) {
+    document.body.classList.toggle("panel-open", open);
+    if (navToggle) navToggle.textContent = open ? "[ CLOSE ]" : "[ NAV ]";
+  }
+
+  function showView(name) {
+    const target = $('[data-view="' + name + '"]');
+    if (!target) return;
+    $$(".view.active").forEach((v) => v.classList.remove("active"));
+    target.classList.add("active");
+    $$(".nav-links a, .side-link").forEach((a) => {
+      const href = (a.getAttribute("href") || "").replace(/^#/, "");
+      a.classList.toggle("active", href === name);
+    });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    setPanel(false);
+  }
+
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const id = (a.getAttribute("href") || "").slice(1);
+    const el = document.getElementById(id);
+    if (el && el.dataset && el.dataset.view) {
+      e.preventDefault();
+      showView(el.dataset.view);
+    }
+  });
+
+  const navToggle = $("#navToggle");
+  if (navToggle) {
+    navToggle.addEventListener("click", () => setPanel(!document.body.classList.contains("panel-open")));
+  }
+  const sidePanel = $("#sidePanel");
+  if (sidePanel) {
+    sidePanel.addEventListener("click", (e) => {
+      if (e.target.closest("a")) setPanel(false);
+    });
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (!document.body.classList.contains("panel-open")) return;
+    if (e.target.closest("#sidePanel") || e.target.closest("#navToggle")) return;
+    setPanel(false);
+  });
+  showView("home");
+
   const tickerTrack = $("#tickerTrack");
   const TICKER_ITEMS = [
     "ARE YOU SITTING COMFORTABLY?",
@@ -518,6 +565,93 @@
   };
 
   const typeIn = $("#typeIn");
+  const aiLog = $("#aiLog");
+  const signalSend = $("#signalSend");
+  const aiKey = (window.AI_CONFIG && window.AI_CONFIG.groqKey) || "";
+  const aiModel = (window.AI_CONFIG && window.AI_CONFIG.model) || "llama-3.3-70b-versatile";
+  const AI_SYSTEM = "You are THE QUESTION, the entity from a horror text game. Answer in exactly ONE short sentence. Be eerie and unsettling, but never violent, never threaten the user directly, no gore, no harm. Stay under 180 characters.";
+  const AI_FALLBACK = [
+    "THE SIGNAL IS STATIC TONIGHT. TRY AGAIN WHEN THE LIGHTS ARE OFF.",
+    "I HEARD THAT. I AM NOT SURE I BELIEVE IT.",
+    "THE ENTITY IS BUSY ELSEWHERE. IT WILL REMEMBER YOU ASKED.",
+    "STATIC. ONLY STATIC. THAT IS ALSO AN ANSWER."
+  ];
+  let aiBusy = false;
+
+  async function askAI(text) {
+    if (!aiKey || aiKey.indexOf("PASTE_") === 0) throw new Error("no key");
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + aiKey },
+        body: JSON.stringify({
+          model: aiModel,
+          messages: [
+            { role: "system", content: AI_SYSTEM },
+            { role: "user", content: text }
+          ],
+          max_tokens: 90,
+          temperature: 0.9
+        }),
+        signal: ctrl.signal
+      });
+      if (!res.ok) throw new Error("groq " + res.status);
+      const data = await res.json();
+      const out = ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "").trim();
+      if (!out) throw new Error("empty");
+      return out;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function aiLine(cls, label, text) {
+    const div = document.createElement("div");
+    div.className = "ai-line " + cls;
+    const lab = document.createElement("span");
+    lab.textContent = "> " + label + ": ";
+    const body = document.createElement("span");
+    body.textContent = text;
+    div.appendChild(lab);
+    div.appendChild(body);
+    aiLog.appendChild(div);
+    aiLog.scrollTop = aiLog.scrollHeight;
+    return body;
+  }
+
+  async function sendSignal() {
+    const text = (typeIn ? typeIn.value : "").trim();
+    if (!text || aiBusy) return;
+    if (typeIn) typeIn.value = "";
+    aiBusy = true;
+    if (signalSend) { signalSend.disabled = true; signalSend.textContent = "..."; }
+    aiLog.classList.remove("hidden");
+    aiLine("ai-you", "YOU", text);
+    const body = aiLine("ai-it", "IT", "TRANSMITTING...");
+    let reply;
+    try {
+      reply = await askAI(text);
+    } catch (err) {
+      reply = AI_FALLBACK[Math.floor(Math.random() * AI_FALLBACK.length)];
+    }
+    body.textContent = "";
+    typeNode(body, reply, 24);
+    aiBusy = false;
+    if (signalSend) { signalSend.disabled = false; signalSend.textContent = "SEND"; }
+  }
+
+  if (typeIn && signalSend) {
+    signalSend.addEventListener("click", sendSignal);
+    typeIn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendSignal();
+      }
+    });
+  }
+
   const scare = $("#scare");
 
   function jumpscare() {

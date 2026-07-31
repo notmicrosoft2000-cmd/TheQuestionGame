@@ -202,6 +202,38 @@ main.shake{animation:shake .5s linear}
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+/* ---------- Views & navigation panel ---------- */
+.view{display:none}
+.view.active{display:block;animation:view-in .5s ease}
+.hero.view.active{display:flex}
+@keyframes view-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.nav-right{display:flex;align-items:center;gap:.8rem}
+.nav-links a.active{color:var(--green);text-shadow:var(--glow-green)}
+.nav-links a.active::after{right:0}
+.nav-toggle{
+  font-family:var(--vt);font-size:1.05rem;letter-spacing:.12em;color:var(--green);
+  background:transparent;border:1px solid var(--line-bright);padding:.28rem .7rem;
+  transition:all .2s;white-space:nowrap;
+}
+.nav-toggle:hover{color:var(--red);border-color:var(--red);box-shadow:var(--glow-red)}
+.side-panel{
+  position:fixed;top:0;right:0;bottom:0;width:min(300px,84vw);z-index:9890;
+  background:rgba(4,4,4,.97);border-left:1px solid var(--line-bright);
+  padding:4.6rem 1.4rem 1.4rem;overflow-y:auto;
+  transform:translateX(105%);transition:transform .35s ease;
+  display:flex;flex-direction:column;
+}
+body.panel-open .side-panel{transform:translateX(0)}
+.side-head{font-family:var(--vt);font-size:1.3rem;color:#e0e0e0;letter-spacing:.12em;margin-bottom:1rem}
+.side-links{display:flex;flex-direction:column}
+.side-link{
+  font-family:var(--vt);font-size:1.35rem;letter-spacing:.14em;color:#9a9a9a;
+  padding:.6rem .7rem;border-left:2px solid transparent;transition:all .2s;
+}
+.side-link:hover{color:var(--green);border-left-color:var(--green);background:rgba(0,220,0,.05)}
+.side-link.active{color:var(--green);border-left-color:var(--green);text-shadow:var(--glow-green)}
+.side-foot{margin-top:auto;padding-top:1.4rem;font-size:.6rem;letter-spacing:.16em;color:#3d3d3d}
+
 /* ---------- Hero ---------- */
 .hero{
   min-height:100vh;
@@ -401,6 +433,33 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
 }
 .type-in::placeholder{color:#333}
 .signal-hint{font-size:.62rem;letter-spacing:.16em;color:#3d3d3d;margin-top:.8rem;text-transform:uppercase}
+.signal-send{
+  font-family:var(--vt);font-size:1.1rem;letter-spacing:.12em;color:var(--green);
+  border:1px solid var(--green-dim);background:transparent;padding:.35rem .9rem;
+  transition:all .2s;white-space:nowrap;
+}
+.signal-send:hover{background:rgba(0,220,0,.1);box-shadow:var(--glow-green)}
+.signal-send:disabled{color:#3a3a3a;border-color:var(--line-bright);pointer-events:none}
+.ai-log{margin-top:.9rem;display:flex;flex-direction:column;gap:.75rem;max-height:320px;overflow-y:auto}
+.ai-line{font-family:var(--vt);font-size:1.15rem;line-height:1.6;word-break:break-word}
+.ai-you{color:#b8b8b8}
+.ai-it{color:var(--green);text-shadow:var(--glow-green)}
+.signal-disclosure{
+  margin-top:1rem;font-size:.58rem;letter-spacing:.06em;color:#5a5a5a;line-height:1.7;
+  border-top:1px dashed var(--line-bright);padding-top:.7rem;
+}
+
+/* ---------- Dev ---------- */
+.dev-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(2rem,5vw,4rem);align-items:start}
+.dev-card{border:1px solid var(--line);background:var(--panel);padding:1.6rem}
+.dev-card-title{font-family:var(--vt);font-weight:400;font-size:1.3rem;color:var(--green);letter-spacing:.12em;margin-bottom:1rem}
+.dev-card-title.mt{margin-top:1.6rem}
+.dev-list{display:grid;gap:.6rem}
+.dev-list li{font-size:.8rem;color:#bcbcbc}
+.dev-list a{color:var(--green);border-bottom:1px solid var(--green-dim)}
+.dev-copy{font-family:var(--mono);font-size:.8rem;color:var(--green);background:transparent;border:1px solid var(--green-dim);padding:.1rem .5rem;transition:all .2s}
+.dev-copy:hover{box-shadow:var(--glow-green)}
+.dev-note{font-size:.76rem;color:var(--dim);line-height:1.7;margin-bottom:1rem}
 
 /* ---------- Sessions ---------- */
 .sessions-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem}
@@ -596,9 +655,10 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 
 /* ---------- Responsive ---------- */
 @media(max-width:920px){
-  .about-grid,.download-grid{grid-template-columns:1fr}
+  .about-grid,.download-grid,.dev-grid{grid-template-columns:1fr}
   .sessions-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}
-  .nav-status{display:none}
+  .nav-links{display:none}
+  .nav-right .nav-status{display:none}
   .hud-tr{display:none}
 }
 @media(max-width:600px){
