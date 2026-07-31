@@ -2,8 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REPO_URL = "https://github.com/" + REPO;
-  const RELEASES_URL = REPO_URL + "/releases/latest";
+
 
   const $ = (s, c) => (c || document).querySelector(s);
   const $$ = (s, c) => Array.prototype.slice.call((c || document).querySelectorAll(s));
@@ -360,85 +359,74 @@
   }
 
   const ASSET_LABELS = [
-    [/thequestiongame\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
-    [/macos\.dmg$/i, "macOS — APP BUNDLE"]
+    [/\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
+    [/\.dmg$/i, "macOS — APP BUNDLE"]
   ];
 
-  function assetRow(asset, recommended) {
-    const row = document.createElement("div");
-    row.className = "asset-row";
-    const info = document.createElement("div");
-    info.className = "asset-info";
-    const name = document.createElement("div");
-    name.className = "asset-name";
-    let label = null;
-    for (const [re, text] of ASSET_LABELS) {
-      if (re.test(asset.name)) { label = text; break; }
+  function setStatus(el, text, miss) {
+    el.textContent = text;
+    el.classList.toggle("miss", !!miss);
+  }
+
+  function platformKey() {
+    const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    if (/mac|darwin/i.test(p)) return "mac";
+    if (/win/i.test(p)) return "win";
+    return null;
+  }
+
+  function wirePlatform(btnId, statusId, asset) {
+    const btn = $("#" + btnId);
+    const status = $("#" + statusId);
+    if (asset) {
+      let label = asset.name;
+      for (const [re, text] of ASSET_LABELS) {
+        if (re.test(asset.name)) { label = text; break; }
+      }
+      btn.href = asset.browser_download_url;
+      btn.removeAttribute("aria-disabled");
+      btn.classList.remove("platform-miss");
+      btn.textContent = "DOWNLOAD " + btn.dataset.os + " ⤓";
+      setStatus(status, "READY — " + label + " · " + fmtSize(asset.size));
+    } else {
+      btn.setAttribute("aria-disabled", "true");
+      btn.classList.add("platform-miss");
+      btn.textContent = "UNAVAILABLE";
+      setStatus(status, btn.dataset.os + " BUILD NOT PUBLISHED YET", true);
     }
-    name.textContent = label || asset.name;
-    info.appendChild(name);
-    const meta = document.createElement("div");
-    meta.className = "asset-meta";
-    meta.textContent = asset.name + " · " + fmtSize(asset.size) + " · " + new Date(asset.updated_at || asset.created_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
-    info.appendChild(meta);
-    row.appendChild(info);
-    const btn = document.createElement("a");
-    btn.className = "asset-btn";
-    btn.href = asset.browser_download_url;
-    btn.target = "_blank";
-    btn.rel = "noopener";
-    btn.textContent = recommended ? "DOWNLOAD ⤓" : "GET";
-    row.appendChild(btn);
-    if (recommended) {
-      const badge = document.createElement("span");
-      badge.className = "asset-badge";
-      badge.textContent = "RECOMMENDED";
-      name.appendChild(badge);
-    } else if (/macos\.dmg$/i.test(asset.name)) {
-      const badge = document.createElement("span");
-      badge.className = "asset-badge";
-      badge.textContent = "MACOS";
-      name.appendChild(badge);
-    }
-    return row;
   }
 
   async function loadRelease() {
-    const box = $("#releaseAssets");
     const ver = $("#relVersion");
     const date = $("#relDate");
+    const fallback = $("#releaseFallback");
+    const os = platformKey();
+    if (os === "win" || os === "mac") {
+      const card = $(os === "mac" ? "#macCard" : "#winCard");
+      const tag = $(os === "mac" ? "#macDetected" : "#winDetected");
+      card.classList.add("is-current");
+      if (tag) tag.classList.remove("hidden");
+    }
     try {
       const res = await fetch("https://api.github.com/repos/" + REPO + "/releases/latest");
       if (!res.ok) throw new Error("release not found");
       const rel = await res.json();
       ver.textContent = rel.tag_name || "v1.0.0";
       date.textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
-      box.innerHTML = "";
-      const assets = (rel.assets || []).slice().sort((a, b) => (b.size - a.size));
-      const zip = assets.filter((a) => /\.zip$/i.test(a.name));
-      const rest = assets.filter((a) => !/\.zip$/i.test(a.name));
-      const ordered = zip.concat(rest).slice(0, 4);
-      if (!ordered.length) {
-        const a = document.createElement("p");
-        a.className = "release-loading";
-        a.textContent = "NO FILES ATTACHED TO THIS RELEASE YET.";
-        box.appendChild(a);
-      }
-      ordered.forEach((a, i) => box.appendChild(assetRow(a, i === 0)));
+      const assets = rel.assets || [];
+      wirePlatform("dlWindows", "dlWindowsStatus", assets.find((a) => /\.zip$/i.test(a.name)));
+      wirePlatform("dlMac", "dlMacStatus", assets.find((a) => /\.dmg$/i.test(a.name)));
     } catch (e) {
       date.textContent = "RELEASE NOT PUBLISHED YET";
-      box.innerHTML = "";
-      const p = document.createElement("p");
-      p.className = "release-loading";
-      p.textContent = "WAITING FOR THE FIRST RELEASE. THE ARCHIVE WILL APPEAR HERE.";
-      box.appendChild(p);
-      const a = document.createElement("a");
-      a.className = "asset-btn";
-      a.href = RELEASES_URL;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.textContent = "[ OPEN GITHUB RELEASES ]";
-      box.appendChild(a);
+      ["dlWindows", "dlMac"].forEach((id) => {
+        const btn = $("#" + id);
+        btn.setAttribute("aria-disabled", "true");
+        btn.classList.add("platform-miss");
+        btn.textContent = "UNAVAILABLE";
+      });
+      setStatus($("#dlWindowsStatus"), "WINDOWS BUILD NOT PUBLISHED YET", true);
+      setStatus($("#dlMacStatus"), "MACOS BUILD NOT PUBLISHED YET", true);
+      fallback.classList.remove("hidden");
     }
   }
   loadRelease();

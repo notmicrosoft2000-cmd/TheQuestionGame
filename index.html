@@ -310,8 +310,29 @@
             </div>
           </div>
 
-          <div class="release-assets" id="releaseAssets">
-            <p class="release-loading">LOCATING RELEASE ARCHIVE<span class="dots-anim"></span></p>
+          <div class="platform-options">
+            <div class="platform-card" id="winCard">
+              <div class="platform-head">
+                <span class="platform-os">WINDOWS</span>
+                <span class="tag tag-green hidden" id="winDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGame.exe</b> — no installation required.</p>
+              <a class="platform-btn" id="dlWindows" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="WINDOWS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
+              <p class="platform-status" id="dlWindowsStatus">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="platform-card" id="macCard">
+              <div class="platform-head">
+                <span class="platform-os">MACOS</span>
+                <span class="tag tag-green hidden" id="macDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">macOS 10.15+. Open the DMG and drag <b>The Question Game</b> into your Applications folder.</p>
+              <a class="platform-btn" id="dlMac" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="MACOS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
+              <p class="platform-status" id="dlMacStatus">CONTACTING RELEASE SERVER...</p>
+            </div>
+          </div>
+
+          <div class="release-fallback hidden" id="releaseFallback">
+            <a class="asset-btn" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener">[ OPEN GITHUB RELEASES ]</a>
           </div>
 
           <div class="release-note">
