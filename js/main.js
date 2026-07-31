@@ -122,28 +122,12 @@
           setTimeout(() => flash.classList.remove("go"), 200);
         }
         loop();
-      }, rand(14000, 26000));
+      }, rand(10000, 20000));
     })();
   }
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
-  let noiseTile = null;
-  function refreshNoiseTile() {
-    if (!noiseTile) {
-      noiseTile = document.createElement("canvas");
-      noiseTile.width = 128;
-      noiseTile.height = 128;
-    }
-    const t = noiseTile.getContext("2d");
-    const img = t.createImageData(128, 128);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const v = (Math.random() * 255) | 0;
-      d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
-    }
-    t.putImageData(img, 0, 0);
-  }
   function initNoise() {
     if (!noiseCnv) return;
     noiseCtx = noiseCnv.getContext("2d");
@@ -154,15 +138,21 @@
     noiseCnv.width = Math.max(1, Math.floor(window.innerWidth / 2));
     noiseCnv.height = Math.max(1, Math.floor(window.innerHeight / 2));
   }
+  let noiseFrame = 0;
   function frameNoise() {
     if (noiseCtx) {
-      refreshNoiseTile();
-      noiseCtx.imageSmoothingEnabled = false;
-      noiseCtx.clearRect(0, 0, noiseCnv.width, noiseCnv.height);
-      noiseCtx.drawImage(noiseTile, 0, 0, noiseCnv.width, noiseCnv.height);
-      if (Math.random() < 0.35) {
+      const w = noiseCnv.width, h = noiseCnv.height;
+      const img = noiseCtx.createImageData(w, h);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = (Math.random() * 255) | 0;
+        d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
+      }
+      noiseCtx.putImageData(img, 0, 0);
+      noiseFrame++;
+      if (noiseFrame % 9 === 0) {
         noiseCtx.fillStyle = "rgba(255,255,255,0.05)";
-        noiseCtx.fillRect(0, Math.random() * noiseCnv.height, noiseCnv.width, 2 + Math.random() * 8);
+        noiseCtx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 8);
       }
     }
     setTimeout(frameNoise, document.hidden ? 400 : 100);
@@ -471,6 +461,61 @@
     });
   });
 
+  const sfx = {
+    ctx: null,
+    ensure() {
+      if (!this.ctx) {
+        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { }
+      }
+      if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+      return this.ctx;
+    },
+    type() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "square";
+        o.frequency.value = 420 + Math.random() * 600;
+        g.gain.setValueAtTime(0.03, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.035);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + 0.035);
+      } catch (e) { }
+    }
+  };
+
+  const typeIn = $("#typeIn");
+  const scare = $("#scare");
+
+  function jumpscare() {
+    if (scareLock) return;
+    scareLock = true;
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.classList.add("shake");
+    if (scare) scare.classList.add("go");
+    let n = 0;
+    const pulse = () => {
+      flash.classList.add("go");
+      setTimeout(() => {
+        flash.classList.remove("go");
+        n++;
+        if (n < 4) {
+          setTimeout(pulse, 110);
+        } else {
+          if (scare) scare.classList.remove("go");
+          if (mainEl) mainEl.classList.remove("shake");
+          scareLock = false;
+        }
+      }, 150);
+    };
+    pulse();
+  }
+  let scareLock = false;
+
   const PHRASES = {
     "who are you": "WE ARE A SET OF QUESTIONS.",
     "are you there": "WE ARE ALWAYS HERE.",
@@ -482,25 +527,39 @@
   };
   let keyBuf = "";
   let keyTimer = null;
+
+  function handleTypeKey(e, key) {
+    sfx.type();
+    keyBuf = (keyBuf + key.toLowerCase()).slice(-24);
+    clearTimeout(keyTimer);
+    keyTimer = setTimeout(() => { keyBuf = ""; }, 2500);
+    if (keyBuf.endsWith("hello")) {
+      keyBuf = "";
+      if (typeIn) typeIn.value = "";
+      jumpscare();
+      return;
+    }
+    for (const phrase in PHRASES) {
+      if (keyBuf.endsWith(phrase)) {
+        showToast(PHRASES[phrase], phrase === "exit" || phrase === "lie");
+        keyBuf = "";
+        break;
+      }
+    }
+  }
+
   document.addEventListener("keydown", (e) => {
     const tag = (e.target.tagName || "").toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
+    const inSignal = typeIn && e.target === typeIn;
+    if (!inSignal && (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable)) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Enter") {
       keyBuf = "";
+      if (inSignal) typeIn.blur();
       return;
     }
     if (e.key.length === 1) {
-      keyBuf = (keyBuf + e.key.toLowerCase()).slice(-24);
-      clearTimeout(keyTimer);
-      keyTimer = setTimeout(() => { keyBuf = ""; }, 2500);
-      for (const phrase in PHRASES) {
-        if (keyBuf.endsWith(phrase)) {
-          showToast(PHRASES[phrase], phrase === "exit" || phrase === "lie");
-          keyBuf = "";
-          break;
-        }
-      }
+      handleTypeKey(e, e.key);
     }
   });
 

@@ -75,11 +75,34 @@ button{font-family:inherit}
 }
 #noise{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
 .flash{
-  position:absolute;inset:0;background:rgba(160,0,0,.16);
+  position:absolute;inset:0;background:rgba(200,0,0,.24);
   opacity:0;pointer-events:none;
 }
 .flash.go{animation:redflash .18s ease-out}
 @keyframes redflash{0%{opacity:1}100%{opacity:0}}
+
+.scare{
+  position:fixed;inset:0;z-index:9996;
+  display:none;align-items:center;justify-content:center;
+  font-family:var(--vt);font-size:clamp(4rem,18vw,14rem);
+  color:var(--red);text-shadow:0 0 40px rgba(200,0,0,.85);
+  pointer-events:none;letter-spacing:.04em;
+}
+.scare.go{display:flex;animation:scare-in .1s steps(2) infinite}
+@keyframes scare-in{
+  0%{opacity:1;transform:translate(-5px,3px) scale(1)}
+  50%{opacity:.8;transform:translate(4px,-4px) scale(1.05)}
+  100%{opacity:1;transform:translate(-3px,2px) scale(.98)}
+}
+main.shake{animation:shake .5s linear}
+@keyframes shake{
+  0%,100%{transform:translate(0,0)}
+  10%{transform:translate(-9px,5px)}
+  30%{transform:translate(8px,-7px)}
+  50%{transform:translate(-7px,-5px)}
+  70%{transform:translate(6px,7px)}
+  90%{transform:translate(-5px,4px)}
+}
 
 /* ---------- Fixed HUD ---------- */
 .hud{
@@ -165,13 +188,6 @@ button{font-family:inherit}
   box-shadow:var(--glow-green);animation:pulse 2s ease-in-out infinite;
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-
-.nav-discord{
-  font-family:var(--vt);font-size:1rem;letter-spacing:.12em;line-height:1;
-  color:var(--green);background:transparent;border:1px solid var(--green-dim);
-  padding:.32rem .65rem;white-space:nowrap;transition:all .2s;
-}
-.nav-discord:hover{box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
 
 /* ---------- Hero ---------- */
 .hero{
@@ -351,6 +367,23 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
   border-left:2px solid var(--line-bright);margin-left:1.4rem;
 }
 
+/* ---------- Signal Intercept ---------- */
+.signal-box{border:1px solid var(--line-bright);background:#050505;padding:1.4rem 1.5rem;max-width:780px}
+.signal-label{font-family:var(--vt);font-size:1.3rem;color:var(--green);letter-spacing:.12em;text-shadow:var(--glow-green);display:block;margin-bottom:.9rem}
+.signal-row{
+  display:flex;align-items:center;gap:.6rem;
+  border:1px solid var(--line-bright);background:#000;
+  padding:.7rem .9rem;
+}
+.signal-prompt{font-family:var(--vt);font-size:1.4rem;color:var(--green)}
+.type-in{
+  flex:1;background:transparent;border:0;outline:0;
+  font-family:var(--vt);font-size:1.4rem;color:#f0f0f0;
+  letter-spacing:.1em;min-width:0;caret-color:var(--green);
+}
+.type-in::placeholder{color:#333}
+.signal-hint{font-size:.62rem;letter-spacing:.16em;color:#3d3d3d;margin-top:.8rem;text-transform:uppercase}
+
 /* ---------- Sessions ---------- */
 .sessions-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.4rem}
 .session{
@@ -520,7 +553,7 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 @media(max-width:920px){
   .about-grid,.download-grid{grid-template-columns:1fr}
   .sessions-grid{grid-template-columns:1fr;max-width:520px;margin:0 auto}
-  .nav-status,.nav-discord{display:none}
+  .nav-status{display:none}
   .hud-tr{display:none}
 }
 @media(max-width:600px){
