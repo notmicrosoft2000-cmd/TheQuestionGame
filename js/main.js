@@ -186,6 +186,33 @@
     $$(".reveal").forEach((el) => io.observe(el));
   }
 
+  const staggerIO = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) {
+        const kids = Array.prototype.slice.call(en.target.children);
+        kids.forEach((k, i) => { k.style.transitionDelay = (i * 90) + "ms"; });
+        en.target.classList.add("in");
+        setTimeout(() => {
+          kids.forEach((k) => { k.style.transitionDelay = ""; });
+        }, 1200 + kids.length * 90);
+        staggerIO.unobserve(en.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  $$("[data-stagger]").forEach((el) => {
+    if ("IntersectionObserver" in window) staggerIO.observe(el);
+    else el.classList.add("in");
+  });
+
+  $$(".session, .platform-card").forEach((el) => {
+    el.classList.add("spotlight");
+    el.addEventListener("pointermove", (e) => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", (e.clientX - r.left) + "px");
+      el.style.setProperty("--my", (e.clientY - r.top) + "px");
+    });
+  });
+
   const tickerTrack = $("#tickerTrack");
   const TICKER_ITEMS = [
     "ARE YOU SITTING COMFORTABLY?",

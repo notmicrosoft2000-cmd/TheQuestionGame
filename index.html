@@ -19,6 +19,7 @@
     <style>
       #boot{display:none !important}
       .reveal{opacity:1 !important; transform:none !important}
+      [data-stagger]>*{opacity:1 !important; transform:none !important}
       .cursor{display:none !important}
     </style>
   </noscript>
@@ -26,6 +27,7 @@
   <div class="crt" aria-hidden="true">
     <div class="scanlines"></div>
     <div class="vignette"></div>
+    <div class="beam"></div>
     <canvas id="noise"></canvas>
     <div class="flash"></div>
   </div>
@@ -168,7 +170,7 @@
       </div>
       <p class="section-sub reveal">A descent in three parts. Best experienced in the dark, with headphones.</p>
 
-      <div class="sessions-grid">
+      <div class="sessions-grid" data-stagger>
         <article class="session reveal">
           <div class="session-head">
             <span class="session-code">SESSION 01</span>
@@ -310,7 +312,7 @@
             </div>
           </div>
 
-          <div class="platform-options">
+          <div class="platform-options" data-stagger>
             <div class="platform-card" id="winCard">
               <div class="platform-head">
                 <span class="platform-os">WINDOWS</span>

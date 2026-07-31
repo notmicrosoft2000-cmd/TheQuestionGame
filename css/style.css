@@ -62,7 +62,13 @@ button{font-family:inherit}
 @keyframes blink{50%{opacity:0}}
 
 /* ---------- CRT overlays ---------- */
-.crt{position:fixed;inset:0;pointer-events:none;z-index:9950}
+.crt{position:fixed;inset:0;pointer-events:none;z-index:9950;animation:crt-flicker 6s linear infinite}
+@keyframes crt-flicker{
+  0%,100%{opacity:1}
+  6%{opacity:.95} 7%{opacity:1}
+  38%{opacity:.97} 39%{opacity:1}
+  71%{opacity:.93} 72%{opacity:1}
+}
 .crt .scanlines{
   position:absolute;inset:0;
   background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.26) 2px 4px);
@@ -73,6 +79,13 @@ button{font-family:inherit}
     radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6) 100%),
     linear-gradient(rgba(0,220,0,.02),rgba(0,220,0,.02));
 }
+.crt .beam{
+  position:absolute;left:0;right:0;top:-24vh;height:22vh;
+  background:linear-gradient(to bottom,transparent,rgba(0,220,0,.05) 42%,rgba(0,220,0,.13) 50%,rgba(0,220,0,.05) 58%,transparent);
+  animation:beam 8s linear infinite;
+  will-change:transform;
+}
+@keyframes beam{0%{transform:translateY(0)}100%{transform:translateY(200vh)}}
 #noise{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
 .flash{
   position:absolute;inset:0;background:rgba(200,0,0,.24);
@@ -294,14 +307,19 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
 @keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
 /* ---------- Sections ---------- */
-.section{max-width:1080px;margin:0 auto;padding:clamp(4rem,9vw,7rem) var(--pad)}
+.section{max-width:1080px;margin:0 auto;padding:clamp(4rem,9vw,7rem) var(--pad);scroll-margin-top:4.5rem}
 .section-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1rem}
 .section-title{
   font-family:var(--vt);font-weight:400;font-size:clamp(1.7rem,4vw,2.5rem);
   letter-spacing:.06em;color:#f0f0f0;white-space:nowrap;
 }
 .section-title .red{color:var(--red)}
-.section-line{flex:1;height:1px;background:linear-gradient(90deg,var(--line-bright),transparent)}
+.section-line{
+  flex:1;height:1px;
+  background:linear-gradient(90deg,transparent,var(--green-dim) 40%,var(--line-bright) 75%,transparent);
+  background-size:220% 100%;animation:line-shift 7s linear infinite;
+}
+@keyframes line-shift{from{background-position:180% 0}to{background-position:-40% 0}}
 .section-sub{color:var(--dim);font-size:.85rem;letter-spacing:.06em;margin-bottom:2.4rem}
 
 /* ---------- About ---------- */
@@ -490,7 +508,7 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
 }
 .platform-card{
   border:1px solid var(--line);background:#070707;padding:1.2rem;
-  display:flex;flex-direction:column;gap:.8rem;
+  display:flex;flex-direction:column;gap:.8rem;position:relative;
 }
 .platform-card.is-current{border-color:var(--green-dim);background:#050d05;box-shadow:inset 0 0 24px rgba(0,220,0,.05)}
 .platform-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
@@ -561,6 +579,21 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s ease}
 .reveal.in{opacity:1;transform:none}
 
+/* ---------- Staggered reveals ---------- */
+[data-stagger]>*{
+  opacity:0;transform:translateY(22px);
+  transition:opacity .65s ease,transform .65s ease,box-shadow .3s,border-color .3s;
+}
+[data-stagger].in>*{opacity:1;transform:none}
+
+/* ---------- Card spotlight ---------- */
+.spotlight::after{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;z-index:1;
+  background:radial-gradient(250px circle at var(--mx,50%) var(--my,50%),rgba(0,220,0,.09),transparent 70%);
+  transition:opacity .35s ease;
+}
+.spotlight:hover::after{opacity:1}
+
 /* ---------- Responsive ---------- */
 @media(max-width:920px){
   .about-grid,.download-grid{grid-template-columns:1fr}
@@ -583,4 +616,5 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
   *,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.01s!important}
   html{scroll-behavior:auto}
   .cursor{display:none!important}
+  .crt .beam{display:none}
 }
