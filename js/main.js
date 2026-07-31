@@ -461,28 +461,6 @@
     });
   });
 
-  const WINGET_CMD = "winget install NeptuneProductions.TheQuestionGame";
-  const wingetCopy = $("#wingetCopy");
-  if (wingetCopy) {
-    wingetCopy.addEventListener("click", (e) => {
-      e.preventDefault();
-      const done = () => showToast("WINGET COMMAND COPIED");
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(WINGET_CMD).then(done).catch(done);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = WINGET_CMD;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand("copy"); } catch (err) { }
-        document.body.removeChild(ta);
-        done();
-      }
-    });
-  }
-
   const sfx = {
     ctx: null,
     ensure() {
