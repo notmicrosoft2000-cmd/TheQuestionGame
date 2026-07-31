@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="The Question Game — a psychological Q&A experience by Neptune Productions. It asks. You answer. It remembers.">
+  <meta name="theme-color" content="#000000">
+  <title>THE QUESTION GAME — by Neptune Productions</title>
+  <link rel="icon" type="image/png" href="windowq.png">
+  <link rel="apple-touch-icon" href="windowq.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <noscript>
+    <style>
+      #boot{display:none !important}
+      .reveal{opacity:1 !important; transform:none !important}
+      .cursor{display:none !important}
+    </style>
+  </noscript>
+
+  <div class="crt" aria-hidden="true">
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <canvas id="noise"></canvas>
+    <div class="flash"></div>
+  </div>
+
+  <div class="hud hud-tl" aria-hidden="true">
+    <span class="rec-dot"></span> REC&nbsp;<span id="recTime">00:00:00</span>
+  </div>
+  <div class="hud hud-tr" aria-hidden="true">
+    SIGNAL: <span class="sig">STABLE</span>
+  </div>
+  <div class="hud hud-bl" aria-hidden="true">v1.0.0</div>
+  <div class="hud hud-br" aria-hidden="true">NEPTUNE PRODUCTIONS [C]</div>
+
+  <div id="boot" aria-hidden="true">
+    <div class="boot-inner">
+      <div class="boot-log" id="bootLog"></div>
+      <div class="boot-prompt hidden" id="bootPrompt">&gt; [ ENTER ] TO BEGIN</div>
+    </div>
+  </div>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
+
+  <header class="nav" id="nav">
+    <a class="nav-brand" href="#top">TQG<span class="blink">_</span></a>
+    <nav class="nav-links">
+      <a href="#about">ABOUT</a>
+      <a href="#sessions">SESSIONS</a>
+      <a href="#transmission">TRANSMISSION</a>
+      <a href="#download" class="nav-cta">DOWNLOAD</a>
+    </nav>
+    <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
+  </header>
+
+  <main>
+    <section class="hero" id="top">
+      <div class="hero-meta">
+        <span>NEPTUNE PRODUCTIONS [C]</span>
+        <span>ENCOUNTERS: 1 · PERSISTENT MEMORY ENABLED</span>
+      </div>
+
+      <div class="hero-badge"><span class="led"></span> BUILD v1.0.0 — WINDOWS</div>
+
+      <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
+      <h1 class="glitch" data-text="GAME">GAME</h1>
+
+      <p class="hero-sub"><span id="heroType"></span><span class="caret"></span></p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#download">[ PLAY / DOWNLOAD ]</a>
+        <a class="btn btn-ghost" href="#sessions">[ VIEW SESSIONS ]</a>
+      </div>
+
+      <div class="hero-hint">[ TAB ] CYCLE &nbsp;·&nbsp; [ ENTER ] CONFIRM &nbsp;·&nbsp; ANSWERS CARRY FORWARD</div>
+    </section>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track" id="tickerTrack"></div>
+    </div>
+
+    <section class="section" id="about">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> ABOUT THE EXPERIENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="about-grid">
+        <div class="about-copy reveal">
+          <p>This is not a quiz. It is a set of questions, and a quiet observer sitting behind them.</p>
+          <p>Answer truthfully. Your answers, your response times, and your hesitations are recorded into a persistent local file that survives between sessions. The longer you play, the more it knows.</p>
+          <p class="dim">Nothing leaves your machine. Everything stays. That is the point.</p>
+          <p class="about-quote">"This is not the first time we've spoken."</p>
+        </div>
+        <div class="stats reveal">
+          <div class="stat"><span class="stat-num">100+</span><span class="stat-label">QUESTIONS PER SESSION</span></div>
+          <div class="stat"><span class="stat-num">03</span><span class="stat-label">SESSIONS. NO FOURTH.</span></div>
+          <div class="stat"><span class="stat-num">01</span><span class="stat-label">PERSISTENT MEMORY FILE</span></div>
+          <div class="stat"><span class="stat-num">∞</span><span class="stat-label">IT WATCHES YOU PLAY</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="sessions">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE SESSIONS</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Three runs. It remembers every answer between them.</p>
+
+      <div class="sessions-grid">
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 01</span>
+            <span class="session-status ok">AVAILABLE</span>
+          </div>
+          <h3 class="session-name">THE FIRST TIME</h3>
+          <ul class="session-points">
+            <li>~100 questions. No skip. No fast-forward.</li>
+            <li>It learns your favorite color. Your location. Your hesitations.</li>
+            <li>By the end, your name is in its databases.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">100% COMPLETE</span></div>
+          <p class="session-login">ARE YOU SITTING COMFORTABLY?</p>
+        </article>
+
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 02</span>
+            <span class="session-status warn">RETURNING USERS</span>
+          </div>
+          <h3 class="session-name">IT REMEMBERS</h3>
+          <ul class="session-points">
+            <li>The wallpaper is your color now.</li>
+            <li>It quotes your own answers back at you. The camera activates.</li>
+            <li>The main menu only says: .... &nbsp;... &nbsp;Leave.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:60%"></span><span class="bar-label">ANSWERS CARRY OVER</span></div>
+          <p class="session-login">WHY DID YOU COME BACK?</p>
+        </article>
+
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 03</span>
+            <span class="session-status danger">FINAL</span>
+          </div>
+          <h3 class="session-name">THE INTERFACE BREAKS</h3>
+          <ul class="session-points">
+            <li>The window shakes. Then other windows shake.</li>
+            <li>It opens your pictures. It opens your webcam.</li>
+            <li>There is an ending. There is no fourth session.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">NO FOURTH SESSION</span></div>
+          <p class="session-login">THIS FILE WILL NOT OPEN AGAIN.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="transmission">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> LIVE TRANSMISSION</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">A preview of the interrogation. Answer honestly.</p>
+
+      <div class="terminal reveal" id="term">
+        <div class="terminal-bar">
+          <span class="dots"><span class="dot dot-red"></span><span class="dot dot-green"></span><span class="dot dot-dim"></span></span>
+          <span>TRANSMISSION.EXE</span>
+          <span id="termStatus">RECEIVING FEED</span>
+        </div>
+        <div class="terminal-body">
+          <div class="term-lines" id="termLines"></div>
+          <div class="term-options hidden" id="termOptions"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="download">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Windows 10 / 11. No installation required. It only needs permission.</p>
+
+      <div class="download-grid">
+        <div class="release reveal">
+          <div class="release-top">
+            <div>
+              <span class="tag tag-green">LATEST BUILD</span>
+              <h3 class="release-version" id="relVersion">v1.0.0</h3>
+              <p class="release-date" id="relDate">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="release-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="release-assets" id="releaseAssets">
+            <p class="release-loading">LOCATING RELEASE ARCHIVE<span class="dots-anim"></span></p>
+          </div>
+
+          <div class="release-note">
+            IMPORTANT: Do not share the EXE alone. Download the full ZIP — it contains the assets the game needs to run.
+          </div>
+
+          <div class="release-warn">
+            THIS SOFTWARE INTERACTS WITH YOUR LOCAL ENVIRONMENT.<br>
+            During play it may modify your wallpaper, move windows, access your webcam, and open files from your Pictures folder.
+            It does not transmit your data. Run at your own discretion.
+          </div>
+        </div>
+
+        <aside class="side reveal">
+          <h3 class="side-title">IN THIS BUILD</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> 100+ first-session questions</li>
+            <li><span class="mark">▸</span> Three-session narrative arc</li>
+            <li><span class="mark">▸</span> Persistent local memory</li>
+            <li><span class="mark">▸</span> Procedural audio &amp; VHS effects</li>
+            <li><span class="mark">▸</span> Webcam moments</li>
+            <li><span class="mark">▸</span> Desktop-level intrusions</li>
+            <li><span class="mark">▸</span> A real ending</li>
+          </ul>
+          <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit)</li>
+            <li><span class="mark">▸</span> Screen — 800×600, resizable</li>
+            <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER)</li>
+            <li><span class="mark">▸</span> Network — Optional</li>
+            <li><span class="mark">▸</span> Camera — Used in certain moments</li>
+            <li><span class="mark">▸</span> Storage — ~70 MB</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-line"></div>
+    <p>NEPTUNE PRODUCTIONS [C] — THE QUESTION GAME v1.0.0</p>
+    <p class="footer-tag">YOUR ANSWERS ARE REMEMBERED.</p>
+    <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
