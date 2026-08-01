@@ -3,6 +3,7 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
   const REMASTER_TAG = "v1.1.0-remastered";
+  const CLASSIC_TAG = "v1.0.0";
 
 
   const $ = (s, c) => (c || document).querySelector(s);
@@ -471,31 +472,65 @@
     }
   }
 
-  async function loadReleaseFromTag(tag, dom) {
-    const url = tag
-      ? "https://api.github.com/repos/" + REPO + "/releases/tags/" + tag
-      : "https://api.github.com/repos/" + REPO + "/releases/latest";
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("release not found");
-      const rel = await res.json();
-      if (dom.relVersion) $(dom.relVersion).textContent = rel.tag_name || tag || "v1.0.0";
-      if (dom.relDate) $(dom.relDate).textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
-      const assets = rel.assets || [];
-      wirePlatform(dom.winBtn, dom.winStatus, assets.find((a) => /\.zip$/i.test(a.name)));
-      wirePlatform(dom.macBtn, dom.macStatus, assets.find((a) => /\.dmg$/i.test(a.name)));
-    } catch (e) {
-      if (dom.relDate) $(dom.relDate).textContent = "RELEASE NOT PUBLISHED YET";
-      [dom.winBtn, dom.macBtn].forEach((id) => {
-        const btn = $("#" + id);
-        btn.setAttribute("aria-disabled", "true");
-        btn.classList.add("platform-miss");
-        btn.textContent = "UNAVAILABLE";
-      });
-      setStatus($(dom.winStatus), "WINDOWS BUILD NOT PUBLISHED YET", true);
-      setStatus($(dom.macStatus), "MACOS BUILD NOT PUBLISHED YET", true);
-      if (dom.releaseFallback) $(dom.releaseFallback).classList.remove("hidden");
-    }
+  const FALLBACKS = {
+    classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg" },
+    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg" }
+  };
+
+  function downloadUrl(tag, file) {
+    return "https://github.com/" + REPO + "/releases/download/" + tag + "/" + file;
+  }
+
+  function wireFallback(btnId, statusId, os, url) {
+    const btn = $("#" + btnId);
+    const status = $("#" + statusId);
+    btn.href = url;
+    btn.removeAttribute("aria-disabled");
+    btn.classList.remove("platform-miss");
+    btn.textContent = "DOWNLOAD " + os + " ⤓";
+    setStatus(status, "READY — DIRECT LINK");
+  }
+
+  async function loadReleaseFromTag(tag, dom, fb) {
+    let wired = false;
+    const applyAssets = (assets) => {
+      const zip = assets.find((a) => /\.zip$/i.test(a.name));
+      const dmg = assets.find((a) => /\.dmg$/i.test(a.name));
+      if (zip) wirePlatform(dom.winBtn, dom.winStatus, zip);
+      else wireFallback(dom.winBtn, dom.winStatus, "WINDOWS", downloadUrl(fb.tag, fb.win));
+      if (dmg) wirePlatform(dom.macBtn, dom.macStatus, dmg);
+      else wireFallback(dom.macBtn, dom.macStatus, "MACOS", downloadUrl(fb.tag, fb.mac));
+    };
+    const tryFetch = async () => {
+      try {
+        const url = tag
+          ? "https://api.github.com/repos/" + REPO + "/releases/tags/" + tag
+          : "https://api.github.com/repos/" + REPO + "/releases/latest";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("release not found");
+        const rel = await res.json();
+        if (wired) return;
+        wired = true;
+        if (dom.relVersion) $(dom.relVersion).textContent = rel.tag_name || tag || "v1.0.0";
+        if (dom.relDate) $(dom.relDate).textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
+        applyAssets(rel.assets || []);
+      } catch (e) {
+        if (wired) return;
+        wired = true;
+        if (dom.relVersion) $(dom.relVersion).textContent = fb.tag;
+        if (dom.relDate) $(dom.relDate).textContent = "RELEASE SERVER UNREACHABLE — USING DIRECT LINK";
+        applyAssets([]);
+      }
+    };
+    const fallbackNow = () => {
+      if (wired) return;
+      wired = true;
+      if (dom.relVersion) $(dom.relVersion).textContent = fb.tag;
+      if (dom.relDate) $(dom.relDate).textContent = "DIRECT LINK — NO API REQUIRED";
+      applyAssets([]);
+    };
+    tryFetch();
+    setTimeout(fallbackNow, 8000);
   }
 
   async function loadRelease() {
@@ -510,16 +545,27 @@
         if (t) t.classList.remove("hidden");
       });
     }
-    loadReleaseFromTag(null, {
-      relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
-      winBtn: "dlWindows", winStatus: "dlWindowsStatus",
-      macBtn: "dlMac", macStatus: "dlMacStatus"
-    });
     loadReleaseFromTag(REMASTER_TAG, {
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
       macBtn: "dlRemMac", macStatus: "dlRemMacStatus"
-    });
+    }, FALLBACKS.remastered);
+    (async () => {
+      let tag = CLASSIC_TAG;
+      try {
+        const res = await fetch("https://api.github.com/repos/" + REPO + "/releases");
+        if (res.ok) {
+          const rels = await res.json();
+          const match = (Array.isArray(rels) ? rels : []).find((r) => !/remastered/i.test(r.tag_name || ""));
+          if (match && match.tag_name) tag = match.tag_name;
+        }
+      } catch (e) { }
+      loadReleaseFromTag(tag, {
+        relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
+        winBtn: "dlWindows", winStatus: "dlWindowsStatus",
+        macBtn: "dlMac", macStatus: "dlMacStatus"
+      }, FALLBACKS.classic);
+    })();
   }
   loadRelease();
 
