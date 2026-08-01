@@ -290,7 +290,8 @@
     { q: "ARE YOU SITTING COMFORTABLY?", o: ["YES", "NO"], r: ["GOOD. THAT WILL CHANGE.", "THEN STAND. IT WILL NOT HELP."] },
     { q: "ARE YOU ALONE RIGHT NOW?", o: ["YES", "NO"], r: ["WE WILL VERIFY THAT LATER.", "THEN WHO IS IN THE ROOM WITH YOU?"] },
     { q: "DO YOU TRUST WHAT IS ON YOUR SCREEN?", o: ["YES", "NO"], r: ["THAT IS THE FIRST MISTAKE.", "WISE. MOST PEOPLE LIE HERE."] },
-    { q: "ARE YOU AFRAID OF THE DARK?", o: ["YES", "NO"], r: ["GOOD. THE DARK REMEMBERS TOO.", "EVERYONE IS. YOU HIDE IT BETTER."] }
+    { q: "ARE YOU AFRAID OF THE DARK?", o: ["YES", "NO"], r: ["GOOD. THE DARK REMEMBERS TOO.", "EVERYONE IS. YOU HIDE IT BETTER."] },
+    { q: "THE LIGHTS ARE OFF NOW. DO YOU FEEL SAFER?", o: ["YES", "NO"], r: ["THEN THE DARK HAS YOU EXACTLY WHERE IT WANTS YOU.", "GOOD. THE DARK NEVER NEEDED THE LIGHTS."] }
   ];
 
   const term = $("#term");
@@ -334,9 +335,10 @@
   let resolveOpt = null;
 
   function selectOption(i) {
-    if (termBusy || !resolveOpt) return;
-    resolveOpt(i);
+    if (!resolveOpt) return;
+    const r = resolveOpt;
     resolveOpt = null;
+    r(i);
   }
 
   function promptChoice() {
@@ -392,6 +394,12 @@
     }
 
     termStatus.textContent = "TRANSMISSION END";
+    termOptions.classList.add("hidden");
+    await addLine("", "> IT HAS WHAT IT NEEDS NOW.", 34);
+    await sleep(600);
+    giantJumpscare();
+    await sleep(1800);
+    termStatus.textContent = "SESSION LOGGED";
     await addLine("", "THE PREVIEW ENDS HERE. THE FULL SESSION HAS 100 QUESTIONS.", 32);
     await addLine("", "IT HEARS EVERYTHING.", 32);
 
@@ -625,6 +633,59 @@
         o.start();
         o.stop(ctx.currentTime + 0.035);
       } catch (e) { }
+    },
+    scare() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const master = ctx.createGain();
+        master.gain.setValueAtTime(0.0001, t);
+        master.gain.exponentialRampToValueAtTime(0.8, t + 0.02);
+        master.gain.setValueAtTime(0.8, t + 0.55);
+        master.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
+        master.connect(ctx.destination);
+
+        [1850, 930, 500].forEach((f, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = "sawtooth";
+          o.frequency.setValueAtTime(f, t);
+          o.frequency.exponentialRampToValueAtTime(f * 0.3, t + 1.1);
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(0.2 + i * 0.08, t + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+          o.connect(g);
+          g.connect(master);
+          o.start(t);
+          o.stop(t + 1.2);
+        });
+
+        const n = Math.floor(ctx.sampleRate * 0.9);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.85, t);
+        ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+        src.connect(ng);
+        ng.connect(master);
+        src.start(t);
+
+        const low = ctx.createOscillator();
+        const lg = ctx.createGain();
+        low.type = "sine";
+        low.frequency.setValueAtTime(90, t);
+        low.frequency.exponentialRampToValueAtTime(38, t + 0.7);
+        lg.gain.setValueAtTime(0.75, t);
+        lg.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+        low.connect(lg);
+        lg.connect(master);
+        low.start(t);
+        low.stop(t + 0.9);
+      } catch (e) { }
     }
   };
 
@@ -717,6 +778,42 @@
   }
 
   const scare = $("#scare");
+  const FACE_HTML = '<div class="face"><div class="face-eyes"><span></span><span></span></div><div class="face-mouth"></div><div class="face-text">IT SEES YOU</div></div>';
+
+  function giantJumpscare() {
+    if (scareLock) return;
+    scareLock = true;
+    const mainEl = document.querySelector("main");
+    const saved = scare ? scare.innerHTML : null;
+    if (scare) {
+      scare.innerHTML = FACE_HTML;
+      scare.classList.add("giant", "go");
+    }
+    if (mainEl) mainEl.classList.add("shake");
+    if (document.body) document.body.classList.add("body-shake");
+    sfx.scare();
+    let n = 0;
+    const pulse = () => {
+      flash.classList.add("go");
+      setTimeout(() => {
+        flash.classList.remove("go");
+        n++;
+        if (n < 6) {
+          setTimeout(pulse, 100);
+        }
+      }, 160);
+    };
+    pulse();
+    setTimeout(() => {
+      if (scare) {
+        scare.classList.remove("go", "giant");
+        if (saved !== null) scare.innerHTML = saved;
+      }
+      if (mainEl) mainEl.classList.remove("shake");
+      if (document.body) document.body.classList.remove("body-shake");
+      scareLock = false;
+    }, 1650);
+  }
 
   function jumpscare() {
     if (scareLock) return;

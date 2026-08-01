@@ -102,11 +102,45 @@ button{font-family:inherit}
   pointer-events:none;letter-spacing:.04em;
 }
 .scare.go{display:flex;animation:scare-in .1s steps(2) infinite}
+.scare.giant{background:rgba(0,0,0,.94)}
+.scare.giant .face{animation:face-in .08s steps(2) infinite}
 @keyframes scare-in{
   0%{opacity:1;transform:translate(-5px,3px) scale(1)}
   50%{opacity:.8;transform:translate(4px,-4px) scale(1.05)}
   100%{opacity:1;transform:translate(-3px,2px) scale(.98)}
 }
+.face{
+  display:flex;flex-direction:column;align-items:center;gap:clamp(.8rem,3vh,2.5rem);
+  max-width:94vw;
+}
+.face-eyes{display:flex;gap:clamp(2.5rem,14vw,11rem)}
+.face-eyes span{
+  width:clamp(3.5rem,15vw,13rem);height:clamp(3.5rem,15vw,13rem);
+  border-radius:50%;
+  background:radial-gradient(circle at 50% 45%,#ff3b3b 0%,#a00000 55%,#200000 100%);
+  box-shadow:0 0 clamp(1.5rem,6vw,5rem) rgba(255,0,0,.95),inset 0 0 2rem rgba(0,0,0,.75);
+  animation:eye-jitter .1s steps(2) infinite;
+}
+@keyframes eye-jitter{50%{transform:scale(1.18) rotate(2deg)}}
+.face-mouth{
+  width:clamp(9rem,38vw,30rem);height:clamp(4.5rem,19vw,15rem);
+  position:relative;overflow:hidden;
+  background:#0a0000;border:2px solid #ff2a2a;border-bottom-width:0;
+  border-radius:50% 50% 10% 10% / 100% 100% 0% 0%;
+  box-shadow:0 0 clamp(1rem,4vw,3.5rem) rgba(255,0,0,.55),inset 0 0 3rem rgba(200,0,0,.35);
+}
+.face-mouth::after{
+  content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,#180000 0 7px,#000 7px 14px);
+  animation:jaw .09s steps(2) infinite;
+}
+@keyframes jaw{50%{transform:translateY(6px) scaleY(1.15)}}
+.face-text{
+  font-family:var(--vt);font-size:clamp(1.5rem,4.5vw,3.2rem);
+  letter-spacing:.22em;color:#ff4d4d;
+  text-shadow:0 0 2rem rgba(255,0,0,.9);
+}
+body.body-shake{animation:shake .45s linear infinite}
 main.shake{animation:shake .5s linear}
 @keyframes shake{
   0%,100%{transform:translate(0,0)}
