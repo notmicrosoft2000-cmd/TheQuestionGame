@@ -40,10 +40,13 @@ jobs:
           APP=$(find . -maxdepth 4 -name "*.app" -type d | head -1)
           echo "Found app: $APP"
           if [ -z "$APP" ]; then echo "No .app found -- py2app did not produce one."; exit 1; fi
-          rm -f TheQuestionGame-macOS.dmg
+          rm -rf dmgroot TheQuestionGame-macOS.dmg
+          mkdir -p dmgroot
+          cp -R "$APP" dmgroot/
+          ln -s /Applications dmgroot/Applications
           hdiutil create \
             -volname "The Question Game" \
-            -srcfolder "$APP" \
+            -srcfolder dmgroot \
             -ov -format UDZO \
             TheQuestionGame-macOS.dmg
 
