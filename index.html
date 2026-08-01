@@ -257,11 +257,11 @@
         </details>
         <details class="concern">
           <summary>DOES IT USE MY CAMERA OR MICROPHONE?</summary>
-          <div class="concern-body">No. The game never activates a camera or microphone on either platform. The macOS app declares a camera permission in its app bundle (an Apple requirement for any app that ships an Info.plist), but the permission is never requested or used. The Windows build has no camera or microphone code at all.</div>
+          <div class="concern-body">The classic edition never activates a camera or microphone on either platform. The Remastered edition can briefly request your camera <i>only</i> as an in-fiction scare — deny the permission and the scare is skipped, and the game keeps running. Neither edition records audio, and nothing is ever saved from the camera.</div>
         </details>
         <details class="concern">
           <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
-          <div class="concern-body">No. The game makes no network requests. Everything you type is stored only in a local save file on your own machine, and the game can be played with your network fully disconnected. Nothing is uploaded, transmitted, or sent to the developer.</div>
+          <div class="concern-body">The classic edition makes no network requests at all — everything you type stays in a local save file on your machine. The Remastered edition can call an AI service to write your questions when a network is available (it works offline with built-in questions otherwise), but the answers you choose are sent only in a short line of generated-fiction context, are never stored by the developer, and remain yours. Either way, playable fully disconnected.</div>
         </details>
         <details class="concern">
           <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
@@ -356,9 +356,10 @@
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Windows 10 / 11 and macOS. No installation required. It only needs permission.</p>
+      <p class="section-sub reveal">Windows 10 / 11 and macOS, two editions. No installation required. They only need permission.</p>
 
       <div class="download-grid">
+        <div class="releases-col">
         <div class="release reveal">
           <div class="release-top">
             <div>
@@ -411,6 +412,56 @@
             It contains mature themes and moments designed to unsettle you. The game itself transmits nothing — your answers stay on your machine.
             If you are easily disturbed, do not play alone — and do not play at night.
           </div>
+        </div>
+
+        <div class="release reveal rem">
+          <div class="release-top">
+            <div>
+              <span class="tag tag-green">REMASTERED — AI EDITION</span>
+              <h3 class="release-version" id="remRelVersion">v1.1.0-remastered</h3>
+              <p class="release-date" id="remRelDate">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="release-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="platform-options" data-stagger>
+            <div class="platform-card" id="remWinCard">
+              <div class="platform-head">
+                <span class="platform-os">WINDOWS</span>
+                <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live.</p>
+              <a class="platform-btn" id="dlRemWindows" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="WINDOWS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
+              <p class="platform-status" id="dlRemWindowsStatus">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="platform-card" id="remMacCard">
+              <div class="platform-head">
+                <span class="platform-os">MACOS</span>
+                <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
+              <a class="platform-btn" id="dlRemMac" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="MACOS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
+              <p class="platform-status" id="dlRemMacStatus">CONTACTING RELEASE SERVER...</p>
+            </div>
+          </div>
+
+          <div class="release-fallback hidden" id="remReleaseFallback">
+            <a class="asset-btn" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener">[ OPEN GITHUB RELEASES ]</a>
+          </div>
+
+          <div class="release-note">
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows) or DMG (macOS).
+          </div>
+
+          <div class="release-warn rem-warn">
+            THE REMASTERED EDITION MAY BRIEFLY REQUEST YOUR CAMERA AS A SCARE.<br>
+            Deny it and the scare is skipped — the game keeps running. Your answers stay on your machine.
+          </div>
+        </div>
         </div>
 
         <aside class="side reveal">

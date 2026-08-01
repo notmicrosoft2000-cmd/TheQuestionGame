@@ -1,0 +1,70 @@
+name: Build Remastered macOS DMG
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    name: Build Remastered .dmg for macOS
+    runs-on: macos-14
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.release.tag_name, 'remastered')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r requirements-mac-remastered.txt
+
+      - name: Build app icon from windowq.png
+        run: |
+          mkdir -p icon.iconset
+          for s in 16 32 128 256 512; do
+            sips -z $s $s TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}.png >/dev/null
+            sips -z $((s * 2)) $((s * 2)) TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}@2x.png >/dev/null
+          done
+          iconutil -c icns icon.iconset -o icon.icns
+
+      - name: Build .app with py2app
+        run: python mac/setup-remastered.py py2app
+
+      - name: Create .dmg
+        run: |
+          APP=$(find . -maxdepth 4 -name "*.app" -type d | head -1)
+          echo "Found app: $APP"
+          if [ -z "$APP" ]; then echo "No .app found -- py2app did not produce one."; exit 1; fi
+          rm -rf dmgroot TheQuestionGameRemastered-macOS.dmg
+          mkdir -p dmgroot
+          cp -R "$APP" dmgroot/
+          ln -s /Applications dmgroot/Applications
+          hdiutil create \
+            -volname "The Question Game Remastered" \
+            -srcfolder dmgroot \
+            -ov -format UDZO \
+            TheQuestionGameRemastered-macOS.dmg
+
+      - name: Upload .dmg to release
+        if: github.event_name == 'release' && contains(github.event.release.tag_name, 'remastered')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" TheQuestionGameRemastered-macOS.dmg --clobber
+
+      - name: Upload .dmg to latest remastered release (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(gh release list --limit 10 --json tagName -q '.[].tagName' | grep -i remastered | head -1)
+          if [ -n "$TAG" ]; then
+            gh release upload "$TAG" TheQuestionGameRemastered-macOS.dmg --clobber
+          else
+            echo "No remastered release found to attach to — skipping upload."
+          fi

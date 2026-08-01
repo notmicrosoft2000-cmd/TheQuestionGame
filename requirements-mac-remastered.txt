@@ -1,0 +1,6 @@
+# macOS build dependencies (used by .github/workflows/build-mac-remastered.yml)
+py2app
+pygame
+numpy
+opencv-python
+requests

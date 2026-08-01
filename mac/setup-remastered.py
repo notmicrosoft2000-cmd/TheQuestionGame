@@ -1,0 +1,33 @@
+import os
+
+from setuptools import setup
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+setup(
+    name="TheQuestionGameRemastered",
+    version="1.1.0",
+    description="The Question Game Remastered",
+    app=[os.path.join(ROOT, "run_remastered.py")],
+    options={
+        "py2app": {
+            "argv_emulation": True,
+            "iconfile": os.path.join(ROOT, "icon.icns"),
+            "packages": ["pygame", "numpy", "cv2", "requests"],
+            "excludes": ["tkinter", "PyQt5", "PySide2", "matplotlib", "scipy"],
+            "resources": [
+                os.path.join(ROOT, "TheQuestionGameRemastered", "assets"),
+            ],
+            "plist": {
+                "CFBundleName": "The Question Game Remastered",
+                "CFBundleDisplayName": "The Question Game Remastered",
+                "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongameremastered",
+                "CFBundleShortVersionString": "1.1.0",
+                "CFBundleVersion": "1.1.0",
+                "LSApplicationCategoryType": "public.app-category.games",
+                "NSHighResolutionCapable": True,
+                "NSCameraUsageDescription": "The Question Game Remastered checks whether you are still paying attention during the session.",
+            },
+        }
+    },
+)

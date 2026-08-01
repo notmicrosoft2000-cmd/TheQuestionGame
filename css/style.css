@@ -526,7 +526,9 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
 /* ---------- Download ---------- */
 .download-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:1.6rem;align-items:start}
 .release,.side{border:1px solid var(--line);background:var(--panel);position:relative}
+.releases-col{display:grid;gap:1.6rem;min-width:0}
 .release{overflow:hidden}
+.release.rem::before{background:repeating-linear-gradient(90deg,#b00000 0 14px,#4a0000 14px 20px)}
 .release::before{
   content:"";position:absolute;top:0;left:0;right:0;height:3px;
   background:repeating-linear-gradient(90deg,var(--green) 0 14px,var(--green-dim) 14px 20px);

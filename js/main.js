@@ -2,6 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
+  const REMASTER_TAG = "v1.1.0-remastered";
 
 
   const $ = (s, c) => (c || document).querySelector(s);
@@ -470,38 +471,55 @@
     }
   }
 
-  async function loadRelease() {
-    const ver = $("#relVersion");
-    const date = $("#relDate");
-    const fallback = $("#releaseFallback");
-    const os = platformKey();
-    if (os === "win" || os === "mac") {
-      const card = $(os === "mac" ? "#macCard" : "#winCard");
-      const tag = $(os === "mac" ? "#macDetected" : "#winDetected");
-      card.classList.add("is-current");
-      if (tag) tag.classList.remove("hidden");
-    }
+  async function loadReleaseFromTag(tag, dom) {
+    const url = tag
+      ? "https://api.github.com/repos/" + REPO + "/releases/tags/" + tag
+      : "https://api.github.com/repos/" + REPO + "/releases/latest";
     try {
-      const res = await fetch("https://api.github.com/repos/" + REPO + "/releases/latest");
+      const res = await fetch(url);
       if (!res.ok) throw new Error("release not found");
       const rel = await res.json();
-      ver.textContent = rel.tag_name || "v1.0.0";
-      date.textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
+      if (dom.relVersion) $(dom.relVersion).textContent = rel.tag_name || tag || "v1.0.0";
+      if (dom.relDate) $(dom.relDate).textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
       const assets = rel.assets || [];
-      wirePlatform("dlWindows", "dlWindowsStatus", assets.find((a) => /\.zip$/i.test(a.name)));
-      wirePlatform("dlMac", "dlMacStatus", assets.find((a) => /\.dmg$/i.test(a.name)));
+      wirePlatform(dom.winBtn, dom.winStatus, assets.find((a) => /\.zip$/i.test(a.name)));
+      wirePlatform(dom.macBtn, dom.macStatus, assets.find((a) => /\.dmg$/i.test(a.name)));
     } catch (e) {
-      date.textContent = "RELEASE NOT PUBLISHED YET";
-      ["dlWindows", "dlMac"].forEach((id) => {
+      if (dom.relDate) $(dom.relDate).textContent = "RELEASE NOT PUBLISHED YET";
+      [dom.winBtn, dom.macBtn].forEach((id) => {
         const btn = $("#" + id);
         btn.setAttribute("aria-disabled", "true");
         btn.classList.add("platform-miss");
         btn.textContent = "UNAVAILABLE";
       });
-      setStatus($("#dlWindowsStatus"), "WINDOWS BUILD NOT PUBLISHED YET", true);
-      setStatus($("#dlMacStatus"), "MACOS BUILD NOT PUBLISHED YET", true);
-      fallback.classList.remove("hidden");
+      setStatus($(dom.winStatus), "WINDOWS BUILD NOT PUBLISHED YET", true);
+      setStatus($(dom.macStatus), "MACOS BUILD NOT PUBLISHED YET", true);
+      if (dom.releaseFallback) $(dom.releaseFallback).classList.remove("hidden");
     }
+  }
+
+  async function loadRelease() {
+    const os = platformKey();
+    if (os === "win" || os === "mac") {
+      const classic = os === "mac" ? ["#macCard", "#macDetected"] : ["#winCard", "#winDetected"];
+      const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : ["#remWinCard", "#remWinDetected"];
+      [classic, rem].forEach(([card, tag]) => {
+        const c = $(card);
+        const t = $(tag);
+        if (c) c.classList.add("is-current");
+        if (t) t.classList.remove("hidden");
+      });
+    }
+    loadReleaseFromTag(null, {
+      relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
+      winBtn: "dlWindows", winStatus: "dlWindowsStatus",
+      macBtn: "dlMac", macStatus: "dlMacStatus"
+    });
+    loadReleaseFromTag(REMASTER_TAG, {
+      relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
+      winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
+      macBtn: "dlRemMac", macStatus: "dlRemMacStatus"
+    });
   }
   loadRelease();
 
