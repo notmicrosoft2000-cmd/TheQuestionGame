@@ -9,6 +9,8 @@ jobs:
   build-mac:
     name: Build .dmg for macOS
     runs-on: macos-14
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,18 +33,7 @@ jobs:
           iconutil -c icns icon.iconset -o icon.icns
 
       - name: Build .app with py2app
-        run: |
-          which python python3
-          python -c "import sys, sysconfig; print(sys.executable); print(sysconfig.get_config_var('PYTHONFRAMEWORK'))"
-          python mac/setup.py py2app
-
-      - name: Inspect build output
-        run: |
-          ls -la
-          echo "--- dist ---"
-          ls -laR dist | head -60
-          echo "--- find .app ---"
-          find . -maxdepth 4 -name "*.app" -print
+        run: python mac/setup.py py2app
 
       - name: Create .dmg
         run: |
