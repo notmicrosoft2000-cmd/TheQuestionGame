@@ -224,7 +224,7 @@
     if (!target) return;
     $$(".view.active").forEach((v) => v.classList.remove("active"));
     target.classList.add("active");
-    $$(".nav-links a, .side-link").forEach((a) => {
+    $$(".contents-link, .side-link").forEach((a) => {
       const href = (a.getAttribute("href") || "").replace(/^#/, "");
       a.classList.toggle("active", href === name);
     });
