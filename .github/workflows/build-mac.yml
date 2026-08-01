@@ -31,14 +31,28 @@ jobs:
           iconutil -c icns icon.iconset -o icon.icns
 
       - name: Build .app with py2app
-        run: python mac/setup.py py2app
+        run: |
+          which python python3
+          python -c "import sys, sysconfig; print(sys.executable); print(sysconfig.get_config_var('PYTHONFRAMEWORK'))"
+          python mac/setup.py py2app
+
+      - name: Inspect build output
+        run: |
+          ls -la
+          echo "--- dist ---"
+          ls -laR dist | head -60
+          echo "--- find .app ---"
+          find . -maxdepth 4 -name "*.app" -print
 
       - name: Create .dmg
         run: |
+          APP=$(find . -maxdepth 4 -name "*.app" -type d | head -1)
+          echo "Found app: $APP"
+          if [ -z "$APP" ]; then echo "No .app found -- py2app did not produce one."; exit 1; fi
           rm -f TheQuestionGame-macOS.dmg
           hdiutil create \
             -volname "The Question Game" \
-            -srcfolder dist/TheQuestionGame.app \
+            -srcfolder "$APP" \
             -ov -format UDZO \
             TheQuestionGame-macOS.dmg
 
