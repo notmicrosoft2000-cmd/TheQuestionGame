@@ -609,6 +609,76 @@
     });
   });
 
+  // ---------- Download warning + install guide ----------
+  const warnModal = $("#warnModal");
+  const guideModal = $("#guideModal");
+  const guideWin = $("#guideWin");
+  const guideMac = $("#guideMac");
+  const tabWin = $("#tabWin");
+  const tabMac = $("#tabMac");
+  let pendingUrl = null;
+  let pendingOs = "win";
+
+  function openModal(m) {
+    if (!m) return;
+    m.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+  }
+  function closeModal(m) {
+    if (!m) return;
+    m.classList.add("hidden");
+    if (!$(".modal-overlay:not(.hidden)")) document.body.classList.remove("modal-open");
+  }
+  function setGuideTab(os) {
+    const win = os === "win";
+    tabWin.setAttribute("aria-selected", win ? "true" : "false");
+    tabMac.setAttribute("aria-selected", win ? "false" : "true");
+    guideWin.classList.toggle("hidden", !win);
+    guideMac.classList.toggle("hidden", win);
+  }
+
+  const platformBtns = $$(".platform-btn");
+  platformBtns.forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      pendingUrl = b.getAttribute("href");
+      pendingOs = (b.getAttribute("data-os") || "").toLowerCase().indexOf("mac") !== -1 ? "mac" : "win";
+      openModal(warnModal);
+    });
+  });
+
+  $("#warnAccept").addEventListener("click", () => {
+    closeModal(warnModal);
+    setGuideTab(pendingOs);
+    openModal(guideModal);
+  });
+  $("#warnCancel").addEventListener("click", () => closeModal(warnModal));
+  $("#warnClose").addEventListener("click", () => closeModal(warnModal));
+
+  $("#guideGo").addEventListener("click", () => {
+    closeModal(guideModal);
+    if (pendingUrl) window.location.href = pendingUrl;
+  });
+  $("#guideCancel").addEventListener("click", () => {
+    closeModal(guideModal);
+    openModal(warnModal);
+  });
+  $("#guideClose").addEventListener("click", () => closeModal(guideModal));
+
+  tabWin.addEventListener("click", () => setGuideTab("win"));
+  tabMac.addEventListener("click", () => setGuideTab("mac"));
+
+  [warnModal, guideModal].forEach((m) => {
+    m.addEventListener("click", (e) => {
+      if (e.target === m) closeModal(m);
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!warnModal.classList.contains("hidden")) closeModal(warnModal);
+    else if (!guideModal.classList.contains("hidden")) closeModal(guideModal);
+  });
+
   const sfx = {
     ctx: null,
     ensure() {

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=3">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 
@@ -502,9 +502,64 @@
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>
   </footer>
 
+  <div class="modal-overlay hidden" id="warnModal" role="dialog" aria-modal="true" aria-labelledby="warnTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title" id="warnTitle">⚠ STROBE / PHOTOSENSITIVITY WARNING</h3>
+        <button class="modal-x" id="warnClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>THE QUESTION GAME CONTAINS <span class="red">FLASHING LIGHTS, RAPID SCREEN CHANGES AND A SUDDEN FULL-SCREEN FLASH</span> AS PART OF ITS SCARES. THIS SITE PREVIEW ALSO FLASHES.</p>
+        <p>If you or anyone playing has photosensitive epilepsy, or has ever had a seizure triggered by screens or flashing lights, <b>do not play</b>. A small percentage of people may experience symptoms even without a prior history.</p>
+        <p>Play in a well-lit room, at a safe distance from the screen, and stop immediately if you feel any discomfort.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="warnCancel" type="button">[ I'LL SKIP THIS ]</button>
+        <button class="modal-btn" id="warnAccept" type="button">[ I UNDERSTAND — CONTINUE ]</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+    <div class="modal wide">
+      <div class="modal-head">
+        <h3 class="modal-title" id="guideTitle">INSTALL GUIDE</h3>
+        <button class="modal-x" id="guideClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="guide-tabs" role="tablist">
+        <button class="guide-tab" id="tabWin" type="button" role="tab" aria-selected="false">WINDOWS</button>
+        <button class="guide-tab" id="tabMac" type="button" role="tab" aria-selected="false">MACOS</button>
+      </div>
+      <div class="modal-body">
+        <div class="guide-pane" id="guideWin">
+          <ol class="guide-steps">
+            <li><b>Unzip the download.</b> Open the ZIP in File Explorer and click <b>Extract All</b> (or right-click the ZIP → <b>Extract All</b>).</li>
+            <li><b>Open the extracted folder</b> and double-click <code>TheQuestionGame.exe</code> (Classic) or <code>TheQuestionGameRemastered.exe</code> (Remastered).</li>
+            <li><b>Windows SmartScreen:</b> Windows will likely show <i>"Windows protected your PC"</i> because the game is unsigned. Click <b>More info</b> → <b>Run anyway</b>.</li>
+            <li><b>Still blocked?</b> Right-click the .exe → <b>Properties</b> → tick <b>Unblock</b> → <b>OK</b>, then run it again.</li>
+            <li><b>That's it.</b> No installation. To uninstall, delete the folder you unzipped.</li>
+          </ol>
+        </div>
+        <div class="guide-pane hidden" id="guideMac">
+          <ol class="guide-steps">
+            <li><b>Open the DMG</b> by double-clicking the downloaded file.</li>
+            <li><b>Drag</b> <code>The Question Game</code> (or <code>The Question Game Remastered</code>) into your <b>Applications</b> folder.</li>
+            <li><b>Gatekeeper:</b> the first launch will warn the app is from an unidentified developer. <b>Right-click</b> (or Control-click) the app → <b>Open</b> → click <b>Open</b> again in the dialog.</li>
+            <li><b>Alternative:</b> open Terminal and run <code>xattr -cr /Applications/The&nbsp;Question&nbsp;Game.app</code>, then double-click to launch.</li>
+            <li><b>That's it.</b> No installation. To uninstall, delete the app and <code>~/Library/Application Support/TheQuestionGame</code>.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="guideCancel" type="button">[ BACK ]</button>
+        <button class="modal-btn" id="guideGo" type="button">[ I'VE READ IT — BEGIN DOWNLOAD ]</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=3"></script>
-  <script src="js/main.js?v=3"></script>
+  <script src="js/config.js?v=4"></script>
+  <script src="js/main.js?v=4"></script>
 </body>
 </html>
