@@ -586,6 +586,19 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
   border:1px solid var(--dark-red);background:rgba(200,0,0,.05);
   font-size:.7rem;color:#c98a8a;line-height:1.8;letter-spacing:.04em;
 }
+.release-alpha{
+  margin:0 1.8rem 1.2rem;padding:1.1rem 1.3rem;
+  border:2px solid #e00;background:rgba(255,0,0,.1);
+  font-family:var(--vt);font-weight:700;font-size:clamp(1.4rem,3vw,2rem);letter-spacing:.14em;
+  color:#ff4d4d;text-align:center;line-height:1.4;
+  animation:alphaPulse 1.1s steps(2) infinite;
+}
+.release-alpha span{
+  display:block;margin-top:.5rem;
+  font-family:var(--ibm,'IBM Plex Mono',ui-monospace,monospace);font-weight:400;
+  font-size:.72rem;letter-spacing:.05em;line-height:1.7;color:#e0a0a0;
+}
+@keyframes alphaPulse{50%{background:rgba(255,0,0,.2);box-shadow:0 0 22px rgba(255,0,0,.35)}}
 .side{padding:1.8rem 1.6rem}
 .side-title{
   font-family:var(--vt);font-weight:400;font-size:1.35rem;letter-spacing:.1em;

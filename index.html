@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
 
@@ -381,8 +381,8 @@
                 <span class="tag tag-green hidden" id="winDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGame.exe</b> — no installation required.</p>
-              <a class="platform-btn" id="dlWindows" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="WINDOWS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
-              <p class="platform-status" id="dlWindowsStatus">CONTACTING RELEASE SERVER...</p>
+              <a class="platform-btn" id="dlWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v1.0.0/TheQuestionGame.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-status" id="dlWindowsStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="macCard">
               <div class="platform-head">
@@ -390,8 +390,8 @@
                 <span class="tag tag-green hidden" id="macDetected">DETECTED</span>
               </div>
               <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game</b> into your Applications folder.</p>
-              <a class="platform-btn" id="dlMac" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="MACOS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
-              <p class="platform-status" id="dlMacStatus">CONTACTING RELEASE SERVER...</p>
+              <a class="platform-btn" id="dlMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v1.0.0/TheQuestionGame-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <p class="platform-status" id="dlMacStatus">READY — DIRECT LINK</p>
             </div>
           </div>
 
@@ -435,8 +435,8 @@
                 <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live.</p>
-              <a class="platform-btn" id="dlRemWindows" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="WINDOWS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
-              <p class="platform-status" id="dlRemWindowsStatus">CONTACTING RELEASE SERVER...</p>
+              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v1.1.0-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-status" id="dlRemWindowsStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remMacCard">
               <div class="platform-head">
@@ -444,9 +444,14 @@
                 <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
               </div>
               <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
-              <a class="platform-btn" id="dlRemMac" href="#" target="_blank" rel="noopener" aria-disabled="true" data-os="MACOS">LOCATING ARCHIVE<span class="dots-anim"></span></a>
-              <p class="platform-status" id="dlRemMacStatus">CONTACTING RELEASE SERVER...</p>
+              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v1.1.0-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
             </div>
+          </div>
+
+          <div class="release-alpha">
+            ⚠ ALPHA BUILD ⚠<br>
+            <span>THIS EDITION IS EXPECTED TO CRASH. A LOT. GLITCHES, BREAKAGES AND MISSING CONTENT ARE PART OF THE EXPERIENCE. THE CLASSIC EDITION ABOVE IS THE STABLE ONE. PLAY AT YOUR OWN RISK.</span>
           </div>
 
           <div class="release-fallback hidden" id="remReleaseFallback">
@@ -499,7 +504,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/config.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
 </body>
 </html>
