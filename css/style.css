@@ -660,6 +660,39 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
 .req:hover{border-color:var(--green-dim);box-shadow:var(--glow-soft)}
 .req-title{font-family:var(--vt);font-weight:400;font-size:1.25rem;letter-spacing:.12em;color:var(--green);margin-bottom:1rem}
 
+/* ---------- Game-style keyboard cursor (TAB / ENTER) ---------- */
+.contents-link.kb-target{
+  color:var(--red);border-color:var(--red);background:rgba(200,0,0,.1);
+  box-shadow:var(--glow-red);text-shadow:var(--glow-red);
+  animation:kb-blink .9s steps(1) infinite;
+}
+.side-link.kb-target{
+  color:var(--red);border-left-color:var(--red);background:rgba(200,0,0,.08);
+  text-shadow:var(--glow-red);animation:kb-blink .9s steps(1) infinite;
+}
+@keyframes kb-blink{50%{opacity:.4}}
+
+/* ---------- The Archive (secret LOGS) ---------- */
+.logs-lock{border:1px dashed var(--red);background:rgba(120,0,0,.07);padding:3rem 1.5rem;text-align:center}
+.logs-lock-text{font-family:var(--vt);font-size:clamp(1.2rem,2.6vw,1.7rem);color:var(--red);line-height:1.75;text-shadow:var(--glow-red)}
+.logs-hint{margin-top:1.8rem;font-size:.7rem;letter-spacing:.28em;color:var(--dim)}
+.logs-keys{
+  display:inline-block;min-width:1.7rem;padding:.12rem .45rem;margin:0 .2rem;
+  border:1px solid var(--red);color:var(--red);font-family:var(--vt);font-size:1.15rem;
+  animation:kb-blink 1.7s steps(1) infinite;
+}
+.logs-keys + .logs-keys{animation-delay:.2s}
+.logs-keys + .logs-keys + .logs-keys{animation-delay:.4s}
+.logs-keys + .logs-keys + .logs-keys + .logs-keys{animation-delay:.6s}
+.logs-lock-foot{margin-top:1.6rem;font-size:.62rem;letter-spacing:.12em;color:#5a5a5a}
+.logs-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem}
+.logs-entry{border:1px solid var(--line);background:var(--panel);padding:1.3rem 1.5rem;position:relative;transition:border-color .3s,box-shadow .3s}
+.logs-entry:hover{border-color:var(--dark-red);box-shadow:var(--glow-soft)}
+.logs-entry::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red),transparent)}
+.logs-id{font-size:.6rem;letter-spacing:.2em;color:var(--red);text-shadow:var(--glow-red)}
+.logs-body{margin-top:.7rem;font-size:.8rem;color:#9a9a9a;line-height:1.75}
+.logs-return{margin-top:1rem;grid-column:1/-1;text-align:center;font-family:var(--vt);font-size:1rem;color:var(--green);letter-spacing:.14em;text-shadow:var(--glow-green)}
+
 /* ---------- Download ---------- */
 .download-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:1.6rem;align-items:start}
 .release,.side{border:1px solid var(--line);background:var(--panel);position:relative}
@@ -886,6 +919,7 @@ body.modal-open{overflow:hidden}
   .term-opt{text-align:center}
   .gallery{grid-template-columns:1fr}
   .req-grid{grid-template-columns:1fr}
+  .logs-grid{grid-template-columns:1fr}
   .player-controls{flex-direction:column;align-items:stretch}
   .player-btn{text-align:center}
 }

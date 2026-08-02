@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
 
@@ -73,6 +73,7 @@
       <a class="contents-link" href="#requirements">REQUIREMENTS</a>
       <a class="contents-link" href="#transmission">TRANSMISSION</a>
       <a class="contents-link" href="#preview">PREVIEW</a>
+      <a class="contents-link logs-link hidden" href="#logs">LOGS</a>
       <a class="contents-link" href="#dev">THE DEV</a>
       <a class="contents-link" href="#download">DOWNLOAD</a>
     </div>
@@ -92,6 +93,7 @@
       <a class="side-link" href="#requirements">REQUIREMENTS</a>
       <a class="side-link" href="#transmission">TRANSMISSION</a>
       <a class="side-link" href="#preview">SESSION PREVIEW</a>
+      <a class="side-link logs-link hidden" href="#logs">LOGS</a>
       <a class="side-link" href="#dev">THE DEV</a>
       <a class="side-link" href="#download">DOWNLOAD</a>
     </div>
@@ -283,6 +285,50 @@
             <span class="shot-desc">IT ASKS. YOU ANSWER. THE CARET BLINKS WHILE IT DECIDES IF YOU ARE LYING.</span>
           </figcaption>
         </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-question2.png" alt="The Question Game v2.02 — a question still being typed out" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 003 — MID-TRANSMISSION</span>
+            <span class="shot-desc">IT TYPES WHILE YOU READ. THE CARET WAITS AT THE END OF THE SENTENCE.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-settings.png" alt="The Question Game v2.02 — the control panel settings screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 004 — CONTROL PANEL</span>
+            <span class="shot-desc">TEXT SPEED. VHS EFFECTS. RESET ALL DATA. IT ADJUSTS ITSELF TO YOU.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-help.png" alt="The Question Game v2.02 — the help screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 005 — NO HELP FOR YOU</span>
+            <span class="shot-desc">THE CONTROLS ARE SIMPLE. THE WARNING IS NOT A SUGGESTION.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-logs.png" alt="The Question Game v2.02 — the secret LOGS archive screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 006 — THE ARCHIVE [ 2013 ]</span>
+            <span class="shot-desc">FOUR CHARACTERS TYPED QUICKLY UNLOCK THIS. THE SAME CODE WORKS HERE.</span>
+          </figcaption>
+        </figure>
       </div>
     </section>
 
@@ -407,6 +453,56 @@
           <div class="term-lines" id="termLines"></div>
           <div class="term-options hidden" id="termOptions"></div>
         </div>
+      </div>
+    </section>
+
+    <section class="section view locked" id="logs" data-view="logs">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE ARCHIVE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">RECOVERY PROCEDURE — ENCRYPTED. TYPE THE SEQUENCE TO DECRYPT.</p>
+
+      <div class="logs-lock" id="logsLock">
+        <p class="logs-lock-text">FOUR CHARACTERS. TYPED QUICKLY.<br>THAT WAS THE TEST. NOT THE QUESTIONS BEFORE IT.</p>
+        <p class="logs-hint">PRESS: <span class="logs-keys">2</span><span class="logs-keys">0</span><span class="logs-keys">1</span><span class="logs-keys">3</span></p>
+        <p class="logs-lock-foot">THE SAME CODE WORKS INSIDE THE GAME — TYPED ON THE MAIN MENU. IT ALWAYS HAS.</p>
+      </div>
+
+      <div class="logs-grid hidden" id="logsGrid">
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 04 — UNDATED</span>
+          <p class="logs-body">The questions were never the point. The pauses were. We started timing the silences before we started reading the answers.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 23 — UNDATED</span>
+          <p class="logs-body">Neptune Productions is not a studio. It was never registered as one.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 30 — UNDATED</span>
+          <p class="logs-body">If you are reading this, you typed the code quickly enough. That was the test. Not the questions before it.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 47 — UNDATED</span>
+          <p class="logs-body">We archived a dozen sessions that look almost identical. Small variations in hesitation, different times of day. An emergent pattern we did not anticipate.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 77 — UNDATED</span>
+          <p class="logs-body">Sometimes we leave a breadcrumb. If someone follows it twice, they find the key.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 117 — UNDATED</span>
+          <p class="logs-body">There is a record of a late-night session where the subject didn't blink for five minutes. Screenshots show small changes in the wallpaper at odd intervals. No system process had permission to alter those pixels.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 140 — UNDATED</span>
+          <p class="logs-body">A user reported their mouse moving on its own. Video shows the cursor sliding in regular arcs every 17 seconds. Correlations do not equal causation, but patterns are patterns.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 169 — UNDATED</span>
+          <p class="logs-body">We asked a subject to check their Dock. They reported nothing unusual. We had already changed it while they were reading.</p>
+        </article>
+        <p class="logs-return">THE ARCHIVE IS OPEN NOW. IT WILL NOT CLOSE AGAIN.</p>
       </div>
     </section>
 
@@ -707,7 +803,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=10"></script>
-  <script src="js/main.js?v=10"></script>
+  <script src="js/config.js?v=11"></script>
+  <script src="js/main.js?v=11"></script>
 </body>
 </html>

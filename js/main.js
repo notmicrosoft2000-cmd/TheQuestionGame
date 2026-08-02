@@ -325,6 +325,8 @@
     });
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setPanel(false);
+    kbdTargetName = "";
+    $$(".contents-link, .side-link").forEach((a) => a.classList.remove("kb-target"));
   }
 
   document.addEventListener("click", (e) => {
@@ -335,6 +337,62 @@
     if (el && el.dataset && el.dataset.view) {
       e.preventDefault();
       showView(el.dataset.view);
+    }
+  });
+
+  // ---------- Game-style keyboard navigation (TAB cycles, ENTER confirms) ----------
+  const kbdViews = $$(".view").map((v) => v.dataset.view).filter(Boolean);
+  let kbdTargetName = "";
+  let logsUnlocked = false;
+
+  function kbdCycleList() {
+    return kbdViews.filter((v) => v !== "logs" || logsUnlocked);
+  }
+
+  function setKbTarget(name) {
+    $$(".contents-link, .side-link").forEach((a) => {
+      const href = (a.getAttribute("href") || "").replace(/^#/, "");
+      a.classList.toggle("kb-target", href === name);
+    });
+  }
+
+  function unlockLogs() {
+    if (logsUnlocked) return;
+    logsUnlocked = true;
+    const section = $("#logs");
+    if (section) section.classList.remove("locked");
+    const lock = $("#logsLock");
+    if (lock) lock.classList.add("hidden");
+    const grid = $("#logsGrid");
+    if (grid) grid.classList.remove("hidden");
+    $$(".logs-link").forEach((a) => a.classList.remove("hidden"));
+    $$("#logs .reveal").forEach((el) => el.classList.add("in"));
+    showToast("LOGS UNLOCKED — YOU TYPED THE CODE QUICKLY ENOUGH");
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" && e.key !== "Enter") return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (document.body.classList.contains("no-scroll")) return;
+    if (resolveOpt) return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button" || tag === "a" || tag === "summary" || e.target.isContentEditable) return;
+    if ($(".modal-overlay:not(.hidden)")) return;
+    const list = kbdCycleList();
+    if (e.key === "Tab") {
+      e.preventDefault();
+      let i = list.indexOf(kbdTargetName);
+      if (i === -1) {
+        const active = document.querySelector(".view.active");
+        i = active ? list.indexOf(active.dataset.view) : 0;
+        if (i === -1) i = 0;
+      }
+      i = (i + (e.shiftKey ? -1 : 1) + list.length) % list.length;
+      kbdTargetName = list[i];
+      setKbTarget(list[i]);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (kbdTargetName) showView(kbdTargetName);
     }
   });
 
@@ -1069,6 +1127,11 @@
       keyBuf = "";
       if (typeIn) typeIn.value = "";
       jumpscare();
+      return;
+    }
+    if (keyBuf.endsWith("2013")) {
+      keyBuf = "";
+      unlockLogs();
       return;
     }
     for (const phrase in PHRASES) {
