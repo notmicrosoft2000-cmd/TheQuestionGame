@@ -210,6 +210,42 @@
   }
   window.addEventListener("resize", sizeAsh);
 
+  const SWAY_SELECTORS = [
+    ".hero h1", ".hero-sub", ".hero-badge", ".hero-meta span",
+    ".nav-brand", ".stat-num", ".section-title", ".session-code",
+    ".session-name", ".side-title", ".release-version"
+  ];
+  const swayEls = [];
+  SWAY_SELECTORS.forEach((sel) => {
+    $$(sel).forEach((el) => {
+      swayEls.push({
+        el,
+        phase: Math.random() * 6.283,
+        ampX: 3 + Math.random() * 4,
+        ampY: 2 + Math.random() * 3,
+        sx: 0.35 + Math.random() * 0.3,
+        sy: 0.28 + Math.random() * 0.25
+      });
+    });
+  });
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function frameSway(ts) {
+    const t = ts / 1000;
+    const active = document.body.classList.contains("loaded");
+    for (let i = 0; i < swayEls.length; i++) {
+      const s = swayEls[i];
+      if (!active) {
+        s.el.style.transform = "";
+        continue;
+      }
+      const x = Math.sin(t * s.sx + s.phase) * s.ampX;
+      const y = Math.cos(t * s.sy + s.phase) * s.ampY;
+      s.el.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)";
+    }
+    requestAnimationFrame(frameSway);
+  }
+  if (!reduceMotion) requestAnimationFrame(frameSway);
+
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
     window.addEventListener("mousemove", (e) => {
