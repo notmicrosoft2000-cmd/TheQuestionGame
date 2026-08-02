@@ -426,11 +426,11 @@ class Game:
         if self.typing_state != "WAITING":
             return
         if key == pygame.K_TAB or key == pygame.K_UP or key == pygame.K_DOWN:
-            step = 1 if (key == pygame.K_DOWN or key == pygame.K_TAB) else -1
+            delta = 1 if (key == pygame.K_DOWN or key == pygame.K_TAB) else -1
             if key == pygame.K_UP:
-                step = -1
+                delta = -1
             opts = step["opts"]
-            self.selected_answer = (self.selected_answer + step) % len(opts)
+            self.selected_answer = (self.selected_answer + delta) % len(opts)
             audio.play_ui_nav_sound()
         elif key == pygame.K_RETURN:
             audio.play_ui_select_sound()
@@ -526,6 +526,14 @@ class Game:
             if not still:
                 self.badge_toast_id = None
 
+        # Ambient dressing, applied over every state like the Classic edition:
+        # rolling scan sweep, drifting ash, breathing vignette, VHS scanlines.
+        if self.game_state.get("settings", {}).get("vhs_intensity", 1.0) > 0:
+            ui.draw_scan_sweep(self.screen, w, h, self.now)
+        ui.draw_dust(self.screen, w, h, self.now)
+        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
+        ui.apply_vhs_effects(self.screen, w, h, self.game_state)
+
         pygame.display.flip()
 
     def _draw_loading(self, w, h):
@@ -545,36 +553,56 @@ class Game:
         font_large, font_med, font_small = self._fonts()
         ui.draw_starfield(self.screen, w, h, self.now, self.starfield)
         ui.draw_menu_decorations(self.screen, w, h, self.now, font_small)
-        ui.draw_dust(self.screen, w, h, self.now)
 
-        ui.draw_glowing_text(self.screen, _TITLE, font_large,
-                             int(w * 0.08), int(h * 0.10), self.now,
-                             color=config.COLOR_RED, glow_color=(150, 0, 0))
+        title_color = config.COLOR_WHITE
+        if self.run_count >= 3:
+            title_color = config.COLOR_RED if random.random() < 0.2 else config.COLOR_DARK_RED
+            if random.random() < 0.05:
+                ui.render_animated_wrapped_text(self.screen, "THIS IS YOUR LAST CHANCE", font_small,
+                                                config.COLOR_RED, 20, 20, 300, self.now)
+
+        title_lines = ["The", "Question", "Game"]
+        if self.run_count == 2:
+            title_lines = ["....", "...", "Leave."]
+
+        base_y = int(h * 0.10)
+        for i, line in enumerate(title_lines):
+            sway_x = int(math.sin(self.now * 1.8 + i) * 6)
+            sway_y = int(math.cos(self.now * 1.2 + i) * 3)
+            ui.draw_glowing_text(self.screen, line, font_large,
+                                 int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
+                                 self.now, color=title_color, glow_color=(150, 0, 0))
+
         sub = font_med.render(_TITLE_SUB, True, (150, 0, 0))
-        self.screen.blit(sub, (int(w * 0.08), int(h * 0.10) + font_large.get_height() + 6))
+        self.screen.blit(sub, (int(w * 0.08), base_y + 3 * 65 + 8))
 
         run_label = font_small.render("SESSION %d / 3" % self.run_count, True, (120, 40, 40))
-        self.screen.blit(run_label, (int(w * 0.08), int(h * 0.28)))
+        self.screen.blit(run_label, (int(w * 0.08), base_y + 3 * 65 + 8 + font_med.get_height() + 6))
 
-        start_y = int(h * 0.36)
+        menu_y_start = h - 310
         for i, option in enumerate(self.menu_options):
-            if i == self.selected_option:
-                p = 0.5 + 0.5 * math.sin(self.now * 4.0)
-                color = tuple(min(255, int(c * (0.7 + 0.5 * p))) for c in config.COLOR_WHITE)
-            else:
-                color = (110, 110, 110)
-            prefix = "> " if i == self.selected_option else "  "
-            surf = font_med.render(prefix + option, True, color)
-            self.screen.blit(surf, (int(w * 0.08), start_y + i * (font_med.get_linesize() + 10)))
+            sel = (i == self.selected_option)
+            base_col = config.COLOR_GREEN if sel else config.COLOR_WHITE
+            if self.run_count >= 3 and sel:
+                base_col = config.COLOR_RED
+            pulse = 0.75 + 0.25 * math.sin(self.now * 2.0 + i * 0.6)
+            alpha = int(180 + 75 * pulse)
+            if sel:
+                p2 = 0.5 + 0.5 * math.sin(self.now * 4.0 + i * 0.6)
+                base_col = tuple(min(255, int(c * (0.7 + 0.5 * p2))) for c in base_col)
+            prefix = f"> {option}" if sel else f"  {option}"
+            surf = font_med.render(prefix, True, base_col)
+            try:
+                surf.set_alpha(alpha)
+            except Exception:
+                pass
+            self.screen.blit(surf, (int(w * 0.08), menu_y_start + i * 45))
 
-        hint = font_small.render("[TAB/UP/DOWN] NAVIGATE    [ENTER] SELECT", True, (80, 80, 80))
-        self.screen.blit(hint, (int(w * 0.08), h - 70))
-        note = font_small.render("YOUR ANSWERS ARE REMEMBERED", True, (100, 0, 0))
-        self.screen.blit(note, (int(w * 0.08), h - 46))
+        cred = font_small.render("NEPTUNE PRODUCTIONS [C]", True, (60, 60, 60))
+        self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
+
         ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
         self.screen.blit(ver, (w - ver.get_width() - 12, h - ver.get_height() - 8))
-
-        ui.apply_vignette(self.screen, w, h, self.now, strong=False)
 
     def _draw_settings(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -667,36 +695,44 @@ class Game:
             self.screen.blit(prompt, (base_x, h - int(h * 0.18)))
         else:
             text = step["q"]
+            t_color = config.COLOR_RED if ("afraid" in text.lower() or self.run_count >= 3) else config.COLOR_WHITE
             if self.typing_state == "THINKING":
                 dots = ["...", "....", ".....", "......"][int(self.now * 2) % 4]
                 surf = font_med.render(dots, True, config.COLOR_DIM_RED)
                 self.screen.blit(surf, (base_x, base_y))
             elif self.typing_state == "TYPING":
                 partial = text[:self.typing_index]
-                ui.render_wrapped_text(self.screen, partial, font_med, config.COLOR_WHITE,
-                                       base_x, base_y, max_width)
+                sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
+                if sway > 0:
+                    ui.render_animated_wrapped_text(self.screen, partial, font_med, t_color,
+                                                    base_x, base_y, max_width, self.now,
+                                                    sway_amp=int(2 + 4 * sway), alpha_base=210)
+                else:
+                    ui.render_wrapped_text(self.screen, partial, font_med, t_color,
+                                           base_x, base_y, max_width)
                 if partial and int(self.now * 2.4) % 2 == 0:
                     cx, cy = ui.wrap_cursor_pos(partial, font_med, base_x, base_y, max_width)
-                    caret = font_med.render("_", True, config.COLOR_WHITE)
+                    caret = font_med.render("_", True, t_color)
                     self.screen.blit(caret, (cx, cy))
             elif self.typing_state == "WAITING":
                 sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
                 if sway > 0:
-                    ui.render_animated_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
+                    ui.render_animated_wrapped_text(self.screen, text, font_med, t_color,
                                                     base_x, base_y, max_width, self.now,
                                                     sway_amp=int(2 + 4 * sway), alpha_base=210)
                 else:
-                    ui.render_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
+                    ui.render_wrapped_text(self.screen, text, font_med, t_color,
                                            base_x, base_y, max_width)
                 opts = step["opts"]
                 opts_x = base_x
                 opts_y = base_y + len(text.split("\n")) * (font_med.get_linesize() + 4) + 40
+                sel_color = config.COLOR_RED if self.run_count >= 3 else config.COLOR_GREEN
                 for i, option in enumerate(opts):
                     if i == self.selected_answer:
                         p = 0.5 + 0.5 * math.sin(self.now * 4.0 + i)
-                        color = (0, int(config.COLOR_GREEN[1] * (0.65 + 0.5 * p)), 0)
+                        color = tuple(min(255, int(c * (0.65 + 0.5 * p))) for c in sel_color)
                     else:
-                        color = (110, 110, 110)
+                        color = config.COLOR_WHITE
                     prefix = "> " if i == self.selected_answer else "  "
                     surf = font_med.render(prefix + option, True, color)
                     self.screen.blit(surf, (opts_x, opts_y + i * (font_med.get_linesize() + 10)))
@@ -728,15 +764,8 @@ class Game:
         if self.fx["webcam_flash_until"] > self.now:
             ui.apply_shadow_static(self.screen, w, h, intensity=1.5)
 
-        ui.apply_vhs_effects(self.screen, w, h, self.game_state)
         ui.apply_shadow_static(self.screen, w, h,
                                intensity=1.5 if self.run_count >= 3 else 1.0)
-
-        vhs = self.game_state.get("settings", {}).get("vhs_intensity", 1.0)
-        if vhs > 0:
-            ui.draw_scan_sweep(self.screen, w, h, self.now)
-        ui.draw_dust(self.screen, w, h, self.now)
-        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
 
     # --- main loop ------------------------------------------------------------
     def run(self):

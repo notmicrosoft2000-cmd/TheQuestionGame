@@ -3,7 +3,7 @@ import platform
 import sys
 
 APP_NAME = "The Question Game Remastered"
-VERSION = "2.03"
+VERSION = "2.04"
 
 # --- AI (embedded key — rotate it if it gets abused) ---
 GROQ_KEY = "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"
