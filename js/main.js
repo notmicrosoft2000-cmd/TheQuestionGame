@@ -221,10 +221,10 @@
       swayEls.push({
         el,
         phase: Math.random() * 6.283,
-        ampX: 3 + Math.random() * 4,
-        ampY: 2 + Math.random() * 3,
-        sx: 0.35 + Math.random() * 0.3,
-        sy: 0.28 + Math.random() * 0.25
+        ampX: 9 + Math.random() * 11,
+        ampY: 5 + Math.random() * 7,
+        sx: 0.7 + Math.random() * 0.5,
+        sy: 0.6 + Math.random() * 0.4
       });
     });
   });
@@ -240,7 +240,9 @@
       }
       const x = Math.sin(t * s.sx + s.phase) * s.ampX;
       const y = Math.cos(t * s.sy + s.phase) * s.ampY;
-      s.el.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)";
+      const pulse = 0.5 + 0.5 * Math.sin(t * 1.2 + s.phase);
+      s.el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px)";
+      s.el.style.opacity = (0.85 + 0.15 * pulse).toFixed(2);
     }
     requestAnimationFrame(frameSway);
   }
