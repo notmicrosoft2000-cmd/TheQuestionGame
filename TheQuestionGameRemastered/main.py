@@ -560,7 +560,7 @@ class Game:
         for i, option in enumerate(self.menu_options):
             if i == self.selected_option:
                 p = 0.5 + 0.5 * math.sin(self.now * 4.0)
-                color = tuple(int(c * (0.7 + 0.5 * p)) for c in config.COLOR_WHITE)
+                color = tuple(min(255, int(c * (0.7 + 0.5 * p))) for c in config.COLOR_WHITE)
             else:
                 color = (110, 110, 110)
             prefix = "> " if i == self.selected_option else "  "
