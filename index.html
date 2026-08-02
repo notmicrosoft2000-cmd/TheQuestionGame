@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
@@ -66,7 +66,11 @@
       <a class="contents-link" href="#about">ABOUT</a>
       <a class="contents-link" href="#history">HISTORY</a>
       <a class="contents-link" href="#sessions">SESSIONS</a>
+      <a class="contents-link" href="#evidence">EVIDENCE</a>
+      <a class="contents-link" href="#ambience">AMBIENCE</a>
+      <a class="contents-link" href="#quotes">QUOTES</a>
       <a class="contents-link" href="#concerns">CONCERNS</a>
+      <a class="contents-link" href="#requirements">REQUIREMENTS</a>
       <a class="contents-link" href="#transmission">TRANSMISSION</a>
       <a class="contents-link" href="#preview">PREVIEW</a>
       <a class="contents-link" href="#dev">THE DEV</a>
@@ -81,7 +85,11 @@
       <a class="side-link" href="#about">ABOUT</a>
       <a class="side-link" href="#history">HISTORY</a>
       <a class="side-link" href="#sessions">SESSIONS</a>
+      <a class="side-link" href="#evidence">EVIDENCE</a>
+      <a class="side-link" href="#ambience">AMBIENCE</a>
+      <a class="side-link" href="#quotes">QUOTES</a>
       <a class="side-link" href="#concerns">CONCERNS</a>
+      <a class="side-link" href="#requirements">REQUIREMENTS</a>
       <a class="side-link" href="#transmission">TRANSMISSION</a>
       <a class="side-link" href="#preview">SESSION PREVIEW</a>
       <a class="side-link" href="#dev">THE DEV</a>
@@ -245,6 +253,84 @@
       </div>
     </section>
 
+    <section class="section view" id="evidence" data-view="evidence">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> EVIDENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Captured directly from the running game — v2.02 classic, no staging, no touch-up. These are the actual frames on the actual build.</p>
+
+      <div class="gallery" data-stagger>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-title.png" alt="The Question Game v2.02 — title screen, glowing text over drifting ash" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 001 — MAIN MENU</span>
+            <span class="shot-desc">THE TITLE BREATHES. THE ASH DRIFTS. IT IS WAITING FOR YOU TO SIT DOWN.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-question.png" alt="The Question Game v2.02 — an in-game question with answers" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 002 — INTERROGATION</span>
+            <span class="shot-desc">IT ASKS. YOU ANSWER. THE CARET BLINKS WHILE IT DECIDES IF YOU ARE LYING.</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section view" id="ambience" data-view="ambience">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> AMBIENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">The room tone from inside the game — the same looping logs theme that plays while it reads your answers. Streaming from this build's own audio file.</p>
+
+      <div class="player reveal" id="ambiencePlayer">
+        <div class="player-head">
+          <span class="player-led"></span>
+          <span class="player-title">LOGSONIC.EXE — ROOM TONE</span>
+          <span class="player-status" id="ambienceStatus">STANDBY</span>
+        </div>
+        <div class="player-controls">
+          <button class="player-btn" id="ambienceToggle" type="button">[ PLAY ]</button>
+          <button class="player-btn ghost" id="ambienceMute" type="button">[ MUTE ]</button>
+          <span class="player-note">SOURCE: logsmusic.ogg — THE GAME'S OWN AUDIO FILE, STREAMED FROM THIS BUILD. HEADPHONES ADVISED.</span>
+        </div>
+      </div>
+      <audio id="ambienceAudio" src="logsmusic.ogg" loop preload="none"></audio>
+    </section>
+
+    <section class="section view" id="quotes" data-view="quotes">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> WHAT THE MACHINE HEARD</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Transcript fragments recovered from machines that survived a full session. Names withheld. Rooms never quite the same.</p>
+
+      <div class="quotes" data-stagger>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"It asked me one hundred questions and I answered every single one of them. I still don't remember typing most of them. The ones I do remember — I answered honestly. I've never been sure that was a good idea."</p>
+          <footer class="quote-by">— SESSION LOG 017 · SUBJECT "K"</footer>
+        </blockquote>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"I closed the laptop at question forty-four. The room was quiet for three hours. Then my phone buzzed with a single message: 'UNFINISHED WORK.' I did not finish the session. It still knew."</p>
+          <footer class="quote-by">— SESSION LOG 023 · SUBJECT "R"</footer>
+        </blockquote>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"There is no way to describe the last question without sounding insane, so I won't. I'll only say this: I answered it. And I have checked every mirror in this house since."</p>
+          <footer class="quote-by">— SESSION LOG 031 · SUBJECT "M"</footer>
+        </blockquote>
+      </div>
+    </section>
+
     <section class="section view" id="concerns" data-view="concerns">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> ADDRESSING CONCERNS</h2>
@@ -349,6 +435,66 @@
           <h3 class="dev-card-title mt">SUGGESTION INBOX</h3>
           <p class="dev-note">Ideas, scare ideas, bug reports, or requests for mercy — all read. It opens a prefilled form on GitHub.</p>
           <a class="btn btn-primary" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/issues/new?title=%5BSUGGESTION%5D+&amp;body=%0A%0A---%0A%0AType%20your%20suggestion%20above.%20If%20this%20is%20a%20bug%20report%2C%20include%20your%20platform%20and%20what%20happened.%0A" target="_blank" rel="noopener">[ OPEN THE INBOX ]</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section view" id="requirements" data-view="requirements">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> REQUIREMENTS</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Nothing modern required. It runs on whatever is already in the room. These are the official margins.</p>
+
+      <div class="req-grid">
+        <div class="req reveal">
+          <h3 class="req-title">SYSTEM</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit)</li>
+            <li><span class="mark">▸</span> OS — macOS 14+ (Apple Silicon)</li>
+            <li><span class="mark">▸</span> CPU — Any dual-core or newer</li>
+            <li><span class="mark">▸</span> RAM — 1 GB free</li>
+            <li><span class="mark">▸</span> Storage — ~70 MB free</li>
+          </ul>
+        </div>
+        <div class="req reveal">
+          <h3 class="req-title">DISPLAY</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> Resolution — 800×600, resizable</li>
+            <li><span class="mark">▸</span> Fullscreen — supported</li>
+            <li><span class="mark">▸</span> Warning — flashing lights / strobe</li>
+          </ul>
+        </div>
+        <div class="req reveal">
+          <h3 class="req-title">INPUT</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> Keyboard only — TAB / ENTER</li>
+            <li><span class="mark">▸</span> Mouse — not required</li>
+          </ul>
+        </div>
+        <div class="req reveal">
+          <h3 class="req-title">AUDIO</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> Headphones — strongly advised</li>
+            <li><span class="mark">▸</span> Device — any audio output</li>
+            <li><span class="mark">▸</span> Volume — keep it low. It is listening.</li>
+          </ul>
+        </div>
+        <div class="req reveal">
+          <h3 class="req-title">PERMISSIONS</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> Camera — optional, Remastered only</li>
+            <li><span class="mark">▸</span> Network — optional (Remastered AI)</li>
+            <li><span class="mark">▸</span> Wallpaper — requested per-session</li>
+          </ul>
+        </div>
+        <div class="req reveal">
+          <h3 class="req-title">NOT SUPPORTED</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> Controllers — none</li>
+            <li><span class="mark">▸</span> Touch — keyboard only</li>
+            <li><span class="mark">▸</span> Sleep — it does not. Do you?</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -561,7 +707,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=9"></script>
-  <script src="js/main.js?v=9"></script>
+  <script src="js/config.js?v=10"></script>
+  <script src="js/main.js?v=10"></script>
 </body>
 </html>

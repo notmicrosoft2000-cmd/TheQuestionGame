@@ -1,6 +1,8 @@
 # The 66MB binary is published via GitHub Releases, not committed.
 TheQuestionGame.exe
 TheQuestionGameRemastered.exe
+TheQuestionGame.zip
+TheQuestionGameRemastered.zip
 
 # Python build/runtime artifacts
 __pycache__/

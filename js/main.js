@@ -670,6 +670,51 @@
   }
   loadRelease();
 
+  // ---------- Ambience player ----------
+  const ambienceAudio = $("#ambienceAudio");
+  const ambiencePlayer = $("#ambiencePlayer");
+  const ambienceStatus = $("#ambienceStatus");
+  const ambienceToggle = $("#ambienceToggle");
+  const ambienceMute = $("#ambienceMute");
+  let ambienceMuted = false;
+
+  function ambiencePlaying() {
+    const on = !!(ambienceAudio && !ambienceAudio.paused && !ambienceAudio.ended);
+    if (ambiencePlayer) ambiencePlayer.classList.toggle("playing", on);
+    if (ambienceToggle) ambienceToggle.textContent = on ? "[ PAUSE ]" : "[ PLAY ]";
+    if (ambienceStatus) ambienceStatus.textContent = on ? "LOOPING — LOGS THEME" : "STANDBY";
+  }
+
+  if (ambienceAudio && ambienceToggle) {
+    ambienceToggle.addEventListener("click", () => {
+      if (ambienceAudio.paused) {
+        const p = ambienceAudio.play();
+        if (p && p.catch) p.catch(() => {
+          if (ambienceStatus) ambienceStatus.textContent = "FEED BLOCKED — ALLOW AUDIO";
+          showToast("AUDIO BLOCKED BY THE BROWSER — CLICK [ PLAY ] AGAIN", true);
+        });
+      } else {
+        ambienceAudio.pause();
+      }
+    });
+  }
+  if (ambienceAudio && ambienceMute) {
+    ambienceMute.addEventListener("click", () => {
+      ambienceMuted = !ambienceMuted;
+      ambienceAudio.muted = ambienceMuted;
+      ambienceMute.classList.toggle("on", ambienceMuted);
+      ambienceMute.textContent = ambienceMuted ? "[ UNMUTE ]" : "[ MUTE ]";
+    });
+  }
+  if (ambienceAudio) {
+    ambienceAudio.addEventListener("play", ambiencePlaying);
+    ambienceAudio.addEventListener("pause", ambiencePlaying);
+    ambienceAudio.addEventListener("ended", ambiencePlaying);
+    ambienceAudio.addEventListener("error", () => {
+      if (ambienceStatus) ambienceStatus.textContent = "SOURCE OFFLINE";
+    });
+  }
+
   const toast = $("#toast");
   let toastTimer = null;
   function showToast(text, isRed) {
