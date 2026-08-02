@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 setup(
     name="TheQuestionGameRemastered",
-    version="1.1.0",
+    version="2.02",
     description="The Question Game Remastered",
     app=[os.path.join(ROOT, "run_remastered.py")],
     options={
@@ -22,8 +22,8 @@ setup(
                 "CFBundleName": "The Question Game Remastered",
                 "CFBundleDisplayName": "The Question Game Remastered",
                 "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongameremastered",
-                "CFBundleShortVersionString": "1.1.0",
-                "CFBundleVersion": "1.1.0",
+                "CFBundleShortVersionString": "2.02",
+                "CFBundleVersion": "2.02",
                 "LSApplicationCategoryType": "public.app-category.games",
                 "NSHighResolutionCapable": True,
                 "NSCameraUsageDescription": "The Question Game Remastered checks whether you are still paying attention during the session.",

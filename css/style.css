@@ -78,6 +78,11 @@ button{font-family:inherit}
   background:
     radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6) 100%),
     linear-gradient(rgba(0,220,0,.02),rgba(0,220,0,.02));
+  animation:vignette-breathe 7s ease-in-out infinite;
+}
+@keyframes vignette-breathe{
+  0%,100%{opacity:.55}
+  50%{opacity:1}
 }
 .crt .beam{
   position:absolute;left:0;right:0;top:-24vh;height:22vh;
@@ -86,6 +91,14 @@ button{font-family:inherit}
   will-change:transform;
 }
 @keyframes beam{0%{transform:translateY(0)}100%{transform:translateY(200vh)}}
+.crt .sweep{
+  position:absolute;left:0;right:0;top:-30vh;height:30vh;
+  background:linear-gradient(to bottom,transparent 0%,rgba(255,255,255,.02) 46%,rgba(255,255,255,.05) 50%,rgba(255,255,255,.02) 54%,transparent 100%);
+  animation:sweep 13s linear infinite;
+  will-change:transform;
+}
+@keyframes sweep{0%{transform:translateY(0)}100%{transform:translateY(160vh)}}
+#ash{position:absolute;inset:0;width:100%;height:100%;opacity:.6}
 #noise{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
 .flash{
   position:absolute;inset:0;background:rgba(200,0,0,.24);
@@ -247,6 +260,11 @@ main.shake{animation:shake .5s linear}
 .contents-link.active{
   color:var(--green);border-color:var(--green);
   background:rgba(0,220,0,.1);box-shadow:var(--glow-green);text-shadow:var(--glow-green);
+  animation:sel-pulse 2.4s ease-in-out infinite;
+}
+@keyframes sel-pulse{
+  0%,100%{background:rgba(0,220,0,.06);box-shadow:var(--glow-green)}
+  50%{background:rgba(0,220,0,.16);box-shadow:0 0 18px rgba(0,220,0,.55)}
 }
 .nav-toggle{
   font-family:var(--vt);font-size:1.05rem;letter-spacing:.12em;color:var(--green);
@@ -282,8 +300,16 @@ main.shake{animation:shake .5s linear}
   opacity:0;transform:translateY(18px);
   transition:opacity .8s ease,transform .8s ease;
 }
-body.loaded .hero h1{opacity:1;transform:none}
-body.loaded .hero h1:nth-of-type(2){transition-delay:.12s}
+body.loaded .hero h1{
+  opacity:1;transform:none;
+  animation:title-bloom 5s ease-in-out infinite;
+  will-change:text-shadow;
+}
+@keyframes title-bloom{
+  0%,100%{text-shadow:0 0 18px rgba(200,0,0,.25),0 0 4px rgba(200,0,0,.4)}
+  50%{text-shadow:0 0 42px rgba(200,0,0,.6),0 0 10px rgba(200,0,0,.85)}
+}
+body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
 .hero-sub{
   margin-top:1.8rem;min-height:1.6em;
   font-family:var(--vt);font-size:clamp(1.2rem,2.6vw,1.75rem);

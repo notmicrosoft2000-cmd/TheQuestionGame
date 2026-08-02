@@ -2,7 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REMASTER_TAG = "v1.1.0-remastered";
+  const REMASTER_TAG = "v2.02-remastered";
   const CLASSIC_TAG = "v1.0.0";
 
 
@@ -32,7 +32,7 @@
   const bootPrompt = $("#bootPrompt");
 
   const BOOT_LINES = [
-    ["INITIALIZING THE QUESTION GAME v1.0.0", ""],
+    ["INITIALIZING THE QUESTION GAME v2.02", ""],
     ["CONNECTING TO LOCAL ENVIRONMENT METRICS ...", ""],
     ["READING HARDWARE PROFILE ... OK", ""],
     ["CALIBRATING INPUT PROTOCOL ... OK", ""],
@@ -159,6 +159,56 @@
     setTimeout(frameNoise, document.hidden ? 400 : 100);
   }
   window.addEventListener("resize", sizeNoise);
+
+  const ashCnv = $("#ash");
+  let ashCtx = null;
+  let ashParticles = [];
+  function sizeAsh() {
+    if (!ashCnv) return;
+    ashCnv.width = Math.max(1, Math.floor(window.innerWidth / 2));
+    ashCnv.height = Math.max(1, Math.floor(window.innerHeight / 2));
+    const w = ashCnv.width, h = ashCnv.height;
+    ashParticles = [];
+    for (let i = 0; i < 40; i++) {
+      ashParticles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: -0.15 - Math.random() * 0.3,
+        size: Math.random() < 0.6 ? 1 : (Math.random() < 0.5 ? 1.5 : 2),
+        phase: Math.random() * 6.28,
+        b: 30 + Math.random() * 70,
+        red: Math.random() < 0.16
+      });
+    }
+  }
+  function frameAsh() {
+    if (ashCtx && !document.hidden) {
+      const w = ashCnv.width, h = ashCnv.height;
+      ashCtx.clearRect(0, 0, w, h);
+      const t = performance.now() / 1000;
+      for (let i = 0; i < ashParticles.length; i++) {
+        const p = ashParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.y < -4) { p.y = h + 4; p.x = Math.random() * w; }
+        if (p.x < -4) p.x = w + 4;
+        if (p.x > w + 4) p.x = -4;
+        const tw = 0.5 + 0.5 * Math.sin(t * 2.2 + p.phase);
+        const b = Math.max(8, Math.min(200, p.b * (0.5 + 0.5 * tw))) | 0;
+        ashCtx.fillStyle = p.red ? ("rgb(" + b + "," + (b * 0.55 | 0) + "," + (b * 0.55 | 0) + ")") : ("rgb(" + b + "," + b + "," + b + ")");
+        ashCtx.fillRect(p.x, p.y, p.size, p.size);
+      }
+    }
+    requestAnimationFrame(frameAsh);
+  }
+  function initAsh() {
+    if (!ashCnv) return;
+    ashCtx = ashCnv.getContext("2d");
+    sizeAsh();
+    requestAnimationFrame(frameAsh);
+  }
+  window.addEventListener("resize", sizeAsh);
 
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
@@ -958,6 +1008,7 @@
   });
 
   initNoise();
+  initAsh();
   runBoot().catch(() => {
     boot.classList.add("done");
     document.body.classList.remove("no-scroll");
