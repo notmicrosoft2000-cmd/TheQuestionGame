@@ -3,7 +3,7 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
   const REMASTER_TAG = "v2.02-remastered";
-  const CLASSIC_TAG = "v1.0.0";
+  const CLASSIC_TAG = "v2.02-classic";
 
 
   const $ = (s, c) => (c || document).querySelector(s);
