@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 setup(
     name="TheQuestionGame",
-    version="1.0.0",
+    version="2.02",
     description="The Question Game",
     app=[os.path.join(ROOT, "TheQuestionGame.py")],
     options={
@@ -24,8 +24,8 @@ setup(
                 "CFBundleName": "The Question Game",
                 "CFBundleDisplayName": "The Question Game",
                 "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongame",
-                "CFBundleShortVersionString": "1.0.0",
-                "CFBundleVersion": "1.0.0",
+                "CFBundleShortVersionString": "2.02",
+                "CFBundleVersion": "2.02",
                 "LSApplicationCategoryType": "public.app-category.games",
                 "NSHighResolutionCapable": True,
                 "NSCameraUsageDescription": "The Question Game checks whether you are still paying attention during the session.",

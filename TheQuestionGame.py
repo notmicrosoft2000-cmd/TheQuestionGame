@@ -1223,6 +1223,134 @@ def apply_shadow_static(surface, w, h, intensity=1.0):
         if random.random() < 0.5:
             play_static_burst()
 
+# === V2.02 AMBIENT ANIMATIONS START ===
+# Pure visual dressing ported from the Remastered edition: a breathing vignette,
+# drifting ash, a rolling scan band, a pulsing title bloom, a blinking typewriter
+# caret, and sin/cos sway + color pulsing on the selections. Nothing here reads
+# input, makes sound, or touches game state.
+
+_vignette_profile = {}
+_dust_state = {}
+
+
+def _get_vignette_profile(w, h):
+    key = (w, h)
+    p = _vignette_profile.get(key)
+    if p is None:
+        cx, cy = w / 2.0, h / 2.0
+        max_d = math.hypot(cx, cy) or 1.0
+        yy, xx = np.mgrid[0:h, 0:w]
+        d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_d
+        p = (np.clip(d, 0.0, 1.0) ** 2 * 255).astype(np.uint8)
+        _vignette_profile[key] = p
+    return p
+
+
+def apply_vignette(surface, w, h, t=0.0, strong=False):
+    """Breathing radial darkness — the room goes dim, then lets go."""
+    profile = _get_vignette_profile(w, h)
+    base = 110 if strong else 80
+    amt = int(max(24, min(210, base + 14 * math.sin(t * 1.1))))
+    try:
+        arr = np.empty((h, w, 4), dtype=np.uint8)
+        arr[:, :, 0] = 0
+        arr[:, :, 1] = 0
+        arr[:, :, 2] = 0
+        arr[:, :, 3] = (profile.astype(np.int32) * amt // 255).astype(np.uint8)
+        v = pygame.image.frombuffer(arr, (w, h), "RGBA").copy()
+        surface.blit(v, (0, 0))
+    except Exception:
+        pass
+
+
+def _get_dust(w, h):
+    key = (w, h)
+    d = _dust_state.get(key)
+    if d is None:
+        d = []
+        for _ in range(42):
+            d.append({
+                "x": random.uniform(0, w),
+                "y": random.uniform(0, h),
+                "size": random.choice([1, 1, 1, 2, 2, 3]),
+                "vx": random.uniform(-4, 4),
+                "vy": random.uniform(-9, -3),
+                "phase": random.uniform(0, 6.28),
+                "b": random.uniform(30, 95),
+                "red": random.random() < 0.16,
+            })
+        _dust_state[key] = d
+    return d
+
+
+def draw_dust(surface, w, h, t):
+    """Drifting ash — slow, weightless, wrong."""
+    for p in _get_dust(w, h):
+        x = (p["x"] + p["vx"] * t * 0.25) % w
+        y = (p["y"] + p["vy"] * t * 0.25) % h
+        tw = 0.5 + 0.5 * math.sin(t * 2.2 + p["phase"])
+        b = int(max(8, min(200, p["b"] * (0.5 + 0.5 * tw))))
+        if p["red"]:
+            color = (b, int(b * 0.55), int(b * 0.55))
+        else:
+            color = (b, b, b)
+        if p["size"] <= 1:
+            try:
+                surface.set_at((int(x), int(y)), color)
+            except Exception:
+                pass
+        else:
+            pygame.draw.circle(surface, color, (int(x), int(y)), p["size"] // 2)
+
+
+def draw_scan_sweep(surface, w, h, t):
+    """A pale band endlessly rolling down the screen."""
+    y = int(t * 36) % (h + 80) - 40
+    band = pygame.Surface((w, 26), pygame.SRCALPHA)
+    band.fill((255, 255, 255, 14))
+    pygame.draw.line(band, (255, 255, 255, 70), (0, 13), (w, 13), 2)
+    surface.blit(band, (0, y))
+
+
+def draw_glowing_text(surface, text, font, x, y, t, color=WHITE, glow_color=(150, 0, 0)):
+    """Title bloom — a red halo breathing behind the letterforms."""
+    base = font.render(text, True, color)
+    try:
+        small = pygame.transform.smoothscale(base, (max(2, base.get_width() // 3), max(2, base.get_height() // 3)))
+        glow = pygame.transform.smoothscale(small, (base.get_width() + 14, base.get_height() + 14))
+        glow.fill(glow_color, special_flags=pygame.BLEND_RGB_MULT)
+        pulse = 0.55 + 0.45 * math.sin(t * 2.2)
+        glow.fill((255, 255, 255, int(255 * (0.3 + 0.4 * pulse))), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(glow, (x - 7, y - 7))
+    except Exception:
+        pass
+    surface.blit(base, (x, y))
+
+
+def wrap_cursor_pos(text, font, start_x, start_y, max_width):
+    """The insertion point after `text`, following the same wrap rules."""
+    words = text.split(" ")
+    lines = 1
+    current = ""
+    for word in words:
+        if "\n" in word:
+            parts = word.split("\n")
+            current = parts[1] + " "
+            lines += 1
+            continue
+        test = current + word + " "
+        if font.size(test)[0] < max_width:
+            current = test
+        else:
+            lines += 1
+            current = word + " "
+    x = start_x + font.size(current)[0]
+    y = start_y + (lines - 1) * (font.get_linesize() + 4)
+    return x, y
+
+
+# === V2.02 AMBIENT ANIMATIONS END ===
+
 # --- Main Menu right-side decoration (fills the previously empty space) ---
 # Fictional, non-trademarked "logo" marks — abstract geometric glyphs with
 # made-up names, never real brand names or logos.
@@ -1977,7 +2105,7 @@ else:
 
 # --- About/Help Variations ---
 about_variations = [
-    "ABOUT THE SIMULATION\n\nThis software interacts with your local environment metrics to generate specialized psychological response loops.\n\nIt reads hardware profiles and stores transient user configuration states in a persistent local file.\n\nYour answers are remembered.\n\nVersion 1.0.0 — The Question Game",
+    "ABOUT THE SIMULATION\n\nThis software interacts with your local environment metrics to generate specialized psychological response loops.\n\nIt reads hardware profiles and stores transient user configuration states in a persistent local file.\n\nYour answers are remembered.\n\nVersion 2.02 — The Question Game",
     "ABOUT THIS EXPERIENCE\n\nA behavioral analysis program masquerading as a game.\n\nYour responses are logged, timed, and cross-referenced.\n\nThe longer you play, the more it knows.\n\nThis file is persistent. It does not forget.",
     "SYSTEM OVERVIEW\n\nDesigned to probe the boundary between a screen and the person behind it.\n\nAll behavioral data is stored locally. Nothing leaves your machine.\n\nYou are not the first to play this.\n\nYou will not be the last.",
 ]
@@ -2734,7 +2862,10 @@ while running:
 
     # --- 2. Title Menu ---
     elif state == "TITLE":
-        # intentionally left black — no decorations per user request
+        # V2.02 ambient dressing: starfield, drifting silhouettes, ash, title bloom
+        draw_starfield(screen, current_w, current_h, current_time)
+        draw_menu_decorations(screen, current_w, current_h, current_time)
+        draw_dust(screen, current_w, current_h, current_time)
 
         title_color = WHITE
         if game_state["run_count"] >= 3:
@@ -2750,8 +2881,8 @@ while running:
         for i, line in enumerate(title_lines):
             sway_x = int(math.sin(current_time * 1.8 + i) * 6)
             sway_y = int(math.cos(current_time * 1.2 + i) * 3)
-            t_surf = font_large.render(line, True, title_color)
-            screen.blit(t_surf, (80 + sway_x, base_y + i * 65 + sway_y))
+            draw_glowing_text(screen, line, font_large, 80 + sway_x, base_y + i * 65 + sway_y,
+                              current_time, color=title_color, glow_color=(150, 0, 0))
 
         menu_y_start = current_h - 310
         for i, opt in enumerate(menu_options):
@@ -2762,6 +2893,10 @@ while running:
             # subtle pulsing
             pulse = 0.75 + 0.25 * math.sin(current_time * 2.0 + i * 0.6)
             alpha = int(180 + 75 * pulse)
+            if sel:
+                # selection color pulse, mirroring the Remastered menu
+                p2 = 0.5 + 0.5 * math.sin(current_time * 4.0 + i * 0.6)
+                base_col = tuple(min(255, int(c * (0.7 + 0.5 * p2))) for c in base_col)
             prefix = f"> {opt}" if sel else f"  {opt}"
             o_surf = font_medium.render(prefix, True, base_col)
             try:
@@ -2774,7 +2909,8 @@ while running:
         cred_surf = font_small.render("Neptune Productions [C]", True, (60, 60, 60))
         screen.blit(cred_surf, (current_w // 2 - cred_surf.get_width() // 2, current_h - 28))
 
-        
+        apply_vignette(screen, current_w, current_h, current_time, strong=game_state["run_count"] >= 3)
+
     # --- 3. About Screen ---
     elif state == "ABOUT":
         layer = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
@@ -3007,6 +3143,11 @@ while running:
         if typing_state in ["TYPING", "READY"]:
             render_animated_wrapped_text(screen, target_text[:typing_index], font_medium, t_color,
                              60 + sway_x, 120 + sway_y, current_w - 120, current_time)
+            # V2.02 blinking typewriter caret at the insertion point
+            if typing_state == "TYPING" and typing_index > 0 and int(current_time * 2.4) % 2 == 0:
+                _cx, _cy = wrap_cursor_pos(target_text[:typing_index], font_medium,
+                                           60 + sway_x, 120 + sway_y, current_w - 120)
+                screen.blit(font_medium.render("_", True, t_color), (_cx, _cy))
 
         # Desktop-scan naming: show captured window title briefly during desktop_check
         if step_data.get("action") == "desktop_check" and captured_window_title and typing_state == "READY":
@@ -3049,7 +3190,12 @@ while running:
             if step_data["type"] == "choice":
                 for i, opt in enumerate(step_data["opts"]):
                     sel_color = RED if game_state["run_count"] >= 3 else GREEN
-                    color = sel_color if i == selected_answer else WHITE
+                    if i == selected_answer:
+                        # V2.02 selection color pulse, mirroring the Remastered answers
+                        p = 0.5 + 0.5 * math.sin(current_time * 4.0 + i)
+                        color = tuple(min(255, int(c * (0.65 + 0.5 * p))) for c in sel_color)
+                    else:
+                        color = WHITE
                     prefix = f"[ {opt} ]" if i == selected_answer else f"  {opt}  "
                     opt_surf = font_medium.render(prefix, True, color)
                     screen.blit(opt_surf, (60 + shake_x, ans_y + i * 50 + shake_y))
@@ -3108,6 +3254,12 @@ while running:
             apply_shadow_static(screen, current_w, current_h, intensity=3.0)
             if random.random() < 0.025:
                 play_glitch_sound()
+
+        # V2.02 ambient dressing (mirrors Remastered): scan sweep, ash, vignette
+        if game_state.get("settings", {}).get("vhs_intensity", 1.0) > 0:
+            draw_scan_sweep(screen, current_w, current_h, current_time)
+        draw_dust(screen, current_w, current_h, current_time)
+        apply_vignette(screen, current_w, current_h, current_time, strong=game_state["run_count"] >= 3)
 
     # --- Badge toast notification (drawn on top of any state) ---
     if _newly_earned_badge is not None:
