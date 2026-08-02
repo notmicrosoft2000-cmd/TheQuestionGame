@@ -595,7 +595,8 @@
 
   const ASSET_LABELS = [
     [/\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
-    [/\.dmg$/i, "macOS — APP BUNDLE"]
+    [/\.dmg$/i, "macOS — APP BUNDLE"],
+    [/\.tar\.gz$/i, "LINUX — TAR.GZ ARCHIVE"]
   ];
 
   function setStatus(el, text, miss) {
@@ -606,6 +607,7 @@
   function platformKey() {
     const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
     if (/mac|darwin/i.test(p)) return "mac";
+    if (/linux|unix|X11/i.test(p)) return "linux";
     if (/win/i.test(p)) return "win";
     return null;
   }
@@ -633,11 +635,17 @@
 
   const FALLBACKS = {
     classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg" },
-    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg" }
+    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
   function downloadUrl(tag, file) {
     return "https://github.com/" + REPO + "/releases/download/" + tag + "/" + file;
+  }
+
+  function wireLinux(btnId, statusId, asset, fb) {
+    if (!$("#" + btnId)) return;
+    if (asset) wirePlatform(btnId, statusId, asset);
+    else wireFallback(btnId, statusId, "LINUX", downloadUrl(fb.tag, fb.linux));
   }
 
   function wireFallback(btnId, statusId, os, url) {
@@ -655,10 +663,12 @@
     const applyAssets = (assets) => {
       const zip = assets.find((a) => /\.zip$/i.test(a.name));
       const dmg = assets.find((a) => /\.dmg$/i.test(a.name));
+      const tar = assets.find((a) => /\.tar\.gz$/i.test(a.name));
       if (zip) wirePlatform(dom.winBtn, dom.winStatus, zip);
       else wireFallback(dom.winBtn, dom.winStatus, "WINDOWS", downloadUrl(fb.tag, fb.win));
       if (dmg) wirePlatform(dom.macBtn, dom.macStatus, dmg);
       else wireFallback(dom.macBtn, dom.macStatus, "MACOS", downloadUrl(fb.tag, fb.mac));
+      if (dom.linuxBtn) wireLinux(dom.linuxBtn, dom.linuxStatus, tar, fb);
     };
     const tryFetch = async () => {
       try {
@@ -694,10 +704,11 @@
 
   async function loadRelease() {
     const os = platformKey();
-    if (os === "win" || os === "mac") {
-      const classic = os === "mac" ? ["#macCard", "#macDetected"] : ["#winCard", "#winDetected"];
-      const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : ["#remWinCard", "#remWinDetected"];
+    if (os === "win" || os === "mac" || os === "linux") {
+      const classic = os === "mac" ? ["#macCard", "#macDetected"] : os === "linux" ? null : ["#winCard", "#winDetected"];
+      const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : os === "linux" ? ["#remLinuxCard", "#remLinuxDetected"] : ["#remWinCard", "#remWinDetected"];
       [classic, rem].forEach(([card, tag]) => {
+        if (!card) return;
         const c = $(card);
         const t = $(tag);
         if (c) c.classList.add("is-current");
@@ -707,7 +718,8 @@
     loadReleaseFromTag(REMASTER_TAG, {
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
-      macBtn: "dlRemMac", macStatus: "dlRemMacStatus"
+      macBtn: "dlRemMac", macStatus: "dlRemMacStatus",
+      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus"
     }, FALLBACKS.remastered);
     (async () => {
       let tag = CLASSIC_TAG;

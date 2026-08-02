@@ -723,7 +723,7 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
 }
 .asset-btn:hover{background:rgba(0,220,0,.1);box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
 .platform-options{
-  padding:0 1.8rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;
+  padding:0 1.8rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;
 }
 .platform-card{
   border:1px solid var(--line);background:#070707;padding:1.2rem;

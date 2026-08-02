@@ -107,7 +107,7 @@
         <span>TEXT-BASED HORROR EXPERIENCE</span>
       </div>
 
-      <div class="hero-badge"><span class="led"></span> BUILD v2.04 — WINDOWS / MACOS</div>
+      <div class="hero-badge"><span class="led"></span> BUILD v2.04 — WINDOWS / MACOS / LINUX</div>
 
       <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
       <h1 class="glitch" data-text="GAME">GAME</h1>
@@ -548,6 +548,7 @@
           <ul class="feature-list">
             <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit)</li>
             <li><span class="mark">▸</span> OS — macOS 14+ (Apple Silicon)</li>
+            <li><span class="mark">▸</span> OS — Linux (64-bit, SDL2 + ALSA)</li>
             <li><span class="mark">▸</span> CPU — Any dual-core or newer</li>
             <li><span class="mark">▸</span> RAM — 1 GB free</li>
             <li><span class="mark">▸</span> Storage — ~70 MB free</li>
@@ -600,7 +601,7 @@
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Windows 10 / 11 and macOS, two editions. No installation required. They only need permission.</p>
+      <p class="section-sub reveal">Windows 10 / 11, macOS and Linux, two editions. No installation required. They only need permission.</p>
 
       <div class="download-grid">
         <div class="releases-col">
@@ -691,6 +692,15 @@
               <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
               <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
             </div>
+            <div class="platform-card" id="remLinuxCard">
+              <div class="platform-head">
+                <span class="platform-os">LINUX</span>
+                <span class="tag tag-green hidden" id="remLinuxDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
+              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
+            </div>
           </div>
 
           <div class="release-alpha">
@@ -703,7 +713,7 @@
           </div>
 
           <div class="release-note">
-            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows) or DMG (macOS).
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS) or TAR.GZ (Linux) — the release contains the assets the game needs to run.
           </div>
 
           <div class="release-warn rem-warn">
@@ -726,7 +736,7 @@
           </ul>
           <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
           <ul class="feature-list">
-            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit) or macOS 14+ (Apple Silicon)</li>
+            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit), macOS 14+ (Apple Silicon) or Linux (64-bit, SDL2 + ALSA)</li>
             <li><span class="mark">▸</span> Screen — 800×600, resizable</li>
             <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER)</li>
             <li><span class="mark">▸</span> Network — Optional</li>
