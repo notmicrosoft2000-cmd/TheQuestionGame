@@ -215,16 +215,19 @@
     ".nav-brand", ".stat-num", ".section-title", ".session-code",
     ".session-name", ".side-title", ".release-version"
   ];
+  // All swaying elements share one phase + one clock, so the whole page
+  // breathes in lockstep — a single synchronized wave, not random jitter.
+  const SWAY_PHASE = Math.random() * 6.283;
+  const SWAY_X_SPEED = 0.8;
+  const SWAY_Y_SPEED = 0.65;
+  const SWAY_ALPHA_SPEED = 1.1;
   const swayEls = [];
   SWAY_SELECTORS.forEach((sel) => {
     $$(sel).forEach((el) => {
       swayEls.push({
         el,
-        phase: Math.random() * 6.283,
-        ampX: 9 + Math.random() * 11,
-        ampY: 5 + Math.random() * 7,
-        sx: 0.7 + Math.random() * 0.5,
-        sy: 0.6 + Math.random() * 0.4
+        ampX: 5 + Math.random() * 4,
+        ampY: 3 + Math.random() * 2
       });
     });
   });
@@ -232,17 +235,19 @@
   function frameSway(ts) {
     const t = ts / 1000;
     const active = document.body.classList.contains("loaded");
+    const xBase = Math.sin(t * SWAY_X_SPEED + SWAY_PHASE);
+    const yBase = Math.cos(t * SWAY_Y_SPEED + SWAY_PHASE);
+    const pulse = 0.5 + 0.5 * Math.sin(t * SWAY_ALPHA_SPEED + SWAY_PHASE);
     for (let i = 0; i < swayEls.length; i++) {
       const s = swayEls[i];
       if (!active) {
         s.el.style.transform = "";
         continue;
       }
-      const x = Math.sin(t * s.sx + s.phase) * s.ampX;
-      const y = Math.cos(t * s.sy + s.phase) * s.ampY;
-      const pulse = 0.5 + 0.5 * Math.sin(t * 1.2 + s.phase);
+      const x = xBase * s.ampX;
+      const y = yBase * s.ampY;
       s.el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px)";
-      s.el.style.opacity = (0.85 + 0.15 * pulse).toFixed(2);
+      s.el.style.opacity = (0.85 + 0.12 * pulse).toFixed(2);
     }
     requestAnimationFrame(frameSway);
   }
