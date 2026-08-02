@@ -2,7 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REMASTER_TAG = "v2.03-remastered";
+  const REMASTER_TAG = "v2.04-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -32,7 +32,7 @@
   const bootPrompt = $("#bootPrompt");
 
   const BOOT_LINES = [
-    ["INITIALIZING THE QUESTION GAME v2.03", ""],
+    ["INITIALIZING THE QUESTION GAME v2.04", ""],
     ["CONNECTING TO LOCAL ENVIRONMENT METRICS ...", ""],
     ["READING HARDWARE PROFILE ... OK", ""],
     ["CALIBRATING INPUT PROTOCOL ... OK", ""],
