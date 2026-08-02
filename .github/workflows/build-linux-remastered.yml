@@ -21,8 +21,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
-            libasound2 \
             espeak
+          # ALSA: name differs across Ubuntu releases (libasound2 vs libasound2t64 on 24.04).
+          sudo apt-get install -y --no-install-recommends libasound2 || \
+            sudo apt-get install -y --no-install-recommends libasound2t64
 
       - name: Set up Python
         uses: actions/setup-python@v5
