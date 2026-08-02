@@ -2,6 +2,7 @@
 
 Run with:  python -m TheQuestionGameRemastered.main
 """
+import math
 import random
 import threading
 import time
@@ -544,10 +545,12 @@ class Game:
         font_large, font_med, font_small = self._fonts()
         ui.draw_starfield(self.screen, w, h, self.now, self.starfield)
         ui.draw_menu_decorations(self.screen, w, h, self.now, font_small)
+        ui.draw_dust(self.screen, w, h, self.now)
 
-        title = font_large.render(_TITLE, True, config.COLOR_RED)
+        ui.draw_glowing_text(self.screen, _TITLE, font_large,
+                             int(w * 0.08), int(h * 0.10), self.now,
+                             color=config.COLOR_RED, glow_color=(150, 0, 0))
         sub = font_med.render(_TITLE_SUB, True, (150, 0, 0))
-        self.screen.blit(title, (int(w * 0.08), int(h * 0.10)))
         self.screen.blit(sub, (int(w * 0.08), int(h * 0.10) + font_large.get_height() + 6))
 
         run_label = font_small.render("SESSION %d / 3" % self.run_count, True, (120, 40, 40))
@@ -555,11 +558,12 @@ class Game:
 
         start_y = int(h * 0.36)
         for i, option in enumerate(self.menu_options):
-            color = config.COLOR_WHITE if i == self.selected_option else (110, 110, 110)
             if i == self.selected_option:
-                prefix = "> "
+                p = 0.5 + 0.5 * math.sin(self.now * 4.0)
+                color = tuple(int(c * (0.7 + 0.5 * p)) for c in config.COLOR_WHITE)
             else:
-                prefix = "  "
+                color = (110, 110, 110)
+            prefix = "> " if i == self.selected_option else "  "
             surf = font_med.render(prefix + option, True, color)
             self.screen.blit(surf, (int(w * 0.08), start_y + i * (font_med.get_linesize() + 10)))
 
@@ -569,6 +573,8 @@ class Game:
         self.screen.blit(note, (int(w * 0.08), h - 46))
         ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
         self.screen.blit(ver, (w - ver.get_width() - 12, h - ver.get_height() - 8))
+
+        ui.apply_vignette(self.screen, w, h, self.now, strong=False)
 
     def _draw_settings(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -669,14 +675,28 @@ class Game:
                 partial = text[:self.typing_index]
                 ui.render_wrapped_text(self.screen, partial, font_med, config.COLOR_WHITE,
                                        base_x, base_y, max_width)
+                if partial and int(self.now * 2.4) % 2 == 0:
+                    cx, cy = ui.wrap_cursor_pos(partial, font_med, base_x, base_y, max_width)
+                    caret = font_med.render("_", True, config.COLOR_WHITE)
+                    self.screen.blit(caret, (cx, cy))
             elif self.typing_state == "WAITING":
-                ui.render_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
-                                       base_x, base_y, max_width)
+                sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
+                if sway > 0:
+                    ui.render_animated_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
+                                                    base_x, base_y, max_width, self.now,
+                                                    sway_amp=int(2 + 4 * sway), alpha_base=210)
+                else:
+                    ui.render_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
+                                           base_x, base_y, max_width)
                 opts = step["opts"]
                 opts_x = base_x
                 opts_y = base_y + len(text.split("\n")) * (font_med.get_linesize() + 4) + 40
                 for i, option in enumerate(opts):
-                    color = config.COLOR_GREEN if i == self.selected_answer else (110, 110, 110)
+                    if i == self.selected_answer:
+                        p = 0.5 + 0.5 * math.sin(self.now * 4.0 + i)
+                        color = (0, int(config.COLOR_GREEN[1] * (0.65 + 0.5 * p)), 0)
+                    else:
+                        color = (110, 110, 110)
                     prefix = "> " if i == self.selected_answer else "  "
                     surf = font_med.render(prefix + option, True, color)
                     self.screen.blit(surf, (opts_x, opts_y + i * (font_med.get_linesize() + 10)))
@@ -711,6 +731,12 @@ class Game:
         ui.apply_vhs_effects(self.screen, w, h, self.game_state)
         ui.apply_shadow_static(self.screen, w, h,
                                intensity=1.5 if self.run_count >= 3 else 1.0)
+
+        vhs = self.game_state.get("settings", {}).get("vhs_intensity", 1.0)
+        if vhs > 0:
+            ui.draw_scan_sweep(self.screen, w, h, self.now)
+        ui.draw_dust(self.screen, w, h, self.now)
+        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
 
     # --- main loop ------------------------------------------------------------
     def run(self):

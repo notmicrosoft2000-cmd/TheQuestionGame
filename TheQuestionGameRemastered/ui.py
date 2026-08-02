@@ -154,6 +154,131 @@ def apply_corruption(surface, w, h, t):
         surface.set_at((x, y), c)
 
 
+# --- Ambient animations -----------------------------------------------------
+# Pure visual dressing: a breathing vignette, drifting ash, a rolling scan
+# band, a pulsing title bloom, and a blinking typewriter caret. Nothing here
+# reads input, makes sound, or touches game state.
+
+_vignette_profile = {}
+_dust_state = {}
+
+
+def _get_vignette_profile(w, h):
+    key = (w, h)
+    p = _vignette_profile.get(key)
+    if p is None:
+        cx, cy = w / 2.0, h / 2.0
+        max_d = math.hypot(cx, cy) or 1.0
+        yy, xx = np.mgrid[0:h, 0:w]
+        d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_d
+        p = (np.clip(d, 0.0, 1.0) ** 2 * 255).astype(np.uint8)
+        _vignette_profile[key] = p
+    return p
+
+
+def apply_vignette(surface, w, h, t=0.0, strong=False):
+    """Breathing radial darkness — the room goes dim, then lets go."""
+    profile = _get_vignette_profile(w, h)
+    base = 110 if strong else 80
+    amt = int(max(24, min(210, base + 14 * math.sin(t * 1.1))))
+    try:
+        arr = np.empty((h, w, 4), dtype=np.uint8)
+        arr[:, :, 0] = 0
+        arr[:, :, 1] = 0
+        arr[:, :, 2] = 0
+        arr[:, :, 3] = (profile.astype(np.int32) * amt // 255).astype(np.uint8)
+        v = pygame.image.frombuffer(arr, (w, h), "RGBA").copy()
+        surface.blit(v, (0, 0))
+    except Exception:
+        pass
+
+
+def _get_dust(w, h):
+    key = (w, h)
+    d = _dust_state.get(key)
+    if d is None:
+        d = []
+        for _ in range(42):
+            d.append({
+                "x": random.uniform(0, w),
+                "y": random.uniform(0, h),
+                "size": random.choice([1, 1, 1, 2, 2, 3]),
+                "vx": random.uniform(-4, 4),
+                "vy": random.uniform(-9, -3),
+                "phase": random.uniform(0, 6.28),
+                "b": random.uniform(30, 95),
+                "red": random.random() < 0.16,
+            })
+        _dust_state[key] = d
+    return d
+
+
+def draw_dust(surface, w, h, t):
+    """Drifting ash — slow, weightless, wrong."""
+    for p in _get_dust(w, h):
+        x = (p["x"] + p["vx"] * t * 0.25) % w
+        y = (p["y"] + p["vy"] * t * 0.25) % h
+        tw = 0.5 + 0.5 * math.sin(t * 2.2 + p["phase"])
+        b = int(max(8, min(200, p["b"] * (0.5 + 0.5 * tw))))
+        if p["red"]:
+            color = (b, int(b * 0.55), int(b * 0.55))
+        else:
+            color = (b, b, b)
+        if p["size"] <= 1:
+            try:
+                surface.set_at((int(x), int(y)), color)
+            except Exception:
+                pass
+        else:
+            pygame.draw.circle(surface, color, (int(x), int(y)), p["size"] // 2)
+
+
+def draw_scan_sweep(surface, w, h, t):
+    """A pale band endlessly rolling down the screen."""
+    y = int(t * 36) % (h + 80) - 40
+    band = pygame.Surface((w, 26), pygame.SRCALPHA)
+    band.fill((255, 255, 255, 14))
+    pygame.draw.line(band, (255, 255, 255, 70), (0, 13), (w, 13), 2)
+    surface.blit(band, (0, y))
+
+
+def draw_glowing_text(surface, text, font, x, y, t, color=config.COLOR_WHITE, glow_color=config.COLOR_RED):
+    """Title bloom — a red halo breathing behind the letterforms."""
+    base = font.render(text, True, color)
+    try:
+        small = pygame.transform.smoothscale(base, (max(2, base.get_width() // 3), max(2, base.get_height() // 3)))
+        glow = pygame.transform.smoothscale(small, (base.get_width() + 14, base.get_height() + 14))
+        glow.fill(glow_color, special_flags=pygame.BLEND_RGB_MULT)
+        pulse = 0.55 + 0.45 * math.sin(t * 2.2)
+        glow.fill((255, 255, 255, int(255 * (0.3 + 0.4 * pulse))), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(glow, (x - 7, y - 7))
+    except Exception:
+        pass
+    surface.blit(base, (x, y))
+
+
+def wrap_cursor_pos(text, font, start_x, start_y, max_width):
+    """The insertion point after `text`, following the same wrap rules."""
+    words = text.split(" ")
+    lines = 1
+    current = ""
+    for word in words:
+        if "\n" in word:
+            parts = word.split("\n")
+            current = parts[1] + " "
+            lines += 1
+            continue
+        test = current + word + " "
+        if font.size(test)[0] < max_width:
+            current = test
+        else:
+            lines += 1
+            current = word + " "
+    x = start_x + font.size(current)[0]
+    y = start_y + (lines - 1) * (font.get_linesize() + 4)
+    return x, y
+
+
 # --- Menu decoration --------------------------------------------------------
 _MENU_LOGO_MARKS = ["NEPTUNE", "AXIOM", "GRAYLINE", "VESTIGE", "HOLLOWCO", "OBSIDIAN SYS"]
 _menu_silhouettes = None
