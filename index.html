@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
 
@@ -52,6 +52,8 @@
 
   <div class="cursor" id="cursor" aria-hidden="true"></div>
   <div class="scare" id="scare" aria-hidden="true">HELLO</div>
+  <div class="gif-scare" id="gifScare" aria-hidden="true"><img src="img/jumpscare.gif" alt="" draggable="false"></div>
+  <audio id="gifScareAudio" src="jumpscare.mp3" preload="auto"></audio>
 
   <header class="nav" id="nav">
     <div class="nav-row">
@@ -63,14 +65,12 @@
     </div>
     <div class="contents" id="contents">
       <a class="contents-link" href="#home">HOME</a>
-      <a class="contents-link" href="#about">ABOUT</a>
-      <a class="contents-link" href="#history">HISTORY</a>
+      <a class="contents-link" href="#about">ABOUT / HISTORY</a>
       <a class="contents-link" href="#sessions">SESSIONS</a>
       <a class="contents-link" href="#evidence">EVIDENCE</a>
       <a class="contents-link" href="#ambience">AMBIENCE</a>
       <a class="contents-link" href="#quotes">QUOTES</a>
       <a class="contents-link" href="#concerns">CONCERNS</a>
-      <a class="contents-link" href="#requirements">REQUIREMENTS</a>
       <a class="contents-link" href="#transmission">TRANSMISSION</a>
       <a class="contents-link" href="#preview">PREVIEW</a>
       <a class="contents-link logs-link hidden" href="#logs">LOGS</a>
@@ -83,14 +83,12 @@
     <div class="side-head"><span class="red">&gt;</span> NAVIGATION</div>
     <div class="side-links">
       <a class="side-link" href="#home">HOME</a>
-      <a class="side-link" href="#about">ABOUT</a>
-      <a class="side-link" href="#history">HISTORY</a>
+      <a class="side-link" href="#about">ABOUT / HISTORY</a>
       <a class="side-link" href="#sessions">SESSIONS</a>
       <a class="side-link" href="#evidence">EVIDENCE</a>
       <a class="side-link" href="#ambience">AMBIENCE</a>
       <a class="side-link" href="#quotes">QUOTES</a>
       <a class="side-link" href="#concerns">CONCERNS</a>
-      <a class="side-link" href="#requirements">REQUIREMENTS</a>
       <a class="side-link" href="#transmission">TRANSMISSION</a>
       <a class="side-link" href="#preview">SESSION PREVIEW</a>
       <a class="side-link logs-link hidden" href="#logs">LOGS</a>
@@ -145,14 +143,12 @@
           <div class="stat"><span class="stat-num">∞</span><span class="stat-label">IT WATCHES YOU PLAY</span></div>
         </div>
       </div>
-    </section>
 
-    <section class="section view" id="history" data-view="history">
       <div class="section-head reveal">
-        <h2 class="section-title"><span class="red">&gt;</span> HISTORY</h2>
+        <h2 class="section-title"><span class="red">&gt;</span> HISTORY — THE FILE HAS BEEN FOUND BEFORE</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">The file has been found before. These are the records that survive.</p>
+      <p class="section-sub reveal">These are the records that survive.</p>
 
       <div class="timeline reveal">
         <div class="t-entry">
@@ -535,67 +531,6 @@
       </div>
     </section>
 
-    <section class="section view" id="requirements" data-view="requirements">
-      <div class="section-head reveal">
-        <h2 class="section-title"><span class="red">&gt;</span> REQUIREMENTS</h2>
-        <div class="section-line"></div>
-      </div>
-      <p class="section-sub reveal">Nothing modern required. It runs on whatever is already in the room. These are the official margins.</p>
-
-      <div class="req-grid">
-        <div class="req reveal">
-          <h3 class="req-title">SYSTEM</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit)</li>
-            <li><span class="mark">▸</span> OS — macOS 14+ (Apple Silicon)</li>
-            <li><span class="mark">▸</span> OS — Linux (64-bit, SDL2 + ALSA)</li>
-            <li><span class="mark">▸</span> CPU — Any dual-core or newer</li>
-            <li><span class="mark">▸</span> RAM — 1 GB free</li>
-            <li><span class="mark">▸</span> Storage — ~70 MB free</li>
-          </ul>
-        </div>
-        <div class="req reveal">
-          <h3 class="req-title">DISPLAY</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> Resolution — 800×600, resizable</li>
-            <li><span class="mark">▸</span> Fullscreen — supported</li>
-            <li><span class="mark">▸</span> Warning — flashing lights / strobe</li>
-          </ul>
-        </div>
-        <div class="req reveal">
-          <h3 class="req-title">INPUT</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> Keyboard only — TAB / ENTER</li>
-            <li><span class="mark">▸</span> Mouse — not required</li>
-          </ul>
-        </div>
-        <div class="req reveal">
-          <h3 class="req-title">AUDIO</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> Headphones — strongly advised</li>
-            <li><span class="mark">▸</span> Device — any audio output</li>
-            <li><span class="mark">▸</span> Volume — keep it low. It is listening.</li>
-          </ul>
-        </div>
-        <div class="req reveal">
-          <h3 class="req-title">PERMISSIONS</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> Camera — optional, Remastered only</li>
-            <li><span class="mark">▸</span> Network — optional (Remastered AI)</li>
-            <li><span class="mark">▸</span> Wallpaper — requested per-session</li>
-          </ul>
-        </div>
-        <div class="req reveal">
-          <h3 class="req-title">NOT SUPPORTED</h3>
-          <ul class="feature-list">
-            <li><span class="mark">▸</span> Controllers — none</li>
-            <li><span class="mark">▸</span> Touch — keyboard only</li>
-            <li><span class="mark">▸</span> Sleep — it does not. Do you?</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
     <section class="section view" id="download" data-view="download">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
@@ -822,7 +757,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=13"></script>
-  <script src="js/main.js?v=13"></script>
+  <script src="js/config.js?v=14"></script>
+  <script src="js/main.js?v=14"></script>
 </body>
 </html>

@@ -182,6 +182,79 @@
     setTimeout(() => eyesEl.classList.remove("go"), 380);
   }
 
+  let gifScareLock = false;
+  function gifScare() {
+    if (gifScareLock || !$("#gifScare")) return;
+    gifScareLock = true;
+    const gs = $("#gifScare");
+    const au = $("#gifScareAudio");
+    gs.classList.add("go");
+    if (au) {
+      try {
+        au.currentTime = 0;
+        const p = au.play();
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) { }
+    }
+    document.body.classList.add("body-shake");
+    setTimeout(() => {
+      gs.classList.remove("go");
+      document.body.classList.remove("body-shake");
+      gifScareLock = false;
+    }, 1000);
+  }
+
+  const whisperEl = document.createElement("div");
+  whisperEl.id = "whisper";
+  whisperEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(whisperEl);
+  const WHISPERS = [
+    "IT SEES YOU",
+    "DON'T TURN AROUND",
+    "STILL WATCHING",
+    "IT REMEMBERS",
+    "THE QUESTIONS NEVER END",
+    "YOU LEFT THE LIGHTS ON",
+    "SOMEONE IS BEHIND THE STATIC",
+    "IT KNOWS YOU'RE READING THIS",
+    "HEADPHONES WON'T SAVE YOU",
+    "IT SAVED YOUR ANSWERS"
+  ];
+  let whisperTimer = null;
+  function whisper() {
+    if (whisperTimer) return;
+    whisperEl.textContent = WHISPERS[Math.floor(Math.random() * WHISPERS.length)];
+    whisperEl.classList.add("go");
+    whisperTimer = setTimeout(() => {
+      whisperEl.classList.remove("go");
+      whisperTimer = null;
+    }, 2600);
+  }
+
+  let glitchLock = false;
+  function pageGlitch() {
+    if (glitchLock) return;
+    glitchLock = true;
+    document.body.classList.add("page-glitch");
+    setTimeout(() => {
+      document.body.classList.remove("page-glitch");
+      glitchLock = false;
+    }, 160);
+  }
+
+  function corruptSignal() {
+    const sig = $(".sig");
+    if (!sig) return;
+    const states = ["STABLE", "WEAK", "UNSTABLE", "CORRUPT", "WATCHING", "STABLE", "LOST"];
+    const old = sig.textContent;
+    sig.textContent = states[Math.floor(Math.random() * states.length)];
+    sig.classList.add("sig-bad");
+    setTimeout(() => {
+      sig.textContent = old;
+      sig.classList.remove("sig-bad");
+    }, 2000);
+  }
+
   function startJumpscares() {
     setInterval(() => {
       if (document.hidden) return;
@@ -195,6 +268,22 @@
       if (document.hidden) return;
       if (Math.random() < 0.01) flashEyes();
     }, 1000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.001) gifScare();
+    }, 10000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.03) pageGlitch();
+    }, 8000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.12) whisper();
+    }, 6000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.25) corruptSignal();
+    }, 7000);
   }
 
   const noiseCnv = $("#noise");
@@ -1215,6 +1304,12 @@
       keyBuf = "";
       if (typeIn) typeIn.value = "";
       jumpscare();
+      return;
+    }
+    if (keyBuf.endsWith("smile")) {
+      keyBuf = "";
+      if (typeIn) typeIn.value = "";
+      gifScare();
       return;
     }
     if (keyBuf.endsWith("2013")) {
