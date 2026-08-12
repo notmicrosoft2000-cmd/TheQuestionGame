@@ -205,6 +205,26 @@ body.chaos .nav{animation:chaos-jump .14s steps(2) infinite}
   50%{transform:translate(4px,-3px) scale(.98)}
   100%{transform:translate(-2px,2px) scale(1)}
 }
+body.gif-shake main,
+body.gif-shake .hud,
+body.gif-shake .nav{animation:chaos-jump .12s steps(2) infinite}
+
+#wash{position:fixed;inset:0;z-index:9990;pointer-events:none;opacity:0;transition:opacity .03s}
+#wash.go{opacity:1}
+#bars{
+  position:fixed;inset:0;z-index:9989;pointer-events:none;opacity:0;
+  background:repeating-linear-gradient(0deg,transparent 0 14px,rgba(0,220,0,.14) 14px 18px,transparent 18px 32px,rgba(255,0,0,.12) 32px 36px,transparent 36px 50px);
+  transform:translateY(-130%);
+}
+#bars.go{opacity:1;transform:translateY(130%);transition:transform .46s steps(6),opacity .05s}
+#ghost{
+  position:fixed;width:min(420px,60vw);height:min(620px,82vh);z-index:9988;pointer-events:none;
+  opacity:0;background:radial-gradient(ellipse at 50% 30%,rgba(0,0,0,.88),rgba(0,0,0,.32) 55%,transparent 72%);
+  filter:blur(6px);
+}
+#ghost.go{opacity:1;transition:opacity .9s ease}
+.crt.roll{animation:crt-roll .33s steps(6)}
+@keyframes crt-roll{0%{transform:translateY(0)}100%{transform:translateY(16vh)}}
 
 #whisper{
   position:fixed;right:1.2rem;bottom:3rem;z-index:9965;pointer-events:none;

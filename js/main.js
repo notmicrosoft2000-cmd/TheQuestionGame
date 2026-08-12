@@ -196,10 +196,10 @@
         if (p && p.catch) p.catch(() => {});
       } catch (e) { }
     }
-    document.body.classList.add("body-shake");
+    document.body.classList.add("gif-shake");
     setTimeout(() => {
       gs.classList.remove("go");
-      document.body.classList.remove("body-shake");
+      document.body.classList.remove("gif-shake");
       gifScareLock = false;
     }, 1000);
   }
@@ -255,11 +255,105 @@
     }, 2000);
   }
 
+  const washEl = document.createElement("div");
+  washEl.id = "wash";
+  washEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(washEl);
+
+  const barsEl = document.createElement("div");
+  barsEl.id = "bars";
+  barsEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(barsEl);
+
+  const ghostEl = document.createElement("div");
+  ghostEl.id = "ghost";
+  ghostEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(ghostEl);
+
+  function bgWash() {
+    if (!washEl) return;
+    const colors = [
+      "rgba(255,0,0,.22)",
+      "rgba(0,220,0,.16)",
+      "rgba(0,80,255,.2)",
+      "rgba(255,255,255,.12)",
+      "rgba(255,120,0,.18)"
+    ];
+    washEl.style.background = colors[Math.floor(Math.random() * colors.length)];
+    washEl.classList.add("go");
+    setTimeout(() => washEl.classList.remove("go"), 170);
+  }
+
+  function bgBars() {
+    if (!barsEl) return;
+    barsEl.classList.add("go");
+    setTimeout(() => barsEl.classList.remove("go"), 460);
+  }
+
+  function bgRoll() {
+    const crt = $(".crt");
+    if (crt) {
+      crt.classList.add("roll");
+      setTimeout(() => crt.classList.remove("roll"), 330);
+    }
+  }
+
+  function bgGhost() {
+    if (!ghostEl) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    ghostEl.style.left = rand(5, Math.max(10, w - ghostEl.offsetWidth - 10)).toFixed(0) + "px";
+    ghostEl.style.top = rand(5, Math.max(10, h - ghostEl.offsetHeight - 10)).toFixed(0) + "px";
+    ghostEl.classList.add("go");
+    setTimeout(() => ghostEl.classList.remove("go"), 2600);
+  }
+
+  let deviceTimer = null;
+  function detectPlatform() {
+    const ua = navigator.userAgent || "";
+    const pf = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    let os = "AN UNKNOWN MACHINE";
+    if (/android/i.test(ua)) os = "AN ANDROID DEVICE";
+    else if (/iphone|ipad|ipod/i.test(ua)) os = "AN APPLE TOUCH DEVICE";
+    else if (/mac|darwin/i.test(pf)) os = "A MACINTOSH";
+    else if (/linux/i.test(pf) || /linux/i.test(ua)) os = "A LINUX MACHINE";
+    else if (/win/i.test(pf) || /windows/i.test(ua)) os = "A WINDOWS MACHINE";
+    let browser = "SOME BROWSER";
+    if (/edg/i.test(ua)) browser = "EDGE";
+    else if (/firefox/i.test(ua)) browser = "FIREFOX";
+    else if (/opr|opera/i.test(ua)) browser = "OPERA";
+    else if (/chrome|crios/i.test(ua)) browser = "CHROME";
+    else if (/safari/i.test(ua)) browser = "SAFARI";
+    const touch = (navigator.maxTouchPoints || 0) > 0;
+    return { os, browser, touch, w: screen.width, h: screen.height };
+  }
+
+  const DEVICE_COMMENTS = [
+    "{OS}. IT COUNTS THOSE, TOO.",
+    "IT CAN SEE YOU ARE ON {OS}.",
+    "{BROWSER} ON {OS}. THAT WAS NOT A CHOICE.",
+    "{RES} PIXELS. IT CAN FIT MORE QUESTIONS THERE.",
+    "{INPUT} INPUT. IT KNOWS HOW YOU REACH FOR IT.",
+    "IT PREFERRED THE OLD MACHINE. IT WILL GET USED TO {OS}.",
+    "IT HEARD THE FAN ON YOUR {OS} SPEED UP."
+  ];
+
+  function deviceComment() {
+    if (deviceTimer || !whisperEl) return;
+    const d = detectPlatform();
+    const tpl = DEVICE_COMMENTS[Math.floor(Math.random() * DEVICE_COMMENTS.length)];
+    whisperEl.textContent = tpl
+      .replace("{OS}", d.os)
+      .replace("{BROWSER}", d.browser)
+      .replace("{RES}", d.w + "×" + d.h)
+      .replace("{INPUT}", d.touch ? "TOUCH" : "KEYBOARD");
+    whisperEl.classList.add("go");
+    deviceTimer = setTimeout(() => {
+      whisperEl.classList.remove("go");
+      deviceTimer = null;
+    }, 3400);
+  }
+
   function startJumpscares() {
-    setInterval(() => {
-      if (document.hidden) return;
-      if (Math.random() < 0.1) sfx.scare();
-    }, 5000);
     setInterval(() => {
       if (document.hidden) return;
       if (Math.random() < 0.02) darkChaos();
@@ -284,6 +378,29 @@
       if (document.hidden) return;
       if (Math.random() < 0.25) corruptSignal();
     }, 7000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.05) bgWash();
+    }, 6000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.04) bgBars();
+    }, 9000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.03) bgRoll();
+    }, 12000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.06) bgGhost();
+    }, 8000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.5) deviceComment();
+    }, 45000);
+    setTimeout(() => {
+      if (!document.hidden) deviceComment();
+    }, 4500);
   }
 
   const noiseCnv = $("#noise");
