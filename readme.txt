@@ -1,4 +1,4 @@
-The Question Game runs on Windows 10/11 and macOS 14+ (Apple Silicon).
+The Question Game runs on Windows 10/11, macOS 14+ (Apple Silicon) and Linux (64-bit).
 
 When sharing this game, please do not just share a single binary — share the
 release zip / dmg because the game requires its asset files.
@@ -17,6 +17,15 @@ macOS (14+ / Apple Silicon only):
   (for the wallpaper change) and to access the camera. You may deny either —
   the game keeps running, it just skips those scares.
 
+LINUX (64-bit):
+- Requires SDL2 and ALSA runtime libraries (Ubuntu/Debian:
+    sudo apt install libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 libasound2)
+- Download TheQuestionGame-linux.tar.gz from the GitHub Releases page and extract it.
+- Make it executable and run it from a terminal:
+    chmod +x TheQuestionGame
+    ./TheQuestionGame
+- Webcam, wallpaper, window and notification scares are skipped on Linux.
+
 RUNNING FROM SOURCE:
 - pip install -r requirements.txt   (Windows/Linux)
 - python TheQuestionGame.py
@@ -24,5 +33,3 @@ RUNNING FROM SOURCE:
 RUNNING ON macOS FROM SOURCE:
 - pip install -r requirements.txt
 - python3 TheQuestionGame.py
-
-Linux (via WSL) is no longer supported.

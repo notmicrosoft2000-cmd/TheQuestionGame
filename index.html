@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
 </head>
 <body>
 
@@ -638,6 +638,15 @@
               <a class="platform-btn" id="dlMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
               <p class="platform-status" id="dlMacStatus">READY — DIRECT LINK</p>
             </div>
+            <div class="platform-card" id="linuxCard">
+              <div class="platform-head">
+                <span class="platform-os">LINUX</span>
+                <span class="tag tag-green hidden" id="linuxDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGame</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
+              <a class="platform-btn" id="dlLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <p class="platform-status" id="dlLinuxStatus">READY — DIRECT LINK</p>
+            </div>
           </div>
 
           <div class="release-fallback hidden" id="releaseFallback">
@@ -645,7 +654,7 @@
           </div>
 
           <div class="release-note">
-            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows) or DMG (macOS) — the release contains the assets the game needs to run.
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS) or TAR.GZ (Linux) — the release contains the assets the game needs to run.
           </div>
 
           <div class="release-note mac-note">
@@ -813,7 +822,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=12"></script>
-  <script src="js/main.js?v=12"></script>
+  <script src="js/config.js?v=13"></script>
+  <script src="js/main.js?v=13"></script>
 </body>
 </html>

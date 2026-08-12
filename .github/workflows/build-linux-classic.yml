@@ -1,0 +1,68 @@
+name: Build Classic Linux
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build classic binary for Linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.release.tag_name, 'remastered')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
+            espeak
+          # ALSA: name differs across Ubuntu releases (libasound2 vs libasound2t64 on 24.04).
+          sudo apt-get install -y --no-install-recommends libasound2 || \
+            sudo apt-get install -y --no-install-recommends libasound2t64
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install pyinstaller && pip install -r requirements-linux.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm TheQuestionGame-linux.spec
+
+      - name: Package binary
+        run: |
+          ls -la dist/
+          test -f dist/TheQuestionGame && chmod +x dist/TheQuestionGame || exit 1
+          rm -rf linuxroot
+          mkdir -p linuxroot
+          cp dist/TheQuestionGame linuxroot/
+          cp windowq.png logsmusic.ogg linuxroot/
+          cp readme.txt linuxroot/
+          tar -czf TheQuestionGame-linux.tar.gz -C linuxroot .
+
+      - name: Upload to release
+        if: github.event_name == 'release' && !contains(github.event.release.tag_name, 'remastered')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" TheQuestionGame-linux.tar.gz --clobber
+
+      - name: Upload to latest classic release (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(gh release list --limit 10 --json tagName -q '.[].tagName' | grep -vi remastered | head -1)
+          if [ -n "$TAG" ]; then
+            gh release upload "$TAG" TheQuestionGame-linux.tar.gz --clobber
+          else
+            echo "No classic release found to attach to; skipping upload."
+            exit 1
+          fi

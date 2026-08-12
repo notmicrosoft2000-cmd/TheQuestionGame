@@ -164,6 +164,36 @@ main.shake{animation:shake .5s linear}
   90%{transform:translate(-5px,4px)}
 }
 
+#darkOverlay{
+  position:fixed;inset:0;z-index:9995;pointer-events:none;
+  background:#000;opacity:0;transition:opacity .12s steps(3);
+}
+#darkOverlay.go{opacity:.9}
+body.chaos main,
+body.chaos .hud,
+body.chaos .nav{animation:chaos-jump .14s steps(2) infinite}
+@keyframes chaos-jump{
+  0%{transform:translate(-3px,2px) rotate(-.5deg)}
+  25%{transform:translate(5px,-4px) rotate(.6deg)}
+  50%{transform:translate(-6px,-2px) rotate(-.4deg)}
+  75%{transform:translate(4px,5px) rotate(.5deg)}
+  100%{transform:translate(-2px,-3px) rotate(0)}
+}
+.scrambled{transform:translate(var(--scx,0),var(--scy,0)) rotate(var(--scr,0deg)) var(--scflip,scaleX(1)) !important;transition:none !important;animation:none !important}
+#eyes{
+  position:fixed;z-index:9994;pointer-events:none;
+  display:flex;gap:14px;opacity:0;
+}
+#eyes span{
+  width:clamp(6px,1.1vw,15px);height:clamp(6px,1.1vw,15px);
+  border-radius:50%;
+  background:radial-gradient(circle,#ffffff 0%,#d8ecff 45%,rgba(200,235,255,0) 75%);
+  box-shadow:0 0 20px 5px rgba(220,240,255,.85),0 0 6px 2px rgba(255,255,255,.9);
+  animation:eye-pulse .3s steps(2) infinite;
+}
+@keyframes eye-pulse{50%{transform:scale(1.25)}}
+#eyes.go{opacity:1;transition:opacity .04s}
+
 /* ---------- Fixed HUD ---------- */
 .hud{
   position:fixed;z-index:9960;font-family:var(--vt);font-size:1.05rem;

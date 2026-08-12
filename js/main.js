@@ -55,6 +55,7 @@
       startHeroType();
       startRecTimer();
       startFlashLoop();
+      startJumpscares();
     };
 
     const skipHint = document.createElement("div");
@@ -125,6 +126,75 @@
         loop();
       }, rand(10000, 20000));
     })();
+  }
+
+  const darkOverlay = document.createElement("div");
+  darkOverlay.id = "darkOverlay";
+  darkOverlay.setAttribute("aria-hidden", "true");
+  document.body.appendChild(darkOverlay);
+
+  const eyesEl = document.createElement("div");
+  eyesEl.id = "eyes";
+  eyesEl.setAttribute("aria-hidden", "true");
+  eyesEl.innerHTML = "<span></span><span></span>";
+  document.body.appendChild(eyesEl);
+
+  let chaosLock = false;
+  function darkChaos() {
+    if (chaosLock) return;
+    chaosLock = true;
+    darkOverlay.classList.add("go");
+    document.body.classList.add("chaos");
+    const pool = $$("main, section, .hud, .nav, .side-panel, .ticker-track, .release, .section-title, h1, h2");
+    const picked = [];
+    for (let i = 0; i < 10 && pool.length; i++) {
+      const el = pool[Math.floor(Math.random() * pool.length)];
+      if (picked.indexOf(el) !== -1) continue;
+      picked.push(el);
+      el.classList.add("scrambled");
+      el.style.setProperty("--scx", rand(-14, 14).toFixed(1) + "px");
+      el.style.setProperty("--scy", rand(-14, 14).toFixed(1) + "px");
+      el.style.setProperty("--scr", rand(-4, 4).toFixed(2) + "deg");
+      el.style.setProperty("--scflip", Math.random() < 0.3 ? "scaleX(-1)" : "scaleX(1)");
+    }
+    flash.classList.add("go");
+    setTimeout(() => flash.classList.remove("go"), 200);
+    setTimeout(() => {
+      picked.forEach((el) => {
+        el.classList.remove("scrambled");
+        el.style.removeProperty("--scx");
+        el.style.removeProperty("--scy");
+        el.style.removeProperty("--scr");
+        el.style.removeProperty("--scflip");
+      });
+      document.body.classList.remove("chaos");
+      darkOverlay.classList.remove("go");
+      chaosLock = false;
+    }, 2200);
+  }
+
+  function flashEyes() {
+    if (!eyesEl) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    eyesEl.style.left = rand(20, Math.max(30, w - 120)).toFixed(0) + "px";
+    eyesEl.style.top = rand(20, Math.max(30, h - 60)).toFixed(0) + "px";
+    eyesEl.classList.add("go");
+    setTimeout(() => eyesEl.classList.remove("go"), 380);
+  }
+
+  function startJumpscares() {
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.1) sfx.scare();
+    }, 5000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.02) darkChaos();
+    }, 3000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.01) flashEyes();
+    }, 1000);
   }
 
   const noiseCnv = $("#noise");
@@ -634,7 +704,7 @@
   }
 
   const FALLBACKS = {
-    classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg" },
+    classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz" },
     remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
@@ -705,7 +775,7 @@
   async function loadRelease() {
     const os = platformKey();
     if (os === "win" || os === "mac" || os === "linux") {
-      const classic = os === "mac" ? ["#macCard", "#macDetected"] : os === "linux" ? null : ["#winCard", "#winDetected"];
+      const classic = os === "mac" ? ["#macCard", "#macDetected"] : os === "linux" ? ["#linuxCard", "#linuxDetected"] : ["#winCard", "#winDetected"];
       const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : os === "linux" ? ["#remLinuxCard", "#remLinuxDetected"] : ["#remWinCard", "#remWinDetected"];
       [classic, rem].forEach(([card, tag]) => {
         if (!card) return;
@@ -734,7 +804,8 @@
       loadReleaseFromTag(tag, {
         relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
         winBtn: "dlWindows", winStatus: "dlWindowsStatus",
-        macBtn: "dlMac", macStatus: "dlMacStatus"
+        macBtn: "dlMac", macStatus: "dlMacStatus",
+        linuxBtn: "dlLinux", linuxStatus: "dlLinuxStatus"
       }, FALLBACKS.classic);
     })();
   }
@@ -850,13 +921,18 @@
     b.addEventListener("click", (e) => {
       e.preventDefault();
       pendingUrl = b.getAttribute("href");
-      pendingOs = (b.getAttribute("data-os") || "").toLowerCase().indexOf("mac") !== -1 ? "mac" : "win";
+      const osAttr = (b.getAttribute("data-os") || "").toLowerCase();
+      pendingOs = osAttr.indexOf("mac") !== -1 ? "mac" : osAttr.indexOf("linux") !== -1 ? "linux" : "win";
       openModal(warnModal);
     });
   });
 
   $("#warnAccept").addEventListener("click", () => {
     closeModal(warnModal);
+    if (pendingOs === "linux") {
+      if (pendingUrl) window.location.href = pendingUrl;
+      return;
+    }
     setGuideTab(pendingOs);
     openModal(guideModal);
   });
