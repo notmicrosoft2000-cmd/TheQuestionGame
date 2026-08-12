@@ -1004,9 +1004,50 @@ body.modal-open{overflow:hidden}
 }
 [data-stagger].in>*{opacity:1;transform:none}
 
+/* ---------- Element text scares ---------- */
+.takeover{color:var(--red)!important;text-shadow:var(--glow-red)!important}
+.revread{color:var(--red)!important;text-shadow:var(--glow-red)!important;transition:color .2s}
+.shadow-copy{
+  position:fixed;z-index:9963;pointer-events:none;color:var(--red);
+  text-shadow:0 0 18px rgba(200,0,0,.6);
+  transform:translate(-22px,6px) rotate(-2deg);
+  opacity:.5;margin:0;
+  transition:transform .9s ease,opacity .9s ease;
+}
+
+/* ---------- Mock popup (insult machine) ---------- */
+.mock-pop{
+  position:fixed;right:1.2rem;bottom:4.5rem;z-index:9968;
+  width:min(340px,86vw);
+  border:1px solid var(--red);background:#070707;
+  box-shadow:0 0 3rem rgba(200,0,0,.2),var(--glow-soft);
+  animation:mock-in .3s ease;
+}
+.mock-pop.hidden{display:none}
+@keyframes mock-in{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+.mock-head{
+  display:flex;justify-content:space-between;align-items:center;gap:.6rem;
+  background:#0d0000;border-bottom:1px solid var(--dark-red);
+  padding:.45rem .8rem;
+}
+.mock-title{font-family:var(--vt);font-size:1rem;letter-spacing:.16em;color:var(--red);text-shadow:var(--glow-red)}
+.mock-x{background:none;border:none;color:var(--dim);font-size:.9rem;padding:.2rem .3rem;line-height:1}
+.mock-x:hover{color:#fff}
+.mock-body{
+  font-family:var(--vt);font-size:1.25rem;letter-spacing:.06em;
+  color:#e0e0e0;line-height:1.55;padding:1rem 1.1rem .4rem;min-height:2.4em;
+}
+.mock-actions{display:flex;justify-content:flex-end;gap:.5rem;padding:.5rem 1rem 1rem;flex-wrap:wrap}
+.mock-btn{
+  font-family:var(--vt);font-size:1rem;letter-spacing:.1em;color:var(--red);
+  border:1px solid var(--dark-red);background:transparent;padding:.3rem .8rem;transition:all .2s;touch-action:manipulation;
+}
+.mock-btn:hover{background:rgba(200,0,0,.12);box-shadow:var(--glow-red)}
+.mock-btn.ghost{color:var(--dim);border-color:var(--line-bright)}
+.mock-btn.ghost:hover{color:var(--text);border-color:#555}
+
 /* ---------- Card spotlight ---------- */
-.spotlight::after{
-  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;z-index:1;
+.spotlight::after{  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;z-index:1;
   background:radial-gradient(250px circle at var(--mx,50%) var(--my,50%),rgba(0,220,0,.09),transparent 70%);
   transition:opacity .35s ease;
 }

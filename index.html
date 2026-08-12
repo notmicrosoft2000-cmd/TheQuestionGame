@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
 
@@ -756,9 +756,21 @@
     </div>
   </div>
 
+  <div class="mock-pop hidden" id="mockPop" role="dialog" aria-label="Interrupted transmission">
+    <div class="mock-head">
+      <span class="mock-title">TRANSMISSION INTERRUPT</span>
+      <button class="mock-x" id="mockX" type="button" aria-label="Dismiss">✕</button>
+    </div>
+    <div class="mock-body" id="mockBody"></div>
+    <div class="mock-actions">
+      <button class="mock-btn" id="mockMore" type="button">[ MOCK ME MORE ]</button>
+      <button class="mock-btn ghost" id="mockDismiss" type="button">[ IGNORE ]</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=16"></script>
-  <script src="js/main.js?v=16"></script>
+  <script src="js/config.js?v=17"></script>
+  <script src="js/main.js?v=17"></script>
 </body>
 </html>

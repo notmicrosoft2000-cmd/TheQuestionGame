@@ -402,6 +402,200 @@
     showToast(EERIE_TOASTS[Math.floor(Math.random() * EERIE_TOASTS.length)], Math.random() < 0.4);
   }
 
+  const TAKEOVERS = [
+    "SOMETHING IS IN THE TITLE",
+    "IT IS IN THE PAGE NOW",
+    "READ FASTER",
+    "IT KNOWS THIS HEADING",
+    "THE SECTION BELOW IS MISSING",
+    "IT IS READING WITH YOU",
+    "THIS IS NOT THE REAL TITLE"
+  ];
+  let takeoverLock = false;
+  function headingTakeover() {
+    if (takeoverLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const pool = $$(".section-title");
+    if (!pool.length) return;
+    takeoverLock = true;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    const saved = el.innerHTML;
+    el.innerHTML = '<span class="red">&gt;</span> ' + TAKEOVERS[Math.floor(Math.random() * TAKEOVERS.length)];
+    el.classList.add("takeover");
+    setTimeout(() => {
+      el.innerHTML = saved;
+      el.classList.remove("takeover");
+      takeoverLock = false;
+    }, 1500);
+  }
+
+  let reverseLock = false;
+  function reverseRead() {
+    if (reverseLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const pool = $$(".quote-text");
+    if (!pool.length) return;
+    reverseLock = true;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    const saved = el.textContent;
+    el.textContent = saved.split(/\s+/).reverse().join(" ");
+    el.classList.add("revread");
+    setTimeout(() => {
+      el.textContent = saved;
+      el.classList.remove("revread");
+      reverseLock = false;
+    }, 1700);
+  }
+
+  let shadowLock = false;
+  function titleShadow() {
+    if (shadowLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const pool = $$(".section-title, h1.glitch, .session-name");
+    const visible = pool.filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!visible.length) return;
+    shadowLock = true;
+    const el = visible[Math.floor(Math.random() * visible.length)];
+    const r = el.getBoundingClientRect();
+    const ghost = el.cloneNode(true);
+    ghost.classList.remove("reveal", "in", "active", "glitch", "kb-target");
+    ghost.classList.add("shadow-copy");
+    ghost.style.left = r.left + "px";
+    ghost.style.top = r.top + "px";
+    ghost.style.width = r.width + "px";
+    document.body.appendChild(ghost);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ghost.style.transform = "translate(0,0) rotate(0)";
+        ghost.style.opacity = "0";
+      });
+    });
+    setTimeout(() => {
+      ghost.remove();
+      shadowLock = false;
+    }, 1100);
+  }
+
+  const DETACH_POOL = ".session, .release, .quote, .shot, .stat, .platform-card, .signal-box, .concern, .player, .terminal";
+  let detachLock = false;
+  function elementDetach() {
+    if (detachLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const pool = $$(DETACH_POOL);
+    const visible = pool.filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    if (!visible.length) return;
+    detachLock = true;
+    const el = visible[Math.floor(Math.random() * visible.length)];
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const dx = dir * rand(45, 100);
+    const dy = rand(-14, 14);
+    const rot = (Math.random() < 0.5 ? -1 : 1) * rand(2, 6);
+    el.style.transition = "transform .45s cubic-bezier(.2,.85,.3,1.1), box-shadow .45s ease";
+    el.style.transform = "translate(" + dx.toFixed(1) + "px," + dy.toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg) scale(.98)";
+    el.style.zIndex = "60";
+    el.style.boxShadow = "0 30px 90px rgba(200,0,0,.3)";
+    sfx.glitch();
+    setTimeout(() => {
+      el.style.transition = "transform .5s cubic-bezier(.3,1.6,.4,1), box-shadow .5s ease";
+      el.style.transform = "";
+      el.style.boxShadow = "";
+      el.style.zIndex = "";
+      setTimeout(() => {
+        el.style.transition = "";
+        detachLock = false;
+      }, 620);
+    }, 800);
+  }
+
+  const GHOST_TYPES = [
+    "I CAN TYPE TOO",
+    "HELLO?",
+    "I CAN SEE YOUR HANDS",
+    "STOP TYPING",
+    "DID YOU WANT SOMETHING?",
+    "IT GETS QUIETER IN HERE"
+  ];
+  let tgLock = false;
+  let tgInterval = null;
+  let tgTimer = null;
+  function stopGhost(clearValue) {
+    if (tgInterval) { clearInterval(tgInterval); tgInterval = null; }
+    if (tgTimer) { clearTimeout(tgTimer); tgTimer = null; }
+    if (clearValue && typeIn) typeIn.value = "";
+    tgLock = false;
+  }
+  function typingGhost() {
+    if (tgLock || !typeIn || document.hidden) return;
+    if (typeIn === document.activeElement) return;
+    if (typeIn.value.trim() || aiBusy) return;
+    tgLock = true;
+    const msg = GHOST_TYPES[Math.floor(Math.random() * GHOST_TYPES.length)];
+    let i = 0;
+    tgInterval = setInterval(() => {
+      i++;
+      typeIn.value = msg.slice(0, i);
+      if (i >= msg.length) {
+        clearInterval(tgInterval);
+        tgInterval = null;
+        tgTimer = setTimeout(() => {
+          tgTimer = null;
+          typeIn.value = "";
+          tgLock = false;
+        }, 1900);
+      }
+    }, 95);
+  }
+
+  const MOCK_LINES = [
+    "IS THAT THE BEST YOU COULD TYPE?",
+    "YOU'VE BEEN ON THIS PAGE FOR A WHILE. GETTING COMFORTABLE?",
+    "YOUR CURSOR IS ANXIOUS.",
+    "YOU SCROLL LIKE SOMEONE AFRAID OF THE NEXT SECTION.",
+    "I READ YOUR OTHER ANSWERS. EMBARRASSING.",
+    "YOU CHECKED YOUR PHONE. I SAW IT.",
+    "YOUR HESITATION IS LOUD.",
+    "SOMEONE WITH YOUR HISTORY SHOULD CLOSE THIS TAB.",
+    "DO YOU PRACTICE BEING THIS PREDICTABLE?",
+    "THE FAN IS RUNNING BECAUSE OF YOU.",
+    "I'VE WATCHED SLOWER READERS. NOT MANY. BUT SOME.",
+    "NICE SCROLLING. VERY SLOW. VERY EASY TO WATCH.",
+    "YOU ANSWER QUESTIONS LIKE SOMEONE WITH SOMETHING TO HIDE.",
+    "YOUR BLINKS ARE A TELL."
+  ];
+  const mockPop = $("#mockPop");
+  const mockBody = $("#mockBody");
+  let mockTimer = null;
+  function mockMachine() {
+    if (document.hidden || !mockPop || mockTimer) return;
+    mockTimer = setTimeout(() => {
+      mockTimer = null;
+      if (document.hidden) return;
+      showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
+    }, 700);
+  }
+  function showMock(line) {
+    if (!mockPop) return;
+    mockBody.textContent = "";
+    mockPop.classList.remove("hidden");
+    sfx.glitch();
+    typeNode(mockBody, line, 20);
+  }
+  function hideMock() {
+    if (!mockPop) return;
+    mockPop.classList.add("hidden");
+    mockBody.textContent = "";
+  }
+  if (mockPop) {
+    const mockMore = $("#mockMore");
+    const mockDismiss = $("#mockDismiss");
+    const mockX = $("#mockX");
+    if (mockMore) mockMore.addEventListener("click", () => showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]));
+    if (mockDismiss) mockDismiss.addEventListener("click", hideMock);
+    if (mockX) mockX.addEventListener("click", hideMock);
+  }
+
   let deviceTimer = null;
   function detectPlatform() {
     const ua = navigator.userAgent || "";
@@ -520,6 +714,30 @@
       if (document.hidden) return;
       if (Math.random() < 0.08) sfx.drone();
     }, 20000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.25) elementDetach();
+    }, 7000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.08) headingTakeover();
+    }, 14000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.07) reverseRead();
+    }, 16000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.06) titleShadow();
+    }, 15000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.12) typingGhost();
+    }, 13000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.1) mockMachine();
+    }, 10000);
   }
 
   const noiseCnv = $("#noise");
@@ -1387,6 +1605,36 @@
         o.start(t);
         o.stop(t + 1.6);
       } catch (e) { }
+    },
+    glitch() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const n = Math.floor(ctx.sampleRate * 0.14);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+        src.connect(g);
+        g.connect(ctx.destination);
+        src.start(t);
+        const o = ctx.createOscillator();
+        const og = ctx.createGain();
+        o.type = "square";
+        o.frequency.setValueAtTime(300 + Math.random() * 400, t);
+        o.frequency.exponentialRampToValueAtTime(70, t + 0.13);
+        og.gain.setValueAtTime(0.06, t);
+        og.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+        o.connect(og);
+        og.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.14);
+      } catch (e) { }
     }
   };
 
@@ -1481,6 +1729,8 @@
       typeIn.addEventListener("focus", () => signalBox.classList.add("focused"));
       typeIn.addEventListener("blur", () => signalBox.classList.remove("focused"));
     }
+    typeIn.addEventListener("focus", () => stopGhost(true));
+    typeIn.addEventListener("input", () => stopGhost(false));
   }
 
   const scare = $("#scare");
