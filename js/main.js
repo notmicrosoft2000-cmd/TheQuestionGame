@@ -307,6 +307,101 @@
     setTimeout(() => ghostEl.classList.remove("go"), 2600);
   }
 
+  const blipEl = document.createElement("div");
+  blipEl.id = "blip";
+  blipEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(blipEl);
+  let blipLock = false;
+  function monitorBlip() {
+    if (blipLock || document.hidden) return;
+    blipLock = true;
+    blipEl.classList.add("go");
+    setTimeout(() => blipEl.classList.remove("go"), 340);
+    setTimeout(() => { blipLock = false; }, 1900);
+  }
+
+  const ghostLineEl = document.createElement("div");
+  ghostLineEl.id = "ghostLine";
+  ghostLineEl.setAttribute("aria-hidden", "true");
+  document.body.appendChild(ghostLineEl);
+  const GHOST_LINES = [
+    "IT IS IN THE WALLS",
+    "THE FILE OPENED ITSELF",
+    "YOUR NAME WAS ALREADY HERE",
+    "THE SECOND HAND IS A HEARTBEAT",
+    "IT HAS BEEN WATCHING SINCE THE BOOT",
+    "THE QUESTION BEFORE THIS ONE WAS ABOUT YOU",
+    "YOU DID NOT CLOSE THE DOOR",
+    "THE LIGHT IN THE HALLWAY IS OUT NOW"
+  ];
+  let ghostLineLock = false;
+  function ghostLine() {
+    if (ghostLineLock || document.hidden) return;
+    ghostLineLock = true;
+    const text = GHOST_LINES[Math.floor(Math.random() * GHOST_LINES.length)];
+    const w = window.innerWidth, h = window.innerHeight;
+    ghostLineEl.textContent = "";
+    ghostLineEl.style.left = rand(4, Math.max(10, w - Math.min(420, w * 0.7))).toFixed(0) + "px";
+    ghostLineEl.style.top = rand(8, Math.max(12, h - 60)).toFixed(0) + "px";
+    ghostLineEl.classList.add("go");
+    typeNode(ghostLineEl, text, 18).then(() => {
+      setTimeout(() => {
+        ghostLineEl.classList.remove("go");
+        setTimeout(() => { ghostLineLock = false; }, 500);
+      }, 1500);
+    });
+  }
+
+  function recGlitch() {
+    if (!recTime || document.hidden) return;
+    const saved = recTime.textContent;
+    const bad = ["99:99:99", "00:00:00", "STOP", "19:94:??", "00:00:13", "00:13:00", "??:??:??"];
+    recTime.textContent = bad[Math.floor(Math.random() * bad.length)];
+    recTime.classList.add("rec-bad");
+    setTimeout(() => {
+      recTime.textContent = saved;
+      recTime.classList.remove("rec-bad");
+    }, 1900);
+  }
+
+  const SCRAMBLE_CHARS = "▓▒░#@%&?/\\!§$";
+  let scrambleLock = false;
+  function titleScramble() {
+    if (scrambleLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const pool = $$("h1.glitch");
+    if (!pool.length) return;
+    scrambleLock = true;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    const saved = el.textContent;
+    let frames = 0;
+    const iv = setInterval(() => {
+      frames++;
+      el.textContent = saved.split("").map((c, i) =>
+        i < frames ? c : SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]
+      ).join("");
+      if (frames > saved.length + 4) {
+        clearInterval(iv);
+        el.textContent = saved;
+        setTimeout(() => { scrambleLock = false; }, 400);
+      }
+    }, 38);
+  }
+
+  const EERIE_TOASTS = [
+    "IT NOTICED YOU STOPPED READING",
+    "SOMETHING MOVED BEHIND THE TEXT",
+    "IT COUNTED YOUR BLINKS",
+    "THE SESSION ARCHIVE JUST GREW",
+    "IT KNOWS YOU ARE ON THIS PAGE",
+    "DON'T LET THE SCREEN GO DARK",
+    "YOUR EARLIER ANSWERS HAVE BEEN SORTED",
+    "IT REMEMBERS WHEN YOU LEFT LAST TIME"
+  ];
+  function fakeToast() {
+    if (document.hidden) return;
+    showToast(EERIE_TOASTS[Math.floor(Math.random() * EERIE_TOASTS.length)], Math.random() < 0.4);
+  }
+
   let deviceTimer = null;
   function detectPlatform() {
     const ua = navigator.userAgent || "";
@@ -401,6 +496,30 @@
     setTimeout(() => {
       if (!document.hidden) deviceComment();
     }, 4500);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.04) monitorBlip();
+    }, 15000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.08) recGlitch();
+    }, 12000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.1) ghostLine();
+    }, 9000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.1) fakeToast();
+    }, 11000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.06) titleScramble();
+    }, 18000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.08) sfx.drone();
+    }, 20000);
   }
 
   const noiseCnv = $("#noise");
@@ -528,6 +647,9 @@
     requestAnimationFrame(frameSway);
   }
   if (!reduceMotion) requestAnimationFrame(frameSway);
+
+  const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints || 0) > 0;
+  if (isTouch) document.body.classList.add("touch-device");
 
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
@@ -1246,6 +1368,25 @@
         low.start(t);
         low.stop(t + 0.9);
       } catch (e) { }
+    },
+    drone() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(120 + Math.random() * 70, t);
+        o.frequency.exponentialRampToValueAtTime(45, t + 1.4);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.05, t + 0.15);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 1.6);
+      } catch (e) { }
     }
   };
 
@@ -1335,6 +1476,11 @@
         sendSignal();
       }
     });
+    const signalBox = typeIn.closest(".signal-box");
+    if (signalBox) {
+      typeIn.addEventListener("focus", () => signalBox.classList.add("focused"));
+      typeIn.addEventListener("blur", () => signalBox.classList.remove("focused"));
+    }
   }
 
   const scare = $("#scare");
@@ -1409,6 +1555,43 @@
     "lie": "LYING IS NOTED. IT ALWAYS IS.",
     "game": "THE GAME REMEMBERS. DO YOU?"
   };
+
+  function triggerEasterEgg(word) {
+    const w = String(word).toLowerCase();
+    if (w === "hello") {
+      if (typeIn) typeIn.value = "";
+      jumpscare();
+      return;
+    }
+    if (w === "smile") {
+      if (typeIn) typeIn.value = "";
+      gifScare();
+      return;
+    }
+    if (w === "2013") {
+      unlockLogs();
+      return;
+    }
+    if (PHRASES[w]) {
+      showToast(PHRASES[w], w === "exit" || w === "lie");
+      return;
+    }
+  }
+
+  const QUICK_SIGNALS = ["hello", "smile", "2013", "who are you", "are you there", "exit", "help", "truth", "lie", "game"];
+  const signalKeys = $("#signalKeys");
+  if (signalKeys) {
+    QUICK_SIGNALS.forEach((w) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "signal-key";
+      b.textContent = w.toUpperCase();
+      b.setAttribute("aria-label", "Send signal: " + w);
+      b.addEventListener("click", () => triggerEasterEgg(w));
+      signalKeys.appendChild(b);
+    });
+  }
+
   let keyBuf = "";
   let keyTimer = null;
 

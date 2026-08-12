@@ -234,6 +234,43 @@ body.gif-shake .nav{animation:chaos-jump .12s steps(2) infinite}
 }
 #whisper.go{opacity:1}
 
+#ghostLine{
+  position:fixed;z-index:9964;pointer-events:none;
+  font-family:var(--vt);font-size:clamp(1rem,2vw,1.4rem);letter-spacing:.16em;
+  color:rgba(220,220,220,.5);text-shadow:0 0 14px rgba(0,220,0,.25);
+  opacity:0;transition:opacity .4s ease;max-width:70vw;
+}
+#ghostLine.go{opacity:1}
+.rec-bad{color:var(--red)!important;text-shadow:var(--glow-red)}
+
+#blip{
+  position:fixed;inset:0;z-index:9997;pointer-events:none;
+  background:#000;opacity:0;
+}
+#blip::after{
+  content:"";position:absolute;left:0;right:0;top:46%;
+  height:3px;background:rgba(255,255,255,.6);opacity:0;
+  box-shadow:0 0 30px 6px rgba(255,255,255,.35);
+}
+#blip.go{animation:blip .5s steps(7)}
+@keyframes blip{
+  0%{opacity:0}
+  8%{opacity:1}
+  26%{opacity:.05}
+  34%{opacity:.9}
+  52%{opacity:.12}
+  62%{opacity:1}
+  86%{opacity:.2}
+  100%{opacity:0}
+}
+#blip.go::after{animation:blip-line .5s steps(7)}
+@keyframes blip-line{
+  0%{opacity:0;transform:translateY(-30vh)}
+  30%{opacity:1}
+  70%{opacity:.8}
+  100%{opacity:0;transform:translateY(30vh)}
+}
+
 body.page-glitch main,
 body.page-glitch .hud,
 body.page-glitch .nav,
@@ -570,6 +607,16 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
 }
 .signal-send:hover{background:rgba(0,220,0,.1);box-shadow:var(--glow-green)}
 .signal-send:disabled{color:#3a3a3a;border-color:var(--line-bright);pointer-events:none}
+.signal-keys{display:none;flex-wrap:wrap;gap:.5rem;margin-top:.9rem}
+body.touch-device .signal-keys,
+.signal-box.focused .signal-keys{display:flex}
+.signal-key{
+  font-family:var(--vt);font-size:1.05rem;letter-spacing:.1em;
+  color:var(--dim);background:#000;border:1px solid var(--line-bright);
+  padding:.25rem .8rem;transition:all .2s;touch-action:manipulation;
+}
+.signal-key:hover,.signal-key:active{color:var(--green);border-color:var(--green);text-shadow:var(--glow-green);box-shadow:var(--glow-green)}
+.signal-key:active{transform:translateY(1px)}
 .ai-log{margin-top:.9rem;display:flex;flex-direction:column;gap:.75rem;max-height:320px;overflow-y:auto}
 .ai-line{font-family:var(--vt);font-size:1.15rem;line-height:1.6;word-break:break-word}
 .ai-you{color:#b8b8b8}
