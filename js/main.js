@@ -2077,7 +2077,16 @@
     termBusy = false;
 
     setTimeout(() => {
-      if (!document.hidden && !bfStarted) bfStart();
+      if (bfStarted) return;
+      if (document.hidden) {
+        const onVis = () => {
+          window.removeEventListener("visibilitychange", onVis);
+          if (!bfStarted) bfStart();
+        };
+        window.addEventListener("visibilitychange", onVis);
+        return;
+      }
+      bfStart();
     }, 900);
   }
 
@@ -2992,7 +3001,8 @@
       s.style.top = "0px";
     }
     bfSpikesEl.appendChild(s);
-    BF.spikes[which].push({ x, h, w: w || 14, el: s });
+    const spikeKey = which === "c" ? "ceil" : "floor";
+    BF.spikes[spikeKey].push({ x, h, w: w || 14, el: s });
   }
   function bfAddSpikeCluster(which, cx, h, width, n) {
     const spread = width / (n + 1);
@@ -3223,6 +3233,7 @@
     BF.won = false;
     BF.tLeft = 30;
     BF.acc = 0;
+    bfStarted = false;
     BF.piston.y = 0;
     bfPistonEl.style.transform = "translate(0px,0px)";
   }
@@ -3240,7 +3251,6 @@
     BF.acc = 0;
     BF.badge.taken = false;
     BF.keys.left = BF.keys.right = BF.keys.crouch = BF.keys.jump = false;
-    bfStarted = false;
     bfTimerEl.textContent = "30";
     bfEl.classList.add("go");
     document.body.classList.add("modal-open");
@@ -3282,6 +3292,13 @@
   if (bfLeftBtn) bfBindBtn(bfLeftBtn, "left");
   if (bfRightBtn) bfBindBtn(bfRightBtn, "right");
   if (bfCrouchBtn) bfBindBtn(bfCrouchBtn, "crouch");
+
+  const stageBtnEl = $("#stageBtn");
+  if (stageBtnEl) {
+    stageBtnEl.addEventListener("click", () => {
+      if (!BF.active) bfStart();
+    });
+  }
 
   if (bfArena) {
     let bfSwipe = { x: 0, y: 0, on: false };

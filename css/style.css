@@ -760,6 +760,16 @@ body.touch-device .signal-keys,
 .term-prompt{display:inline-flex;gap:.5rem;align-items:center;font-family:var(--vt);font-size:1.25rem;color:var(--green)}
 .term-prompt .block{width:.6em;height:1.15em;background:var(--green);animation:blink 1s steps(1) infinite}
 
+.stage-launch{margin-top:1.6rem;display:flex;flex-direction:column;align-items:flex-start;gap:.5rem}
+.stage-btn{
+  font-family:var(--vt);font-size:1.4rem;letter-spacing:.08em;
+  border:1px solid var(--red);color:var(--red);background:transparent;
+  padding:.5rem 1.5rem;cursor:pointer;transition:all .18s;position:relative;
+}
+.stage-btn:hover{border-color:var(--red);background:rgba(255,31,31,.12);box-shadow:0 0 14px rgba(255,31,31,.45)}
+.stage-btn:hover::before{content:">";position:absolute;left:-1.2rem;top:50%;transform:translateY(-50%);color:var(--red)}
+.stage-hint{font-size:.95rem;color:var(--dim);letter-spacing:.03em}
+
 /* ---------- Evidence ---------- */
 .gallery{display:grid;grid-template-columns:1fr 1fr;gap:1.6rem}
 .shot{
