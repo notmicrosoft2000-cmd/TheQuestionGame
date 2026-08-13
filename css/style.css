@@ -107,6 +107,13 @@ button{font-family:inherit}
 .flash.go{animation:redflash .18s ease-out}
 @keyframes redflash{0%{opacity:1}100%{opacity:0}}
 
+.blink-flash{
+  position:fixed;inset:0;z-index:9990;background:#000;
+  opacity:0;pointer-events:none;
+}
+.blink-flash.go{animation:eyeblink .18s ease-out}
+@keyframes eyeblink{0%{opacity:0}25%{opacity:.9}55%{opacity:.9}100%{opacity:0}}
+
 .scare{
   position:fixed;inset:0;z-index:9996;
   display:none;align-items:center;justify-content:center;

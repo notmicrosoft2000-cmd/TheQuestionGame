@@ -803,6 +803,155 @@
     if (Math.random() < 0.35) counterDrift();
   }, 18000);
 
+  const blinkFlash = $(".blink-flash");
+  function blinkPulse() {
+    if (!blinkFlash) return;
+    blinkFlash.classList.remove("go");
+    void blinkFlash.offsetWidth;
+    blinkFlash.classList.add("go");
+    setTimeout(() => blinkFlash.classList.remove("go"), 200);
+  }
+
+  let blinkOn = false;
+  function blinkApply() {
+    const heroH1 = $$(".hero h1.glitch")[0];
+    const sessionCode = $("#sessions .session .session-code");
+    const sessionName = $("#sessions .session .session-name");
+    const quoteBy = $$(".quote-by")[0];
+    const hudVer = $(".hud-bl");
+    const r = Math.random();
+    if (heroH1 && r < 0.3) {
+      heroH1.setAttribute("data-blink", heroH1.textContent);
+      heroH1.setAttribute("data-blink-text", heroH1.getAttribute("data-text"));
+      heroH1.textContent = "THE ANSWER";
+      heroH1.setAttribute("data-text", "THE ANSWER");
+    } else if (sessionCode && r < 0.5) {
+      sessionCode.setAttribute("data-blink", sessionCode.textContent);
+      sessionCode.textContent = "SESSION 00";
+    } else if (sessionName && r < 0.7) {
+      sessionName.setAttribute("data-blink", sessionName.textContent);
+      sessionName.textContent = "A QUIET END";
+    } else if (quoteBy && r < 0.85) {
+      quoteBy.setAttribute("data-blink", quoteBy.textContent);
+      quoteBy.textContent = "— SESSION LOG 999 · SUBJECT \"K\"";
+    } else if (hudVer) {
+      hudVer.setAttribute("data-blink", hudVer.textContent);
+      hudVer.textContent = "v2.05";
+    }
+  }
+  function blinkRevert() {
+    $$("[data-blink]").forEach((el) => {
+      el.textContent = el.getAttribute("data-blink");
+      if (el.hasAttribute("data-blink-text")) {
+        el.setAttribute("data-text", el.getAttribute("data-blink-text"));
+        el.removeAttribute("data-blink-text");
+      }
+      el.removeAttribute("data-blink");
+    });
+  }
+  function blink() {
+    blinkPulse();
+    blinkOn = !blinkOn;
+    if (blinkOn) blinkApply();
+    else blinkRevert();
+  }
+
+  const FLICKER_SEL = ".section-title, .session-name, .session-login, .hero-sub, .about-copy p, .quote-text, .stat-label, .platform-desc, .nav-link, .concern-title";
+  const flickering = new Set();
+  function charFlicker() {
+    const pool = $$(FLICKER_SEL).filter((el) => el.children.length === 0 && el.textContent.trim() && !flickering.has(el));
+    if (!pool.length) return;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    const txt = el.textContent;
+    const idx = Math.floor(Math.random() * txt.length);
+    if (!txt[idx] || txt[idx].trim() === "") return;
+    const orig = txt[idx];
+    const glyph = ["▚", "▒", "×", "8", "?", "#", "0"][Math.floor(Math.random() * 7)];
+    flickering.add(el);
+    el.textContent = txt.slice(0, idx) + glyph + txt.slice(idx + 1);
+    setTimeout(() => {
+      el.textContent = txt;
+      flickering.delete(el);
+    }, 130);
+  }
+
+  function scrollShudder() {
+    const d = Math.random() < 0.5 ? 1 : -1;
+    window.scrollBy(0, d);
+    setTimeout(() => window.scrollBy(0, -d), 90);
+  }
+
+  const LABEL_SWAPS = [
+    ["QUESTIONS TO ANSWER", "QUESTIONS ANSWERED"],
+    ["SKIP BUTTONS", "SKIP BUTTON"],
+    ["IT WATCHES YOU PLAY", "IT WATCHED YOU PLAY"]
+  ];
+  function statLabelJitter() {
+    const labels = $$(".stat-label");
+    if (!labels.length) return;
+    const el = labels[Math.floor(Math.random() * labels.length)];
+    const orig = el.textContent;
+    const pair = LABEL_SWAPS.find((p) => p[0] === orig);
+    if (!pair) return;
+    el.textContent = pair[1];
+    setTimeout(() => { el.textContent = orig; }, 800);
+  }
+
+  function cardShift() {
+    const pool = $$(".session, .release, .stat, .platform-card, .quote").filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && !el.dataset.shift;
+    });
+    if (!pool.length) return;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    el.dataset.shift = "1";
+    el.style.transition = "transform .12s ease";
+    el.style.transform = "translate(" + (Math.random() < 0.5 ? -2 : 2) + "px," + (Math.random() < 0.5 ? -1 : 1) + "px)";
+    setTimeout(() => {
+      el.style.transform = "";
+      setTimeout(() => { el.style.transition = ""; delete el.dataset.shift; }, 140);
+    }, 120);
+  }
+
+  function sigCrack() {
+    const sig = $("#sigStatus");
+    if (!sig || sig.dataset.crack) return;
+    const orig = sig.textContent;
+    sig.dataset.crack = "1";
+    sig.textContent = orig + "…";
+    sig.style.opacity = "0.7";
+    setTimeout(() => {
+      sig.textContent = orig;
+      sig.style.opacity = "";
+      delete sig.dataset.crack;
+    }, 500);
+  }
+
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.02) blink();
+  }, 10000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.05) charFlicker();
+  }, 2500);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.06) scrollShudder();
+  }, 6000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.04) statLabelJitter();
+  }, 5000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.04) cardShift();
+  }, 8000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.05) sigCrack();
+  }, 4000);
+
   const noiseCnv = $("#noise");
   let noiseCtx = null;
   function initNoise() {
