@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=25">
+  <link rel="stylesheet" href="css/style.css?v=26">
 </head>
 <body>
 
@@ -796,7 +796,32 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=25"></script>
-  <script src="js/main.js?v=25"></script>
+  <div class="bossfight" id="bossfight" aria-hidden="true">
+    <div class="bf-face" id="bfFace" aria-hidden="true">
+      <div class="face">
+        <div class="face-eyes"><span></span><span></span></div>
+        <div class="face-mouth"></div>
+        <div class="face-text">STAGE 1/8 — SURVIVE</div>
+      </div>
+    </div>
+    <div class="bf-timer" id="bfTimer" aria-hidden="true">30</div>
+    <div class="bf-arena" id="bfArena">
+      <div class="bf-piston" id="bfPiston"><div class="bf-teeth" id="bfTeeth"></div></div>
+      <div class="bf-spikes" id="bfSpikes"></div>
+      <div class="bf-player" id="bfPlayer"></div>
+      <div class="bf-badge" id="bfBadge" aria-hidden="true">1/8</div>
+    </div>
+    <div class="bf-touch" id="bfTouch" aria-hidden="true">
+      <button class="bf-btn bf-left" id="bfLeft" type="button" aria-label="Move left">◀ MOVE</button>
+      <button class="bf-btn bf-crouch" id="bfCrouch" type="button" aria-label="Crouch">CROUCH</button>
+      <button class="bf-btn bf-right" id="bfRight" type="button" aria-label="Move right">MOVE ▶</button>
+    </div>
+    <div class="bf-flash" id="bfFlash" aria-hidden="true"></div>
+    <div class="bf-msg" id="bfMsg" aria-hidden="true"></div>
+  </div>
+  <audio id="bfAudio" src="bossfight.mp3" loop preload="auto"></audio>
+
+  <script src="js/config.js?v=26"></script>
+  <script src="js/main.js?v=26"></script>
 </body>
 </html>

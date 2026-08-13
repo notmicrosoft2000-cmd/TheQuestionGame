@@ -1301,3 +1301,92 @@ body.no-cursor,body.no-cursor *{cursor:none !important}
 body.lights-out main{filter:brightness(.55) saturate(.7)}
 body.lights-out .crt-glare{opacity:.55;animation:none}
 body.lights-out .blink{animation:blink 1s steps(1) infinite}
+
+/* ---------- Bossfight stage 1/8 ---------- */
+.bossfight{
+  position:fixed;inset:0;z-index:9992;background:#000;overflow:hidden;
+  display:none;font-family:var(--vt);
+}
+.bossfight.go{display:block}
+.bossfight .bf-arena{position:absolute;inset:0}
+.bossfight .bf-face{
+  position:absolute;top:0;left:0;right:0;z-index:3;
+  display:flex;justify-content:center;align-items:flex-start;padding-top:4px;
+  pointer-events:none;transition:opacity .6s ease;
+  transform:scale(.55);transform-origin:top center;
+}
+.bossfight .bf-face .face-text{font-size:clamp(.8rem,1.8vw,1.3rem)}
+.bossfight .bf-face.gone{opacity:0}
+.bossfight .bf-timer{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:4;
+  color:#fff;font-size:clamp(2.6rem,7vw,4.2rem);letter-spacing:.14em;
+  text-shadow:0 0 26px rgba(255,255,255,.75);pointer-events:none;
+}
+.bossfight .bf-timer.warn{color:#ff3b3b;text-shadow:0 0 26px rgba(255,0,0,.9)}
+.bossfight .bf-piston{
+  position:absolute;z-index:2;background:#26262c;border:2px solid #8a8a92;
+  box-shadow:0 0 26px rgba(255,255,255,.12);will-change:transform;
+}
+.bossfight .bf-teeth{position:absolute;left:0;right:0;bottom:-18px;height:18px;pointer-events:none}
+.bossfight .bf-tooth{position:absolute;bottom:0;width:0;height:0;pointer-events:none;
+  border-left:9px solid transparent;border-right:9px solid transparent;
+  border-top:18px solid #e8e8ee;filter:drop-shadow(0 2px 4px rgba(255,255,255,.35))}
+.bossfight .bf-spike{position:absolute;width:0;height:0;pointer-events:none}
+.bossfight .bf-spike.f{border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:32px solid #fff;filter:drop-shadow(0 0 7px rgba(255,255,255,.5))}
+.bossfight .bf-spike.c{border-left:14px solid transparent;border-right:14px solid transparent;border-top:150px solid #fff;filter:drop-shadow(0 0 7px rgba(255,255,255,.5))}
+.bossfight .bf-player{
+  position:absolute;z-index:5;width:26px;height:36px;
+  background:linear-gradient(180deg,#f2f2f8,#b3b3bf);
+  box-shadow:0 0 16px rgba(255,255,255,.6),inset 0 -6px 0 rgba(0,0,0,.3);
+  will-change:transform;border-radius:3px;
+}
+.bossfight .bf-player.crouch{height:16px;background:linear-gradient(180deg,#f2f2f8,#9a9aa6);box-shadow:0 0 16px rgba(255,255,255,.6)}
+.bossfight .bf-player.invuln{animation:bf-blink .22s steps(2) infinite}
+@keyframes bf-blink{50%{opacity:.2}}
+.bossfight .bf-badge{
+  position:absolute;z-index:5;width:46px;height:46px;border-radius:50%;
+  background:radial-gradient(circle at 50% 35%,#fff,#c9c9d4);
+  color:#000;display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:700;letter-spacing:.05em;
+  box-shadow:0 0 30px rgba(255,255,255,.95);opacity:0;pointer-events:none;
+}
+.bossfight .bf-badge.show{opacity:1;animation:bf-badge-pulse .8s ease-in-out infinite}
+@keyframes bf-badge-pulse{50%{transform:scale(1.18);box-shadow:0 0 46px #fff}}
+.bossfight .bf-touch{
+  position:absolute;left:0;right:0;bottom:0;z-index:6;
+  display:none;justify-content:space-between;align-items:flex-end;
+  padding:0 18px 14px;pointer-events:none;
+}
+body.touch-device .bossfight .bf-touch{display:flex}
+.bossfight .bf-btn{
+  pointer-events:auto;font-family:var(--vt);color:#fff;font-size:1.05rem;
+  background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.5);
+  padding:16px 26px;letter-spacing:.12em;border-radius:8px;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  box-shadow:0 0 16px rgba(255,255,255,.12);
+}
+.bossfight .bf-btn:active,.bossfight .bf-btn.press{background:rgba(255,255,255,.26)}
+.bossfight .bf-crouch{font-size:.9rem;padding:16px 18px}
+.bossfight .bf-flash{position:absolute;inset:0;z-index:7;background:rgba(255,0,0,.55);opacity:0;pointer-events:none}
+.bossfight .bf-flash.go{animation:redflash .3s ease-out}
+.bossfight .bf-msg{
+  position:absolute;left:0;right:0;top:30%;text-align:center;z-index:8;
+  color:#fff;font-size:clamp(1.2rem,4vw,2.4rem);letter-spacing:.22em;
+  text-shadow:0 0 26px rgba(255,255,255,.85);opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.bossfight .bf-msg.show{opacity:1}
+
+.bossfight .bf-arena.bf-shake{animation:bf-arena-shake .26s linear}
+@keyframes bf-arena-shake{
+  0%,100%{transform:translate(0,0)}
+  25%{transform:translate(-7px,4px)}
+  50%{transform:translate(6px,-6px)}
+  75%{transform:translate(-4px,3px)}
+}
+
+@keyframes face-in{
+  0%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(2px,-2px) scale(1.02)}
+  100%{transform:translate(-2px,1px) scale(.99)}
+}
+.bossfight .bf-face .face{animation:face-in .09s steps(2) infinite}

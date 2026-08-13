@@ -37,6 +37,8 @@
     };
   })();
 
+  let GAME_OVERLAY = false;
+
   function typeNode(el, text, speed, onChar) {
     return new Promise((res) => {
       let i = 0;
@@ -440,7 +442,7 @@
     "IT REMEMBERS WHEN YOU LEFT LAST TIME"
   ];
   function fakeToast() {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     showToast(EERIE_TOASTS[Math.floor(Math.random() * EERIE_TOASTS.length)], Math.random() < 0.4);
   }
 
@@ -757,7 +759,7 @@
     if (document.hidden || !mockPop || mockTimer) return;
     mockTimer = setTimeout(() => {
       mockTimer = null;
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.4) showMockQuestion();
       else showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
     }, 700);
@@ -893,102 +895,102 @@
 
   function startJumpscares() {
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.02) darkChaos();
     }, 3000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.01) flashEyes();
     }, 1000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.001) gifScare();
     }, 10000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.03) pageGlitch();
     }, 8000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.12) whisper();
     }, 6000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.3) corruptSignal();
     }, 7000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.08) bgWash();
     }, 6000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.04) bgBars();
     }, 9000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.03) bgRoll();
     }, 12000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.1) bgGhost();
     }, 8000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.5) deviceComment();
     }, 45000);
     setTimeout(() => {
       if (!document.hidden) deviceComment();
     }, 4500);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.09) monitorBlip();
     }, 15000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.14) recGlitch();
     }, 12000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.2) ghostLine();
     }, 9000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.2) fakeToast();
     }, 11000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.12) titleScramble();
     }, 18000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.08) sfx.drone();
     }, 20000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.3) elementDetach();
     }, 7000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.08) headingTakeover();
     }, 14000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.07) reverseRead();
     }, 16000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.06) titleShadow();
     }, 15000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.12) typingGhost();
     }, 13000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.1) mockMachine();
     }, 10000);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.08) screenDip();
     }, 9000);
   }
@@ -1046,13 +1048,13 @@
     "IT COUNTED THAT. AND THE ONES BEFORE."
   ];
   document.addEventListener("click", (e) => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (e.target.closest("a, button, input, textarea, select, .modal-overlay, .mock-pop")) return;
     if (Math.random() < 0.12) showWhisperText(CLICK_WHISPERS[Math.floor(Math.random() * CLICK_WHISPERS.length)]);
   });
 
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.35) counterDrift();
   }, 18000);
 
@@ -1237,27 +1239,27 @@
   }
 
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.02) blink();
   }, 10000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.08) charFlicker();
   }, 2500);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.06) scrollShudder();
   }, 6000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.07) statLabelJitter();
   }, 5000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.07) cardShift();
   }, 8000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.08) sigCrack();
   }, 4000);
 
@@ -1292,19 +1294,19 @@
   }
 
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.08) fontSwap();
   }, 5000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.08) tabTitleShift();
   }, 9000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.1) barFlip();
   }, 7000);
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.1) bgHue();
   }, 6000);
 
@@ -1357,7 +1359,7 @@
     }, 1600);
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.35) navGhost();
   }, 30000);
 
@@ -1400,7 +1402,7 @@
     requestAnimationFrame(frame);
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.3) dvdScreensaver();
   }, 30000);
 
@@ -1434,7 +1436,7 @@
     }
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.03) strobeBurst();
   }, 25000);
 
@@ -1454,7 +1456,7 @@
     }, 620);
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.14) cardEvaporate();
   }, 12000);
 
@@ -1522,7 +1524,7 @@
     }, 1300);
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.15) staticTakeover();
   }, 30000);
 
@@ -1566,7 +1568,7 @@
     }, 2000);
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.12) cursorTheft();
   }, 45000);
 
@@ -1751,7 +1753,7 @@
       setTimeout(() => { cursorEcho.style.boxShadow = ""; }, 180);
     }, 700);
     setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || GAME_OVERLAY) return;
       if (Math.random() < 0.2) cursorTrail();
     }, 5000);
   }
@@ -1864,6 +1866,7 @@
     "6": "quotes", "7": "concerns", "8": "transmission", "9": "preview", "0": "download"
   };
   document.addEventListener("keydown", (e) => {
+    if (GAME_OVERLAY) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (document.body.classList.contains("no-scroll")) return;
     if (resolveOpt) return;
@@ -2073,6 +2076,10 @@
     termOptions.appendChild(again);
     termOptions.appendChild(toDownload);
     termBusy = false;
+
+    setTimeout(() => {
+      if (!document.hidden && !bfStarted) bfStart();
+    }, 900);
   }
 
   if (term) {
@@ -2418,7 +2425,7 @@
     });
   }
   setInterval(() => {
-    if (document.hidden) return;
+    if (document.hidden || GAME_OVERLAY) return;
     if (Math.random() < 0.45) secretTab();
   }, 14000);
 
@@ -2594,8 +2601,74 @@
         g.gain.setValueAtTime(0.16, t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         src.connect(g);
-        g.connect(ctx.destination);
+         g.connect(ctx.destination);
         src.start(t);
+      } catch (e) { }
+    },
+    slam() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const master = ctx.createGain();
+        master.gain.setValueAtTime(0.0001, t);
+        master.gain.exponentialRampToValueAtTime(0.9, t + 0.02);
+        master.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        master.connect(ctx.destination);
+        const o1 = ctx.createOscillator();
+        o1.type = "square";
+        o1.frequency.setValueAtTime(110, t);
+        o1.frequency.exponentialRampToValueAtTime(36, t + 0.28);
+        o1.connect(master);
+        const o2 = ctx.createOscillator();
+        o2.type = "sawtooth";
+        o2.frequency.setValueAtTime(88, t);
+        o2.frequency.exponentialRampToValueAtTime(28, t + 0.3);
+        const g2 = ctx.createGain();
+        g2.gain.value = 0.5;
+        o2.connect(g2);
+        g2.connect(master);
+        const len = Math.floor(ctx.sampleRate * 0.28);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const nf = ctx.createBiquadFilter();
+        nf.type = "lowpass";
+        nf.frequency.value = 300;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.6, t);
+        ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+        src.connect(nf);
+        nf.connect(ng);
+        ng.connect(master);
+        o1.start(t);
+        o2.start(t);
+        src.start(t);
+        o1.stop(t + 0.32);
+        o2.stop(t + 0.32);
+      } catch (e) { }
+    },
+    badge() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        [523, 659, 784].forEach((f, i) => {
+          const o = ctx.createOscillator();
+          o.type = "square";
+          o.frequency.value = f;
+          const g = ctx.createGain();
+          const s = t + i * 0.12;
+          g.gain.setValueAtTime(0.0001, s);
+          g.gain.exponentialRampToValueAtTime(0.15, s + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, s + 0.3);
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.start(s);
+          o.stop(s + 0.32);
+        });
       } catch (e) { }
     }
   };
@@ -2851,6 +2924,7 @@
   }
 
   document.addEventListener("keydown", (e) => {
+    if (GAME_OVERLAY) return;
     const tag = (e.target.tagName || "").toLowerCase();
     const inSignal = typeIn && e.target === typeIn;
     if (!inSignal && (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable)) return;
@@ -2864,6 +2938,370 @@
       handleTypeKey(e, e.key);
     }
   });
+
+  // ---------- BOSSFIGHT STAGE 1/8 ----------
+  const bfEl = $("#bossfight");
+  const bfArena = $("#bfArena");
+  const bfPlayerEl = $("#bfPlayer");
+  const bfPistonEl = $("#bfPiston");
+  const bfTeethEl = $("#bfTeeth");
+  const bfSpikesEl = $("#bfSpikes");
+  const bfTimerEl = $("#bfTimer");
+  const bfFaceEl = $("#bfFace");
+  const bfBadgeEl = $("#bfBadge");
+  const bfFlashEl = $("#bfFlash");
+  const bfMsgEl = $("#bfMsg");
+  const bfAudioEl = $("#bfAudio");
+  const bfLeftBtn = $("#bfLeft");
+  const bfRightBtn = $("#bfRight");
+  const bfCrouchBtn = $("#bfCrouch");
+
+  const BF = {
+    active: false, won: false, over: false,
+    W: 0, H: 0, floorY: 0,
+    tLeft: 30, last: 0, acc: 0, raf: 0,
+    pw: 26, phStand: 36, phCrouch: 16,
+    px: 0, py: 0, vy: 0, crouch: false, grounded: true, invuln: 0, jumpHeld: false,
+    keys: { left: false, right: false, crouch: false, jump: false },
+    piston: { x: 0, y: 0, w: 0, h: 62, dir: 1, minX: 0, maxX: 0, speed: 0,
+              slamTimer: 0, slamInterval: 2.6, slamPhase: 0, slamming: false, slammed: false },
+    spikes: { floor: [], ceil: [] },
+    badge: { x: 0, y: 0, taken: false }
+  };
+  let bfStarted = false;
+  const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+  function bfClearSpikes() {
+    bfSpikesEl.innerHTML = "";
+    BF.spikes.floor = [];
+    BF.spikes.ceil = [];
+  }
+  function bfAddSpike(which, x, h, w) {
+    const s = document.createElement("div");
+    s.className = "bf-spike " + which;
+    s.style.left = x + "px";
+    const hw = (w || 14) / 2;
+    if (which === "f") {
+      s.style.borderLeftWidth = hw + "px";
+      s.style.borderRightWidth = hw + "px";
+      s.style.borderBottomWidth = h + "px";
+      s.style.bottom = "0px";
+    } else {
+      s.style.borderLeftWidth = hw + "px";
+      s.style.borderRightWidth = hw + "px";
+      s.style.borderTopWidth = h + "px";
+      s.style.top = "0px";
+    }
+    bfSpikesEl.appendChild(s);
+    BF.spikes[which].push({ x, h, w: w || 14, el: s });
+  }
+  function bfAddSpikeCluster(which, cx, h, width, n) {
+    const spread = width / (n + 1);
+    for (let i = 0; i < n; i++) {
+      const x = cx - width / 2 + spread * (i + 1) - 14;
+      bfAddSpike(which, x, Math.round(h * (0.72 + 0.14 * (i % 3))), 20 + 8 * (i % 2));
+    }
+  }
+  function bfLayout() {
+    BF.W = window.innerWidth;
+    BF.H = window.innerHeight;
+    BF.floorY = BF.H - 86;
+    const pw = BF.piston;
+    pw.w = Math.max(180, Math.min(330, Math.round(BF.W * 0.34)));
+    pw.h = 62;
+    pw.minX = Math.round(BF.W * 0.33);
+    pw.maxX = BF.W - pw.w - Math.round(BF.W * 0.33);
+    if (pw.maxX < pw.minX) pw.maxX = pw.minX;
+    pw.speed = BF.W * 0.22;
+    if (pw.x < pw.minX) pw.x = pw.minX;
+    if (pw.x > pw.maxX) pw.x = pw.maxX;
+    bfPistonEl.style.width = pw.w + "px";
+    bfPistonEl.style.height = pw.h + "px";
+    bfTeethEl.innerHTML = "";
+    const teeth = Math.floor(pw.w / 18);
+    for (let i = 0; i < teeth; i++) {
+      const t = document.createElement("div");
+      t.className = "bf-tooth";
+      t.style.left = (i * 18 + 2) + "px";
+      bfTeethEl.appendChild(t);
+    }
+    bfClearSpikes();
+    [0.27, 0.5, 0.73].forEach((fx) => bfAddSpikeCluster("f", Math.round(BF.W * fx), 32, 90, 4));
+    [0.27, 0.73].forEach((fx) => bfAddSpikeCluster("c", Math.round(BF.W * fx), Math.max(90, BF.floorY - 170), 90, 4));
+  }
+
+  function bfResetPlayer(death) {
+    BF.px = 24;
+    BF.py = BF.floorY - BF.phStand;
+    BF.vy = 0;
+    BF.crouch = false;
+    BF.grounded = true;
+    BF.jumpHeld = false;
+    bfPlayerEl.classList.remove("crouch", "invuln");
+    if (death) {
+      BF.invuln = 1.4;
+      bfPlayerEl.classList.add("invuln");
+      bfFlashEl.classList.add("go");
+      setTimeout(() => bfFlashEl.classList.remove("go"), 320);
+    }
+  }
+  function bfDie() {
+    if (BF.invuln > 0 || BF.won || BF.over) return;
+    bfResetPlayer(true);
+    sfx.glitch();
+  }
+
+  function bfSlamImpact() {
+    if (document.hidden) return;
+    bfArena.classList.add("bf-shake");
+    setTimeout(() => bfArena.classList.remove("bf-shake"), 260);
+    sfx.slam();
+  }
+
+  function bfLoop(ts) {
+    if (!BF.active) return;
+    const dt = Math.min(0.05, (ts - BF.last) / 1000);
+    BF.last = ts;
+    if (BF.over) { BF.raf = requestAnimationFrame(bfLoop); return; }
+
+    if (!BF.won) {
+      BF.acc += dt;
+      if (BF.acc >= 1) {
+        const step = Math.floor(BF.acc);
+        BF.acc -= step;
+        BF.tLeft -= step;
+        if (BF.tLeft < 0) BF.tLeft = 0;
+        bfTimerEl.textContent = String(BF.tLeft);
+        bfTimerEl.classList.toggle("warn", BF.tLeft <= 5);
+        if (BF.tLeft === 0) { bfWin(); }
+      }
+    }
+
+    let move = 0;
+    if (BF.keys.left) move -= 1;
+    if (BF.keys.right) move += 1;
+    BF.crouch = BF.keys.crouch;
+    if (BF.keys.jump && BF.grounded && !BF.jumpHeld) {
+      BF.vy = -400;
+      BF.grounded = false;
+      BF.jumpHeld = true;
+      sfx.type();
+    }
+    if (!BF.keys.jump) BF.jumpHeld = false;
+
+    BF.px += move * 260 * dt;
+    BF.px = Math.max(0, Math.min(BF.W - BF.pw, BF.px));
+
+    let g = 900;
+    if (BF.jumpHeld && BF.vy < 0) g *= 0.6;
+    BF.vy += g * dt;
+    BF.py += BF.vy * dt;
+    const ph = BF.crouch ? BF.phCrouch : BF.phStand;
+    if (BF.py >= BF.floorY - ph) {
+      BF.py = BF.floorY - ph;
+      BF.vy = 0;
+      BF.grounded = true;
+    } else {
+      BF.grounded = false;
+    }
+    bfPlayerEl.classList.toggle("crouch", BF.crouch);
+
+    if (BF.invuln > 0) {
+      BF.invuln -= dt;
+      if (BF.invuln <= 0) bfPlayerEl.classList.remove("invuln");
+    }
+
+    const pw = BF.piston;
+    if (!BF.won) {
+      if (!pw.slamming) {
+        pw.x += pw.dir * pw.speed * dt;
+        if (pw.x <= pw.minX) { pw.x = pw.minX; pw.dir = 1; }
+        if (pw.x >= pw.maxX) { pw.x = pw.maxX; pw.dir = -1; }
+        pw.slamTimer += dt;
+        if (pw.slamTimer >= pw.slamInterval) {
+          pw.slamTimer = 0;
+          pw.slamming = true;
+          pw.slamPhase = 0;
+        }
+      } else {
+        pw.slamPhase += dt;
+        const p = pw.slamPhase;
+        if (p < 0.35) {
+          pw.y = easeInOut(Math.min(1, p / 0.35)) * (BF.floorY - 18 - pw.h);
+        } else if (p < 0.9) {
+          pw.y = BF.floorY - 18 - pw.h;
+          if (!pw.slammed) { pw.slammed = true; bfSlamImpact(); }
+        } else if (p < 1.5) {
+          pw.y = (1 - easeInOut(Math.min(1, (p - 0.9) / 0.6))) * (BF.floorY - 18 - pw.h);
+        } else {
+          pw.y = 0;
+          pw.slamming = false;
+          pw.slammed = false;
+        }
+      }
+    } else {
+      pw.y = 0;
+      pw.slamming = false;
+      pw.slammed = false;
+    }
+    bfPistonEl.style.transform = "translate(" + pw.x.toFixed(1) + "px," + pw.y.toFixed(1) + "px)";
+
+    if (!BF.won) {
+      const pistonBottom = pw.y + pw.h;
+      const playerTop = BF.py;
+      if (pistonBottom > playerTop &&
+          BF.px < pw.x + pw.w - 6 && BF.px + BF.pw > pw.x + 6) {
+        if (!BF.crouch) bfDie();
+      }
+      for (const s of BF.spikes.floor) {
+        if (BF.py + ph > BF.floorY - s.h &&
+            BF.px + BF.pw > s.x && BF.px < s.x + s.w) {
+          bfDie();
+        }
+      }
+      for (const s of BF.spikes.ceil) {
+        if (BF.py < s.h &&
+            BF.px + BF.pw > s.x && BF.px < s.x + s.w) {
+          bfDie();
+        }
+      }
+    }
+
+    if (BF.won && !BF.badge.taken) {
+      if (BF.badge.y < BF.floorY - 46) {
+        BF.badge.y += 700 * dt;
+        if (BF.badge.y >= BF.floorY - 46) BF.badge.y = BF.floorY - 46;
+        bfBadgeEl.style.top = BF.badge.y + "px";
+      } else if (BF.px < BF.badge.x + 46 && BF.px + BF.pw > BF.badge.x &&
+                 BF.py + ph >= BF.floorY - 50) {
+        BF.badge.taken = true;
+        bfCollectBadge();
+      }
+    }
+
+    BF.raf = requestAnimationFrame(bfLoop);
+  }
+
+  function bfWin() {
+    BF.won = true;
+    bfTimerEl.textContent = "0";
+    BF.badge.x = Math.max(0, Math.min(BF.W - 46, BF.px + BF.pw / 2 - 23));
+    BF.badge.y = 0;
+    bfBadgeEl.style.left = BF.badge.x + "px";
+    bfBadgeEl.style.top = "0px";
+    bfBadgeEl.classList.add("show");
+    bfMsgEl.textContent = "THE PISTON STILLS. TAKE IT.";
+    bfMsgEl.classList.add("show");
+  }
+
+  async function bfCollectBadge() {
+    bfBadgeEl.classList.remove("show");
+    bfMsgEl.textContent = "BADGE 1/8 COLLECTED.";
+    sfx.badge();
+    bfFaceEl.classList.add("gone");
+    if (bfAudioEl) bfAudioEl.pause();
+    try {
+      document.cookie = "tq_boss1=defeated; path=/; SameSite=Lax; max-age=31536000";
+    } catch (e) { }
+    await sleep(2600);
+    bfEnd();
+  }
+
+  function bfEnd() {
+    BF.active = false;
+    BF.over = true;
+    cancelAnimationFrame(BF.raf);
+    bfEl.classList.remove("go");
+    document.body.classList.remove("modal-open");
+    GAME_OVERLAY = false;
+    bfFaceEl.classList.remove("gone");
+    bfMsgEl.classList.remove("show");
+    bfMsgEl.textContent = "";
+    bfTimerEl.textContent = "30";
+    bfTimerEl.classList.remove("warn");
+    bfPlayerEl.classList.remove("crouch", "invuln");
+    bfBadgeEl.classList.remove("show");
+    BF.won = false;
+    BF.tLeft = 30;
+    BF.acc = 0;
+    BF.piston.y = 0;
+    bfPistonEl.style.transform = "translate(0px,0px)";
+  }
+
+  function bfStart() {
+    if (bfStarted || !bfEl || !bfArena) return;
+    bfStarted = true;
+    GAME_OVERLAY = true;
+    bfLayout();
+    bfResetPlayer(false);
+    BF.active = true;
+    BF.over = false;
+    BF.won = false;
+    BF.tLeft = 30;
+    BF.acc = 0;
+    BF.badge.taken = false;
+    BF.keys.left = BF.keys.right = BF.keys.crouch = BF.keys.jump = false;
+    bfStarted = false;
+    bfTimerEl.textContent = "30";
+    bfEl.classList.add("go");
+    document.body.classList.add("modal-open");
+    if (bfAudioEl) {
+      const p = bfAudioEl.play();
+      if (p && p.catch) p.catch(() => { });
+    }
+    BF.last = performance.now();
+    BF.raf = requestAnimationFrame(bfLoop);
+  }
+
+  function bfKeyDown(e) {
+    if (!BF.active || BF.over) return;
+    const k = e.key;
+    if (k === "ArrowLeft" || k === "a" || k === "A") BF.keys.left = true;
+    else if (k === "ArrowRight" || k === "d" || k === "D") BF.keys.right = true;
+    else if (k === "ArrowDown" || k === "s" || k === "S") BF.keys.crouch = true;
+    else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") BF.keys.jump = true;
+    if (k === " " || k.indexOf("Arrow") === 0) e.preventDefault();
+  }
+  function bfKeyUp(e) {
+    const k = e.key;
+    if (k === "ArrowLeft" || k === "a" || k === "A") BF.keys.left = false;
+    else if (k === "ArrowRight" || k === "d" || k === "D") BF.keys.right = false;
+    else if (k === "ArrowDown" || k === "s" || k === "S") BF.keys.crouch = false;
+    else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") BF.keys.jump = false;
+  }
+  window.addEventListener("keydown", bfKeyDown);
+  window.addEventListener("keyup", bfKeyUp);
+
+  function bfBindBtn(btn, key) {
+    const down = (e) => { e.preventDefault(); BF.keys[key] = true; btn.classList.add("press"); };
+    const up = (e) => { e.preventDefault(); BF.keys[key] = false; btn.classList.remove("press"); };
+    btn.addEventListener("pointerdown", down);
+    btn.addEventListener("pointerup", up);
+    btn.addEventListener("pointerleave", up);
+    btn.addEventListener("pointercancel", up);
+  }
+  if (bfLeftBtn) bfBindBtn(bfLeftBtn, "left");
+  if (bfRightBtn) bfBindBtn(bfRightBtn, "right");
+  if (bfCrouchBtn) bfBindBtn(bfCrouchBtn, "crouch");
+
+  if (bfArena) {
+    let bfSwipe = { x: 0, y: 0, on: false };
+    bfArena.addEventListener("touchstart", (e) => {
+      const t = e.changedTouches[0];
+      bfSwipe = { x: t.clientX, y: t.clientY, on: true };
+    }, { passive: true });
+    bfArena.addEventListener("touchend", (e) => {
+      if (!bfSwipe.on || !BF.active || BF.over) return;
+      const t = e.changedTouches[0];
+      const dy = bfSwipe.y - t.clientY;
+      const dx = t.clientX - bfSwipe.x;
+      bfSwipe.on = false;
+      if (dy > 46 && Math.abs(dy) > Math.abs(dx)) {
+        BF.keys.jump = true;
+        setTimeout(() => { BF.keys.jump = false; }, Math.min(240, 70 + dy * 1.2));
+      }
+    }, { passive: true });
+  }
 
   initNoise();
   initAsh();
