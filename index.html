@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=17">
+  <link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 
@@ -38,7 +38,7 @@
     <span class="rec-dot"></span> REC&nbsp;<span id="recTime">00:00:00</span>
   </div>
   <div class="hud hud-tr" aria-hidden="true">
-    SIGNAL: <span class="sig">STABLE</span>
+    SIGNAL: <span class="sig" id="sigStatus">STABLE</span>
   </div>
   <div class="hud hud-bl" aria-hidden="true">v2.04</div>
   <div class="hud hud-br" aria-hidden="true">NEPTUNE PRODUCTIONS [C]</div>
@@ -137,7 +137,7 @@
           <p class="about-quote">"Are you sitting comfortably?"</p>
         </div>
         <div class="stats reveal">
-          <div class="stat"><span class="stat-num">100+</span><span class="stat-label">QUESTIONS TO ANSWER</span></div>
+          <div class="stat"><span class="stat-num" id="qCounter">100+</span><span class="stat-label">QUESTIONS TO ANSWER</span></div>
           <div class="stat"><span class="stat-num">01</span><span class="stat-label">QUESTION AT A TIME</span></div>
           <div class="stat"><span class="stat-num">00</span><span class="stat-label">SKIP BUTTONS</span></div>
           <div class="stat"><span class="stat-num">∞</span><span class="stat-label">IT WATCHES YOU PLAY</span></div>
@@ -583,6 +583,15 @@
               <a class="platform-btn" id="dlLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
               <p class="platform-status" id="dlLinuxStatus">READY — DIRECT LINK</p>
             </div>
+            <div class="platform-card" id="androidCard">
+              <div class="platform-head">
+                <span class="platform-os">ANDROID</span>
+                <span class="tag tag-green hidden" id="androidDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Android 8+ (ARM64). An <b>APK</b> — unsigned, sideloaded, cold to the touch. Installs instantly. The device remembers.</p>
+              <a class="platform-btn" id="dlAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlAndroidStatus">READY — DIRECT LINK</p>
+            </div>
           </div>
 
           <div class="release-fallback hidden" id="releaseFallback">
@@ -645,6 +654,15 @@
               <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
               <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
               <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="remAndroidCard">
+              <div class="platform-head">
+                <span class="platform-os">ANDROID</span>
+                <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Android 8+ (ARM64). An <b>APK</b> — the remastered edition, shrunk down, carried inside you. It vibrates when no one is near.</p>
+              <a class="platform-btn" id="dlRemAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlRemAndroidStatus">READY — DIRECT LINK</p>
             </div>
           </div>
 
@@ -728,6 +746,7 @@
       <div class="guide-tabs" role="tablist">
         <button class="guide-tab" id="tabWin" type="button" role="tab" aria-selected="false">WINDOWS</button>
         <button class="guide-tab" id="tabMac" type="button" role="tab" aria-selected="false">MACOS</button>
+        <button class="guide-tab hidden secret-tab" id="tabSecret" type="button" role="tab" aria-selected="false">SECRET</button>
       </div>
       <div class="modal-body">
         <div class="guide-pane" id="guideWin">
@@ -747,6 +766,9 @@
             <li><b>Alternative:</b> open Terminal and run <code>xattr -cr /Applications/The&nbsp;Question&nbsp;Game.app</code>, then double-click to launch.</li>
             <li><b>That's it.</b> No installation. To uninstall, delete the app and <code>~/Library/Application Support/TheQuestionGame</code>.</li>
           </ol>
+        </div>
+        <div class="guide-pane hidden" id="guideSecret">
+          <p class="secret-text">THERE IS NO SECRET TAB. IT MADE ONE BECAUSE IT NOTICED YOU WERE READING CAREFULLY. THE DOWNLOAD WILL WORK. THE GAME WILL REMEMBER THIS.</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -770,7 +792,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=17"></script>
-  <script src="js/main.js?v=17"></script>
+  <script src="js/config.js?v=18"></script>
+  <script src="js/main.js?v=18"></script>
 </body>
 </html>

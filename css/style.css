@@ -334,6 +334,44 @@ body.page-glitch .crt{animation:page-glitch .1s steps(2) infinite;filter:invert(
 }
 @media(pointer:fine){.cursor{display:block}}
 
+.cursor-echo{
+  position:fixed;top:0;left:0;z-index:9998;pointer-events:none;
+  width:14px;height:14px;border:2px solid var(--red);
+  mix-blend-mode:difference;opacity:0;
+  transition:opacity .3s ease;
+  display:none;
+}
+.cursor-echo.on{
+  opacity:.65;
+  box-shadow:0 0 12px rgba(255,0,0,.45);
+}
+@media(pointer:fine){.cursor-echo{display:block}}
+
+.sig.drift,.stat-num.drift{
+  color:var(--red)!important;
+  text-shadow:0 0 10px rgba(255,0,0,.65);
+  animation:sigflicker .16s steps(2) infinite;
+}
+@keyframes sigflicker{
+  0%{opacity:1}
+  50%{opacity:.45}
+  100%{opacity:1}
+}
+.guide-tab.secret-tab{
+  color:var(--red)!important;
+  border-color:var(--red)!important;
+  text-shadow:0 0 8px rgba(255,0,0,.6);
+}
+.secret-text{
+  color:var(--red);
+  font-family:var(--mono);
+  font-size:.95rem;
+  letter-spacing:.06em;
+  text-align:center;
+  padding:1.2rem .4rem;
+  text-shadow:0 0 8px rgba(255,0,0,.4);
+}
+
 /* ---------- Nav ---------- */
 .nav{
   position:sticky;top:0;left:0;right:0;z-index:9900;

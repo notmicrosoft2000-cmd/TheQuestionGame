@@ -740,6 +740,69 @@
     }, 10000);
   }
 
+  let clickWhisperTimer = null;
+  function showWhisperText(text) {
+    if (clickWhisperTimer) return;
+    whisperEl.textContent = text;
+    whisperEl.classList.add("go");
+    clickWhisperTimer = setTimeout(() => {
+      whisperEl.classList.remove("go");
+      clickWhisperTimer = null;
+    }, 3200);
+  }
+
+  let hiddenAt = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      return;
+    }
+    if (!hiddenAt) return;
+    const away = Date.now() - hiddenAt;
+    hiddenAt = null;
+    if (away > 2500) {
+      showToast("GOING SOMEWHERE? IT WAS COUNTING THE SECONDS.", true);
+      setTimeout(() => showWhisperText("IT NOTICED YOU LEFT FOR " + Math.max(1, Math.round(away / 1000)) + " SECONDS."), 700);
+    }
+  });
+
+  function counterDrift() {
+    const q = $("#qCounter");
+    const sig = $("#sigStatus");
+    const drift = (el, txt) => {
+      if (!el) return;
+      el.classList.add("drift");
+      el.textContent = txt;
+      setTimeout(() => {
+        el.classList.remove("drift");
+        el.textContent = el.getAttribute("data-base") || el.textContent;
+      }, 2800);
+    };
+    if (q && !q.getAttribute("data-base")) q.setAttribute("data-base", q.textContent);
+    if (sig && !sig.getAttribute("data-base")) sig.setAttribute("data-base", sig.textContent);
+    if (q) drift(q, Math.round(80 + Math.random() * 40) + (Math.random() < 0.4 ? "+" : ""));
+    if (sig) drift(sig, ["DRIFTING", "LOW", "97.3%", "MERGED", "FAULTY", "STABLE?"][Math.floor(Math.random() * 6)]);
+  }
+
+  const CLICK_WHISPERS = [
+    "IT FELT THAT CLICK.",
+    "EVERY PRESS LEAVES A MARK.",
+    "IT REMEMBERS WHERE YOU POINT.",
+    "YOU KEEP TOUCHING THINGS. IT KEEPS WATCHING.",
+    "THAT ONE WAS LOUDER.",
+    "IT COUNTED THAT. AND THE ONES BEFORE."
+  ];
+  document.addEventListener("click", (e) => {
+    if (document.hidden) return;
+    if (e.target.closest("a, button, input, textarea, select, .modal-overlay, .mock-pop")) return;
+    if (Math.random() < 0.07) showWhisperText(CLICK_WHISPERS[Math.floor(Math.random() * CLICK_WHISPERS.length)]);
+  });
+
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.35) counterDrift();
+  }, 18000);
+
   const noiseCnv = $("#noise");
   let noiseCtx = null;
   function initNoise() {
@@ -871,8 +934,10 @@
 
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
+    let mX = innerWidth / 2, mY = innerHeight / 2, eX = mX, eY = mY;
     window.addEventListener("mousemove", (e) => {
-      cursor.style.transform = "translate(" + e.clientX + "px," + e.clientY + "px) translate(-50%,-50%)";
+      mX = e.clientX; mY = e.clientY;
+      cursor.style.transform = "translate(" + mX + "px," + mY + "px) translate(-50%,-50%)";
     });
     const hoverSel = "a, button, .term-opt, input, textarea, select, .session, .stat";
     document.addEventListener("mouseover", (e) => {
@@ -881,6 +946,34 @@
     document.addEventListener("mouseout", (e) => {
       if (e.target.closest(hoverSel)) cursor.classList.remove("is-hover");
     });
+    const cursorEcho = document.createElement("div");
+    cursorEcho.className = "cursor-echo";
+    document.body.appendChild(cursorEcho);
+    let echoOn = false, echoTimer = null;
+    function cursorTrail() {
+      echoOn = true;
+      cursorEcho.classList.add("on");
+      clearTimeout(echoTimer);
+      echoTimer = setTimeout(() => {
+        echoOn = false;
+        cursorEcho.classList.remove("on");
+      }, 2400);
+    }
+    (function echoLoop() {
+      eX += (mX - eX) * 0.16;
+      eY += (mY - eY) * 0.16;
+      if (echoOn) cursorEcho.style.transform = "translate(" + eX.toFixed(1) + "px," + eY.toFixed(1) + "px) translate(-50%,-50%)";
+      requestAnimationFrame(echoLoop);
+    })();
+    setInterval(() => {
+      if (document.hidden || !echoOn) return;
+      if (Math.random() < 0.6) cursorEcho.style.boxShadow = "0 0 16px rgba(255,0,0,.7), 0 0 30px rgba(255,0,0,.35)";
+      setTimeout(() => { cursorEcho.style.boxShadow = ""; }, 180);
+    }, 700);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.14) cursorTrail();
+    }, 5000);
   }
 
   const io = new IntersectionObserver((entries) => {
@@ -1222,6 +1315,7 @@
 
   function platformKey() {
     const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    if (/android/i.test(p) || /android/i.test(navigator.userAgent || "")) return "android";
     if (/mac|darwin/i.test(p)) return "mac";
     if (/linux|unix|X11/i.test(p)) return "linux";
     if (/win/i.test(p)) return "win";
@@ -1320,9 +1414,9 @@
 
   async function loadRelease() {
     const os = platformKey();
-    if (os === "win" || os === "mac" || os === "linux") {
-      const classic = os === "mac" ? ["#macCard", "#macDetected"] : os === "linux" ? ["#linuxCard", "#linuxDetected"] : ["#winCard", "#winDetected"];
-      const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : os === "linux" ? ["#remLinuxCard", "#remLinuxDetected"] : ["#remWinCard", "#remWinDetected"];
+    if (os === "win" || os === "mac" || os === "linux" || os === "android") {
+      const classic = os === "mac" ? ["#macCard", "#macDetected"] : os === "linux" ? ["#linuxCard", "#linuxDetected"] : os === "android" ? ["#androidCard", "#androidDetected"] : ["#winCard", "#winDetected"];
+      const rem = os === "mac" ? ["#remMacCard", "#remMacDetected"] : os === "linux" ? ["#remLinuxCard", "#remLinuxDetected"] : os === "android" ? ["#remAndroidCard", "#remAndroidDetected"] : ["#remWinCard", "#remWinDetected"];
       [classic, rem].forEach(([card, tag]) => {
         if (!card) return;
         const c = $(card);
@@ -1458,6 +1552,8 @@
     const win = os === "win";
     tabWin.setAttribute("aria-selected", win ? "true" : "false");
     tabMac.setAttribute("aria-selected", win ? "false" : "true");
+    if (guideSecret) guideSecret.classList.add("hidden");
+    if (tabSecret) tabSecret.classList.add("hidden");
     guideWin.classList.toggle("hidden", !win);
     guideMac.classList.toggle("hidden", win);
   }
@@ -1466,8 +1562,13 @@
   platformBtns.forEach((b) => {
     b.addEventListener("click", (e) => {
       e.preventDefault();
-      pendingUrl = b.getAttribute("href");
       const osAttr = (b.getAttribute("data-os") || "").toLowerCase();
+      if (osAttr.indexOf("android") !== -1) {
+        gifScare();
+        showToast("NO ANDROID BUILD EXISTS. WE JUST WANTED TO SEE YOUR FACE.", true);
+        return;
+      }
+      pendingUrl = b.getAttribute("href");
       pendingOs = osAttr.indexOf("mac") !== -1 ? "mac" : osAttr.indexOf("linux") !== -1 ? "linux" : "win";
       openModal(warnModal);
     });
@@ -1481,6 +1582,7 @@
     }
     setGuideTab(pendingOs);
     openModal(guideModal);
+    if (Math.random() < 0.4) setTimeout(secretTab, 1500);
   });
   $("#warnCancel").addEventListener("click", () => closeModal(warnModal));
   $("#warnClose").addEventListener("click", () => closeModal(warnModal));
@@ -1497,6 +1599,37 @@
 
   tabWin.addEventListener("click", () => setGuideTab("win"));
   tabMac.addEventListener("click", () => setGuideTab("mac"));
+
+  const tabSecret = $("#tabSecret");
+  const guideSecret = $("#guideSecret");
+  let secretTabTimer = null;
+  function secretTab() {
+    if (!tabSecret || !guideModal || guideModal.classList.contains("hidden")) return;
+    if (secretTabTimer) return;
+    tabSecret.classList.remove("hidden");
+    secretTabTimer = setTimeout(() => {
+      tabSecret.classList.add("hidden");
+      secretTabTimer = null;
+    }, 3400);
+  }
+  if (tabSecret) {
+    tabSecret.addEventListener("click", () => {
+      guideSecret.classList.remove("hidden");
+      guideWin.classList.add("hidden");
+      guideMac.classList.add("hidden");
+      tabWin.setAttribute("aria-selected", "false");
+      tabMac.setAttribute("aria-selected", "false");
+      tabSecret.classList.add("hidden");
+      clearTimeout(secretTabTimer);
+      secretTabTimer = null;
+      pageGlitch();
+      showWhisperText("THE SECRET IS THAT YOU CAME BACK.");
+    });
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.45) secretTab();
+  }, 14000);
 
   [warnModal, guideModal].forEach((m) => {
     m.addEventListener("click", (e) => {
@@ -1731,6 +1864,18 @@
     }
     typeIn.addEventListener("focus", () => stopGhost(true));
     typeIn.addEventListener("input", () => stopGhost(false));
+    typeIn.addEventListener("input", () => {
+      if (aiBusy || !typeIn || !typeIn.value.trim()) return;
+      if (Math.random() < 0.03) {
+        const v = typeIn.value;
+        const last = v.charAt(v.length - 1);
+        if (last && /\S/.test(last)) {
+          typeIn.value = v + last;
+        } else {
+          typeIn.value = v.slice(0, -1) + ["▚", "◈", "▓", "×"][Math.floor(Math.random() * 4)];
+        }
+      }
+    });
   }
 
   const scare = $("#scare");
