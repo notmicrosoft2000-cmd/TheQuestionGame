@@ -2009,7 +2009,6 @@
 
     for (const step of SCRIPT) {
       await addLine("", "> " + step.q, 40);
-      if (step.q.indexOf("LIGHTS ARE OFF") !== -1) lightsOff(0);
       showOptions(step.o, 0);
       let sel = 0;
       const choice = promptChoice();
