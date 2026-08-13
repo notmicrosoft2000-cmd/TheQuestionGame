@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=21">
+  <link rel="stylesheet" href="css/style.css?v=22">
 </head>
 <body>
 
@@ -54,6 +54,8 @@
   <div class="cursor" id="cursor" aria-hidden="true"></div>
   <div class="scare" id="scare" aria-hidden="true">HELLO</div>
   <div class="gif-scare" id="gifScare" aria-hidden="true"><img src="img/jumpscare.gif" alt="" draggable="false"></div>
+  <div class="static-scare" id="staticScare" aria-hidden="true"><canvas id="staticCnv"></canvas></div>
+  <div class="crt-glare" id="crtGlare" aria-hidden="true"></div>
   <audio id="gifScareAudio" src="jumpscare.mp3" preload="auto"></audio>
 
   <header class="nav" id="nav">
@@ -779,25 +781,6 @@
     </div>
   </div>
 
-  <div class="boss-overlay hidden" id="bossOverlay" role="dialog" aria-label="An unexpected session">
-    <div class="boss-box" id="bossBox">
-      <div class="boss-head">
-        <span class="boss-title">SESSION KEEPER</span>
-        <span class="boss-sub" id="bossSub">IT HAS NOT BEEN SATISFIED IN A LONG TIME.</span>
-      </div>
-      <div class="boss-status">
-        <span class="boss-hearts" id="bossHearts">▚▚▚</span>
-        <span class="boss-meter" id="bossMeter"></span>
-      </div>
-      <div class="boss-track" id="bossTrack">
-        <div class="boss-zone"></div>
-        <div class="boss-needle" id="bossNeedle"></div>
-      </div>
-      <div class="boss-msg" id="bossMsg">PRESS SPACE OR CLICK WHEN THE NEEDLE IS OVER THE ZONE. THREE CLEAN HITS. IT COUNTS YOUR MISSES.</div>
-      <div class="boss-actions" id="bossActions"></div>
-    </div>
-  </div>
-
   <div class="mock-pop hidden" id="mockPop" role="dialog" aria-label="Interrupted transmission">
     <div class="mock-head">
       <span class="mock-title">TRANSMISSION INTERRUPT</span>
@@ -812,7 +795,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=21"></script>
-  <script src="js/main.js?v=21"></script>
+  <script src="js/config.js?v=22"></script>
+  <script src="js/main.js?v=22"></script>
 </body>
 </html>

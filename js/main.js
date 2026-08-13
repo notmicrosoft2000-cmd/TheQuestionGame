@@ -883,7 +883,10 @@
     blinkFlash.classList.remove("go");
     void blinkFlash.offsetWidth;
     blinkFlash.classList.add("go");
-    setTimeout(() => blinkFlash.classList.remove("go"), 1000);
+    setTimeout(() => {
+      blinkFlash.classList.remove("go");
+      afterImage();
+    }, 1000);
   }
 
   let blinkOn = false;
@@ -942,6 +945,45 @@
         blinkTimer = null;
       }, 350);
     }, 10000);
+  }
+
+  let afterImgLock = false;
+  function afterImage() {
+    if (afterImgLock || document.hidden) return;
+    afterImgLock = true;
+    const ai = document.createElement("div");
+    ai.className = "afterimage";
+    ai.setAttribute("aria-hidden", "true");
+    ai.innerHTML = '<div class="afterimage-eyes"><span></span><span></span></div><div class="afterimage-mouth"></div>';
+    document.body.appendChild(ai);
+    const x = rand(window.innerWidth * 0.25, window.innerWidth * 0.65);
+    const y = rand(window.innerHeight * 0.3, window.innerHeight * 0.55);
+    ai.style.left = x.toFixed(1) + "px";
+    ai.style.top = y.toFixed(1) + "px";
+    const born = performance.now();
+    let raf = null;
+    function drift(ts) {
+      const t = Math.min(1, (ts - born) / 2000);
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      ai.style.opacity = String(Math.max(0, 0.2 * (1 - t)));
+      ai.style.transform = "translate(" + ((cx - x) * t).toFixed(1) + "px," + ((cy - y) * t).toFixed(1) + "px) scale(" + (1 + t * 0.3).toFixed(3) + ")";
+      if (t < 1) {
+        raf = requestAnimationFrame(drift);
+      } else {
+        ai.remove();
+        afterImgLock = false;
+      }
+    }
+    raf = requestAnimationFrame(drift);
+  }
+
+  const crtGlare = $("#crtGlare");
+  if (crtGlare) {
+    window.addEventListener("scroll", () => {
+      const y = window.scrollY || 0;
+      crtGlare.style.setProperty("--glare-y", (6 + (y % 20)).toFixed(1) + "%");
+    }, { passive: true });
   }
 
   const FLICKER_SEL = ".section-title, .session-name, .session-login, .hero-sub, .about-copy p, .quote-text, .stat-label, .platform-desc, .nav-link, .concern-title";
@@ -1183,152 +1225,152 @@
     if (Math.random() < 0.18) dvdScreensaver();
   }, 60000);
 
-  const bossOverlay = $("#bossOverlay");
-  let bossActive = false;
-  function readCookie(name) {
-    const m = document.cookie.match(new RegExp("(^|; )" + name + "=([^;]*)"));
-    return m ? m[2] : null;
-  }
-  function bossAckButton(label, cb) {
-    const actions = $("#bossActions");
-    actions.innerHTML = '<button class="mock-btn ghost" type="button">' + label + '</button>';
-    const btn = actions.firstChild;
-    btn.addEventListener("click", () => {
-      bossOverlay.classList.add("hidden");
-      bossOverlay.classList.remove("won", "lost");
-      document.body.classList.remove("modal-open");
-      bossActive = false;
-      if (cb) cb();
-    });
-  }
-  function bossLoreWin() {
-    const msg = $("#bossMsg");
-    msg.classList.remove("denied");
-    msg.innerHTML = [
-      "THE SESSION KEEPER WITHDRAWS. IT MARKS YOU.",
-      "THERE IS A QUESTION IT WANTED YOU TO ASK. IT WOULD NOT SAY WHICH.",
-      "IT WATCHES THE DOWNLOADS. IT KNOWS WHO INSTALLS, WHO STAYS, WHO ONLY LOOKS.",
-      "YOU MAY CLOSE THIS TAB. IT WILL REMEMBER THE TASTE OF A WINNER."
-    ].map((t) => "&gt; " + t).join("<br>");
-    $("#bossHearts").textContent = "▚▚▚";
-    $("#bossMeter").textContent = "PATIENCE: BROKEN";
-    $("#bossSub").textContent = "SATISFIED. FOR NOW.";
-    bossAckButton("[ I CARRY IT ]", () => {
-      showWhisperText("IT REMEMBERS YOU NOW. THE SESSION IS KINDER.");
-    });
-  }
-  function bossLoreReplay() {
-    const msg = $("#bossMsg");
-    msg.classList.remove("denied");
-    msg.innerHTML = [
-      "THE KEEPER RECOGNIZES YOU. IT LET YOU BACK IN ON PURPOSE.",
-      "THE LORE IS STILL DOWNLOADING. THAT IS A LIE. IT IS ALREADY HERE.",
-      "THE QUESTION IS: WHICH SESSION ARE YOU IN?"
-    ].map((t) => "&gt; " + t).join("<br>");
-    $("#bossHearts").textContent = "▚▚▚";
-    $("#bossSub").textContent = "A RETURNING SESSION.";
-    bossAckButton("[ I REMEMBER ]", () => {
-      showWhisperText("IT KNOWS YOU CAME BACK. IT COUNTS VISITS TOO.");
-    });
-  }
-  function bossStart() {
-    if (bossActive || !bossOverlay) return;
-    bossActive = true;
-    $("#bossBox").classList.remove("won", "lost");
-    const msg = $("#bossMsg");
-    msg.classList.remove("denied");
-    $("#bossSub").textContent = "IT HAS NOT BEEN SATISFIED IN A LONG TIME.";
-    $("#bossHearts").textContent = "▚▚▚";
-    $("#bossMeter").textContent = "PATIENCE: ▚▚▚";
-    msg.textContent = "PRESS SPACE OR CLICK WHEN THE NEEDLE IS OVER THE ZONE. THREE CLEAN HITS. IT COUNTS YOUR MISSES.";
-    $("#bossActions").innerHTML = "";
-    bossOverlay.classList.remove("hidden");
-    document.body.classList.add("modal-open");
 
-    const track = $("#bossTrack");
-    const needle = $("#bossNeedle");
-    let hp = 3;
-    let hits = 0;
-    let pos = rand(20, 80);
-    let dir = Math.random() < 0.5 ? -1 : 1;
-    let raf = null;
-    let over = false;
-
-    function finish(win) {
-      if (over) return;
-      over = true;
-      cancelAnimationFrame(raf);
-      document.removeEventListener("keydown", onKey);
-      track.removeEventListener("click", onTrackClick);
-      if (win) {
-        try {
-          document.cookie = "tq_boss=defeated; path=/; SameSite=Lax; max-age=31536000";
-        } catch (e) { }
-        bossOverlay.classList.add("won");
-        bossLoreWin();
+  let strobeLock = false;
+  const strobeWhite = document.createElement("div");
+  strobeWhite.id = "strobeWhite";
+  document.body.appendChild(strobeWhite);
+  function strobeBurst() {
+    if (strobeLock || scareLock || gifScareLock || document.hidden) return;
+    strobeLock = true;
+    sfx.spike();
+    let n = 0;
+    const step = () => {
+      if (n % 2 === 0) strobeWhite.classList.add("go");
+      else strobeWhite.classList.remove("go");
+      flash.classList.add("go");
+      setTimeout(() => flash.classList.remove("go"), 30);
+      n++;
+      if (n < 8) {
+        setTimeout(step, 60);
       } else {
-        bossOverlay.classList.add("lost");
-        msg.classList.add("denied");
-        msg.innerHTML = '<div class="boss-403">403</div>ACCESS DENIED. THE SESSION KEEPER DOES NOT OPEN DOORS FOR PEOPLE WHO MISS.';
-        $("#bossSub").textContent = "FURTHER CONTACT IS NOT RECOMMENDED.";
-        $("#bossMeter").textContent = "PATIENCE: LOST";
-        bossAckButton("[ I ACKNOWLEDGE ]");
+        strobeWhite.classList.remove("go");
+        strobeLock = false;
       }
-    }
-
-    function onKey(e) {
-      if (e.code === "Space" || e.key === " ") {
-        e.preventDefault();
-        parry();
-      }
-    }
-    function onTrackClick() { parry(); }
-    function parry() {
-      if (over) return;
-      if (pos >= 35 && pos <= 63) {
-        hits++;
-        $("#bossMeter").textContent = "PATIENCE: " + "▚".repeat(hits) + "·".repeat(3 - hits);
-        msg.textContent = "PARRY. " + (3 - hits) + " CLEAN HIT" + (3 - hits === 1 ? "" : "S") + " LEFT.";
-        sfx.type();
-        if (hits >= 3) finish(true);
-      } else {
-        hp--;
-        $("#bossHearts").textContent = "▚".repeat(hp) + "·".repeat(3 - hp);
-        msg.textContent = "A MISS. IT NOTED IT. " + hp + " LEFT.";
-        sfx.glitch();
-        if (hp <= 0) finish(false);
-      }
-    }
-
-    function loop() {
-      if (over) return;
-      pos += dir * 3.1;
-      if (pos >= 96) { pos = 96; dir = -1; }
-      if (pos <= 4) { pos = 4; dir = 1; }
-      needle.style.left = pos + "%";
-      raf = requestAnimationFrame(loop);
-    }
-
-    document.addEventListener("keydown", onKey);
-    track.addEventListener("click", onTrackClick);
-    loop();
+    };
+    step();
   }
-  setTimeout(() => {
+  setInterval(() => {
     if (document.hidden) return;
-    if (readCookie("tq_boss")) {
-      bossOverlay.classList.remove("hidden");
-      document.body.classList.add("modal-open");
-      bossActive = true;
-      $("#bossBox").classList.remove("won", "lost");
-      $("#bossMsg").classList.remove("denied");
-      bossLoreReplay();
-    } else {
-      showWhisperText("SOMETHING IN THE SESSION IS STIRRING. IT WANTS A WORD WITH YOU.");
-      setTimeout(() => {
-        if (!document.hidden && !bossActive) bossStart();
-      }, 14000);
+    if (Math.random() < 0.03) strobeBurst();
+  }, 25000);
+
+  let evapLock = false;
+  function cardEvaporate() {
+    if (evapLock || document.hidden) return;
+    const pool = $$(".session, .release, .platform-card, .quote, .evidence-card, .stat").filter((el) => {
+      return !el.dataset.detached && !el.dataset.shift && el.offsetParent !== null;
+    });
+    if (!pool.length) return;
+    evapLock = true;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    el.classList.add("evaporate");
+    setTimeout(() => {
+      el.classList.remove("evaporate");
+      evapLock = false;
+    }, 620);
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.08) cardEvaporate();
+  }, 18000);
+
+  let staticLock = false;
+  const staticScare = $("#staticScare");
+  const staticCnv = $("#staticCnv");
+  let staticCtx = null;
+  let staticRaf = null;
+  function sizeStatic() {
+    if (!staticCnv) return;
+    staticCnv.width = window.innerWidth;
+    staticCnv.height = window.innerHeight;
+  }
+  function drawStatic() {
+    if (!staticCtx) return;
+    const cw = staticCnv.width;
+    const ch = staticCnv.height;
+    const s = 6;
+    for (let y = 0; y < ch; y += s) {
+      for (let x = 0; x < cw; x += s) {
+        const v = Math.floor(Math.random() * 256);
+        staticCtx.fillStyle = "rgb(" + v + "," + v + "," + v + ")";
+        staticCtx.fillRect(x, y, s, s);
+      }
     }
-  }, 180000);
+  }
+  function staticTakeover() {
+    if (staticLock || scareLock || gifScareLock || !staticScare || document.hidden) return;
+    staticLock = true;
+    staticCtx = staticCtx || staticCnv.getContext("2d");
+    sizeStatic();
+    staticScare.classList.add("go");
+    const face = document.createElement("div");
+    face.className = "face";
+    face.innerHTML = '<div class="face-eyes"><span></span><span></span></div><div class="face-mouth"></div><div class="face-text">IT SEES YOU</div>';
+    staticScare.appendChild(face);
+    sfx.static();
+    function loop() {
+      drawStatic();
+      staticRaf = requestAnimationFrame(loop);
+    }
+    loop();
+    setTimeout(() => face.classList.add("go"), 320);
+    setTimeout(() => {
+      cancelAnimationFrame(staticRaf);
+      face.remove();
+      staticScare.classList.remove("go");
+      staticLock = false;
+      pageGlitch();
+    }, 1300);
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.1) staticTakeover();
+  }, 40000);
+
+  let theftLock = false;
+  const fakeCursor = document.createElement("div");
+  fakeCursor.className = "fake-cursor";
+  fakeCursor.textContent = "▚";
+  document.body.appendChild(fakeCursor);
+  function cursorTheft() {
+    if (theftLock || document.hidden) return;
+    theftLock = true;
+    document.body.classList.add("no-cursor");
+    let fx = window.innerWidth - 60;
+    let fy = 20;
+    fakeCursor.classList.add("on");
+    fakeCursor.style.transform = "translate(" + fx.toFixed(1) + "px," + fy.toFixed(1) + "px)";
+    let raf = null;
+    let target = null;
+    function moveTo(e) { target = { x: e.clientX, y: e.clientY }; }
+    function drift() {
+      if (target) {
+        fx += (target.x - fx) * 0.2;
+        fy += (target.y - fy) * 0.2;
+        if (Math.abs(target.x - fx) < 3 && Math.abs(target.y - fy) < 3) target = null;
+      } else {
+        fx += (Math.random() - 0.5) * 4;
+        fy += (Math.random() - 0.5) * 4;
+      }
+      fakeCursor.style.transform = "translate(" + fx.toFixed(1) + "px," + fy.toFixed(1) + "px)";
+      raf = requestAnimationFrame(drift);
+    }
+    document.addEventListener("click", moveTo);
+    drift();
+    setTimeout(() => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener("click", moveTo);
+      fakeCursor.classList.remove("on");
+      document.body.classList.remove("no-cursor");
+      theftLock = false;
+      showWhisperText("IT TOOK YOUR CURSOR.");
+    }, 2000);
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.12) cursorTheft();
+  }, 45000);
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
@@ -2294,6 +2336,44 @@
         og.connect(ctx.destination);
         o.start(t);
         o.stop(t + 0.14);
+      } catch (e) { }
+    },
+    spike() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sawtooth";
+        o.frequency.setValueAtTime(1300, t);
+        o.frequency.exponentialRampToValueAtTime(120, t + 0.55);
+        g.gain.setValueAtTime(0.14, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.62);
+      } catch (e) { }
+    },
+    static() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const dur = 1.1;
+        const n = Math.floor(ctx.sampleRate * dur);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.16, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(g);
+        g.connect(ctx.destination);
+        src.start(t);
       } catch (e) { }
     }
   };
