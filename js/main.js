@@ -11,6 +11,32 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const rand = (a, b) => Math.random() * (b - a) + a;
 
+  const PERF = (() => {
+    function detectLowPower() {
+      try {
+        const mem = navigator.deviceMemory || 0;
+        const cores = navigator.hardwareConcurrency || 0;
+        const mobile = /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "");
+        if (mem > 0 && mem <= 4) return true;
+        if (cores > 0 && cores <= 4) return true;
+        if (mobile && cores > 0 && cores <= 6) return true;
+        return false;
+      } catch (e) {
+        return false;
+      }
+    }
+    const low = detectLowPower();
+    return {
+      low,
+      noiseRes: low ? 4 : 2,
+      noiseEveryN: low ? 2 : 1,
+      ashCount: low ? 24 : 40,
+      swaySkip: low ? 1 : 0,
+      staticRes: low ? 2 : 1,
+      staticPx: low ? 8 : 6
+    };
+  })();
+
   function typeNode(el, text, speed, onChar) {
     return new Promise((res) => {
       let i = 0;
@@ -1437,23 +1463,37 @@
   const staticCnv = $("#staticCnv");
   let staticCtx = null;
   let staticRaf = null;
+  let staticImg = null;
   function sizeStatic() {
     if (!staticCnv) return;
-    staticCnv.width = window.innerWidth;
-    staticCnv.height = window.innerHeight;
+    const r = PERF.staticRes;
+    staticCnv.width = Math.max(32, Math.floor(window.innerWidth / r));
+    staticCnv.height = Math.max(32, Math.floor(window.innerHeight / r));
+    staticImg = null;
   }
   function drawStatic() {
     if (!staticCtx) return;
     const cw = staticCnv.width;
     const ch = staticCnv.height;
-    const s = 6;
+    if (!staticImg || staticImg.width !== cw || staticImg.height !== ch) {
+      staticImg = staticCtx.createImageData(cw, ch);
+    }
+    const d = staticImg.data;
+    const s = PERF.staticPx;
     for (let y = 0; y < ch; y += s) {
       for (let x = 0; x < cw; x += s) {
         const v = Math.floor(Math.random() * 120) + 24;
-        staticCtx.fillStyle = "rgb(" + v + "," + v + "," + v + ")";
-        staticCtx.fillRect(x, y, s, s);
+        const row = y * cw;
+        for (let yy = y; yy < y + s && yy < ch; yy++) {
+          let i = (row + (yy - y) * cw) * 4 + x * 4;
+          const end = i + Math.min(s, cw - x) * 4;
+          for (; i < end; i += 4) {
+            d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+          }
+        }
       }
     }
+    staticCtx.putImageData(staticImg, 0, 0);
   }
   function staticTakeover() {
     if (staticLock || scareLock || gifScareLock || !staticScare || document.hidden) return;
@@ -1477,6 +1517,7 @@
       face.remove();
       staticScare.classList.remove("go");
       staticLock = false;
+      staticImg = null;
       pageGlitch();
     }, 1300);
   }
@@ -1531,6 +1572,8 @@
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
+  let noiseImg = null;
+  let noiseTick = 0;
   function initNoise() {
     if (!noiseCnv) return;
     noiseCtx = noiseCnv.getContext("2d");
@@ -1538,24 +1581,29 @@
     frameNoise();
   }
   function sizeNoise() {
-    noiseCnv.width = Math.max(1, Math.floor(window.innerWidth / 2));
-    noiseCnv.height = Math.max(1, Math.floor(window.innerHeight / 2));
+    const r = PERF.noiseRes;
+    noiseCnv.width = Math.max(1, Math.floor(window.innerWidth / r));
+    noiseCnv.height = Math.max(1, Math.floor(window.innerHeight / r));
+    noiseImg = null;
   }
-  let noiseFrame = 0;
   function frameNoise() {
     if (noiseCtx) {
-      const w = noiseCnv.width, h = noiseCnv.height;
-      const img = noiseCtx.createImageData(w, h);
-      const d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const v = (Math.random() * 255) | 0;
-        d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
-      }
-      noiseCtx.putImageData(img, 0, 0);
-      noiseFrame++;
-      if (noiseFrame % 9 === 0) {
-        noiseCtx.fillStyle = "rgba(255,255,255,0.05)";
-        noiseCtx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 8);
+      noiseTick++;
+      if (PERF.noiseEveryN < 2 || noiseTick % PERF.noiseEveryN === 0) {
+        const w = noiseCnv.width, h = noiseCnv.height;
+        if (!noiseImg || noiseImg.width !== w || noiseImg.height !== h) {
+          noiseImg = noiseCtx.createImageData(w, h);
+        }
+        const d = noiseImg.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const v = (Math.random() * 255) | 0;
+          d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 22;
+        }
+        noiseCtx.putImageData(noiseImg, 0, 0);
+        if (noiseTick % 9 === 0) {
+          noiseCtx.fillStyle = "rgba(255,255,255,0.05)";
+          noiseCtx.fillRect(0, Math.random() * h, w, 2 + Math.random() * 8);
+        }
       }
     }
     setTimeout(frameNoise, document.hidden ? 400 : 100);
@@ -1571,7 +1619,7 @@
     ashCnv.height = Math.max(1, Math.floor(window.innerHeight / 2));
     const w = ashCnv.width, h = ashCnv.height;
     ashParticles = [];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < PERF.ashCount; i++) {
       ashParticles.push({
         x: Math.random() * w,
         y: Math.random() * h,
@@ -1634,7 +1682,13 @@
     });
   });
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let swayFrame = 0;
   function frameSway(ts) {
+    swayFrame++;
+    if (PERF.swaySkip > 0 && swayFrame % (PERF.swaySkip + 1) !== 0) {
+      requestAnimationFrame(frameSway);
+      return;
+    }
     const t = ts / 1000;
     const active = document.body.classList.contains("loaded");
     const xBase = Math.sin(t * SWAY_X_SPEED + SWAY_PHASE);
