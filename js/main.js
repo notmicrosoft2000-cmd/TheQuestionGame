@@ -293,6 +293,13 @@
     setTimeout(() => washEl.classList.remove("go"), 170);
   }
 
+  function screenDip() {
+    if (!washEl) return;
+    washEl.style.background = "rgba(0,0,0,.45)";
+    washEl.classList.add("go");
+    setTimeout(() => washEl.classList.remove("go"), 130);
+  }
+
   function bgBars() {
     if (!barsEl) return;
     barsEl.classList.add("go");
@@ -881,11 +888,11 @@
     }, 6000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.25) corruptSignal();
+      if (Math.random() < 0.3) corruptSignal();
     }, 7000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.05) bgWash();
+      if (Math.random() < 0.08) bgWash();
     }, 6000);
     setInterval(() => {
       if (document.hidden) return;
@@ -897,7 +904,7 @@
     }, 12000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.06) bgGhost();
+      if (Math.random() < 0.1) bgGhost();
     }, 8000);
     setInterval(() => {
       if (document.hidden) return;
@@ -908,23 +915,23 @@
     }, 4500);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.04) monitorBlip();
+      if (Math.random() < 0.09) monitorBlip();
     }, 15000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.08) recGlitch();
+      if (Math.random() < 0.14) recGlitch();
     }, 12000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.1) ghostLine();
+      if (Math.random() < 0.2) ghostLine();
     }, 9000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.1) fakeToast();
+      if (Math.random() < 0.2) fakeToast();
     }, 11000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.06) titleScramble();
+      if (Math.random() < 0.12) titleScramble();
     }, 18000);
     setInterval(() => {
       if (document.hidden) return;
@@ -932,7 +939,7 @@
     }, 20000);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.25) elementDetach();
+      if (Math.random() < 0.3) elementDetach();
     }, 7000);
     setInterval(() => {
       if (document.hidden) return;
@@ -954,6 +961,10 @@
       if (document.hidden) return;
       if (Math.random() < 0.1) mockMachine();
     }, 10000);
+    setInterval(() => {
+      if (document.hidden) return;
+      if (Math.random() < 0.08) screenDip();
+    }, 9000);
   }
 
   let clickWhisperTimer = null;
@@ -1011,7 +1022,7 @@
   document.addEventListener("click", (e) => {
     if (document.hidden) return;
     if (e.target.closest("a, button, input, textarea, select, .modal-overlay, .mock-pop")) return;
-    if (Math.random() < 0.07) showWhisperText(CLICK_WHISPERS[Math.floor(Math.random() * CLICK_WHISPERS.length)]);
+    if (Math.random() < 0.12) showWhisperText(CLICK_WHISPERS[Math.floor(Math.random() * CLICK_WHISPERS.length)]);
   });
 
   setInterval(() => {
@@ -1205,7 +1216,7 @@
   }, 10000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.05) charFlicker();
+    if (Math.random() < 0.08) charFlicker();
   }, 2500);
   setInterval(() => {
     if (document.hidden) return;
@@ -1213,15 +1224,15 @@
   }, 6000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.04) statLabelJitter();
+    if (Math.random() < 0.07) statLabelJitter();
   }, 5000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.04) cardShift();
+    if (Math.random() < 0.07) cardShift();
   }, 8000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.05) sigCrack();
+    if (Math.random() < 0.08) sigCrack();
   }, 4000);
 
   function fontSwap() {
@@ -1256,19 +1267,19 @@
 
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.05) fontSwap();
+    if (Math.random() < 0.08) fontSwap();
   }, 5000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.05) tabTitleShift();
+    if (Math.random() < 0.08) tabTitleShift();
   }, 9000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.07) barFlip();
+    if (Math.random() < 0.1) barFlip();
   }, 7000);
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.06) bgHue();
+    if (Math.random() < 0.1) bgHue();
   }, 6000);
 
   let sessionFourSpawned = false;
@@ -1364,8 +1375,8 @@
   }
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.18) dvdScreensaver();
-  }, 60000);
+    if (Math.random() < 0.3) dvdScreensaver();
+  }, 30000);
 
 
   let strobeLock = false;
@@ -1375,22 +1386,26 @@
   function strobeBurst() {
     if (strobeLock || scareLock || gifScareLock || document.hidden) return;
     strobeLock = true;
-    sfx.spike();
-    let n = 0;
-    const step = () => {
-      if (n % 2 === 0) strobeWhite.classList.add("go");
-      else strobeWhite.classList.remove("go");
-      flash.classList.add("go");
-      setTimeout(() => flash.classList.remove("go"), 30);
-      n++;
-      if (n < 8) {
-        setTimeout(step, 60);
-      } else {
+    try {
+      sfx.spike();
+      let n = 0;
+      const step = () => {
+        if (n % 2 === 0) strobeWhite.classList.add("go");
+        else strobeWhite.classList.remove("go");
+        flash.classList.add("go");
+        setTimeout(() => flash.classList.remove("go"), 30);
+        n++;
+        if (n < 5) {
+          setTimeout(step, 90);
+        }
+      };
+      step();
+    } finally {
+      setTimeout(() => {
         strobeWhite.classList.remove("go");
         strobeLock = false;
-      }
-    };
-    step();
+      }, 620);
+    }
   }
   setInterval(() => {
     if (document.hidden) return;
@@ -1414,8 +1429,8 @@
   }
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.08) cardEvaporate();
-  }, 18000);
+    if (Math.random() < 0.14) cardEvaporate();
+  }, 12000);
 
   let staticLock = false;
   const staticScare = $("#staticScare");
@@ -1434,7 +1449,7 @@
     const s = 6;
     for (let y = 0; y < ch; y += s) {
       for (let x = 0; x < cw; x += s) {
-        const v = Math.floor(Math.random() * 256);
+        const v = Math.floor(Math.random() * 120) + 24;
         staticCtx.fillStyle = "rgb(" + v + "," + v + "," + v + ")";
         staticCtx.fillRect(x, y, s, s);
       }
@@ -1467,8 +1482,8 @@
   }
   setInterval(() => {
     if (document.hidden) return;
-    if (Math.random() < 0.1) staticTakeover();
-  }, 40000);
+    if (Math.random() < 0.15) staticTakeover();
+  }, 30000);
 
   let theftLock = false;
   const fakeCursor = document.createElement("div");
@@ -1683,7 +1698,7 @@
     }, 700);
     setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() < 0.14) cursorTrail();
+      if (Math.random() < 0.2) cursorTrail();
     }, 5000);
   }
 
