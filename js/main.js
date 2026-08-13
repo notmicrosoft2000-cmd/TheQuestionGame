@@ -631,12 +631,102 @@
   const mockBody = $("#mockBody");
   let mockTimer = null;
   let mockAuto = null;
+  let mockMore = null;
+  let mockDismiss = null;
+  let mockX = null;
+
+  let lightsOut = false;
+  let lightsTimer = null;
+  function lightsOff(duration) {
+    const el = $("#lightsOut");
+    clearTimeout(lightsTimer);
+    lightsTimer = null;
+    lightsOut = true;
+    if (el) el.classList.add("on");
+    document.body.classList.add("lights-out");
+    if (duration) lightsTimer = setTimeout(() => lightsOn(), duration);
+  }
+  function lightsOn() {
+    const el = $("#lightsOut");
+    clearTimeout(lightsTimer);
+    lightsTimer = null;
+    lightsOut = false;
+    if (el) el.classList.remove("on");
+    document.body.classList.remove("lights-out");
+  }
+
+  const MOCK_QUESTIONS = [
+    {
+      q: "ARE YOU AFRAID OF THE DARK?",
+      a: ["YES", "NO"],
+      fx: (i) => {
+        if (i === 0) {
+          lightsOff(10000);
+          showWhisperText("THE DARK WAS ALREADY IN THE ROOM. NOW YOU ARE IN IT.");
+        } else {
+          flash.classList.add("go");
+          setTimeout(() => flash.classList.remove("go"), 200);
+          lightsOff(4500);
+          showWhisperText("EVERYONE IS. YOU JUST HIDE IT BETTER.");
+        }
+      }
+    },
+    {
+      q: "DO YOU HEAR THE STATIC?",
+      a: ["YES", "NO"],
+      fx: (i) => {
+        staticTakeover();
+        showWhisperText(i === 0 ? "IT KNOWS YOU CAN HEAR IT." : "IT PLAYS LOUDER FOR YOU NOW.");
+      }
+    },
+    {
+      q: "IS ANYONE IN THE ROOM WITH YOU?",
+      a: ["YES", "NO"],
+      fx: (i) => {
+        if (i === 0) {
+          afterImage();
+          showWhisperText("DON'T TURN AROUND.");
+        } else {
+          cursorTheft();
+          showWhisperText("THEN WHY IS IT WATCHING?");
+        }
+      }
+    },
+    {
+      q: "DO YOU TRUST THE DOWNLOADS?",
+      a: ["YES", "NO"],
+      fx: (i) => {
+        if (i === 0) {
+          dvdScreensaver();
+          showWhisperText("GOOD. IT TRUSTS YOU BACK.");
+        } else {
+          pageGlitch();
+          showWhisperText("THE TRUTH WAS IN THE DOWNLOADS.");
+        }
+      }
+    }
+  ];
+  const LIGHTS_QUESTION = {
+    q: "SHOULD WE TURN THE LIGHTS BACK ON?",
+    a: ["YES", "NO"],
+    fx: (i) => {
+      if (i === 0) {
+        lightsOn();
+        showWhisperText("IT LET YOU HAVE THE LIGHT. THAT IS THE FIRST WARNING.");
+      } else {
+        lightsOff(8000);
+        showWhisperText("STAY IN THE DARK A WHILE. IT LIKES COMPANY.");
+      }
+    }
+  };
+
   function mockMachine() {
     if (document.hidden || !mockPop || mockTimer) return;
     mockTimer = setTimeout(() => {
       mockTimer = null;
       if (document.hidden) return;
-      showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
+      if (Math.random() < 0.4) showMockQuestion();
+      else showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
     }, 700);
   }
   function showMock(line) {
@@ -654,6 +744,43 @@
     clearTimeout(mockAuto);
     mockAuto = setTimeout(hideMock, 5200);
   }
+  function resetMockButtons() {
+    if (mockMore) mockMore.textContent = "[ MOCK ME MORE ]";
+    if (mockDismiss) mockDismiss.textContent = "[ IGNORE ]";
+  }
+  function answerMockQuestion(i) {
+    const q = mockQuestion;
+    mockQuestion = null;
+    mockQuestionActive = false;
+    resetMockButtons();
+    hideMock();
+    if (q && q.fx) q.fx(i);
+  }
+  function showMockQuestion() {
+    if (!mockPop) return;
+    const pool = (lightsOut && Math.random() < 0.6) ? [LIGHTS_QUESTION] : MOCK_QUESTIONS;
+    mockQuestion = pool[Math.floor(Math.random() * pool.length)];
+    mockQuestionActive = true;
+    mockBody.textContent = "";
+    mockPop.classList.remove("hidden");
+    const w = Math.min(340, innerWidth * 0.86);
+    const h = Math.max(180, mockPop.offsetHeight || 190);
+    mockPop.style.left = rand(12, Math.max(12, innerWidth - w - 12)).toFixed(0) + "px";
+    mockPop.style.top = rand(12, Math.max(12, innerHeight - h - 12)).toFixed(0) + "px";
+    mockPop.style.right = "auto";
+    mockPop.style.bottom = "auto";
+    sfx.glitch();
+    typeNode(mockBody, mockQuestion.q, 22);
+    if (mockMore) mockMore.textContent = "[ " + mockQuestion.a[0] + " ]";
+    if (mockDismiss) mockDismiss.textContent = "[ " + mockQuestion.a[1] + " ]";
+    clearTimeout(mockAuto);
+    mockAuto = setTimeout(() => {
+      mockQuestion = null;
+      mockQuestionActive = false;
+      resetMockButtons();
+      hideMock();
+    }, 15000);
+  }
   function hideMock() {
     if (!mockPop) return;
     clearTimeout(mockAuto);
@@ -661,13 +788,28 @@
     mockPop.classList.add("hidden");
     mockBody.textContent = "";
   }
+  let mockQuestion = null;
+  let mockQuestionActive = false;
   if (mockPop) {
-    const mockMore = $("#mockMore");
-    const mockDismiss = $("#mockDismiss");
-    const mockX = $("#mockX");
-    if (mockMore) mockMore.addEventListener("click", () => showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]));
-    if (mockDismiss) mockDismiss.addEventListener("click", hideMock);
-    if (mockX) mockX.addEventListener("click", hideMock);
+    mockMore = $("#mockMore");
+    mockDismiss = $("#mockDismiss");
+    mockX = $("#mockX");
+    if (mockMore) mockMore.addEventListener("click", () => {
+      if (mockQuestionActive) { answerMockQuestion(0); return; }
+      showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
+    });
+    if (mockDismiss) mockDismiss.addEventListener("click", () => {
+      if (mockQuestionActive) { answerMockQuestion(1); return; }
+      hideMock();
+    });
+    if (mockX) mockX.addEventListener("click", () => {
+      if (mockQuestionActive) {
+        mockQuestion = null;
+        mockQuestionActive = false;
+        resetMockButtons();
+      }
+      hideMock();
+    });
   }
 
   let deviceTimer = null;
@@ -1648,14 +1790,23 @@
     showToast("LOGS UNLOCKED — YOU TYPED THE CODE QUICKLY ENOUGH");
   }
 
+  const NAV_DIGITS = {
+    "1": "home", "2": "about", "3": "sessions", "4": "evidence", "5": "ambience",
+    "6": "quotes", "7": "concerns", "8": "transmission", "9": "preview", "0": "download"
+  };
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab" && e.key !== "Enter") return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (document.body.classList.contains("no-scroll")) return;
     if (resolveOpt) return;
     const tag = (e.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button" || tag === "a" || tag === "summary" || e.target.isContentEditable) return;
     if ($(".modal-overlay:not(.hidden)")) return;
+    if (NAV_DIGITS[e.key]) {
+      e.preventDefault();
+      showView(NAV_DIGITS[e.key]);
+      return;
+    }
+    if (e.key !== "Tab" && e.key !== "Enter") return;
     const list = kbdCycleList();
     if (e.key === "Tab") {
       e.preventDefault();
@@ -1786,6 +1937,7 @@
 
     for (const step of SCRIPT) {
       await addLine("", "> " + step.q, 40);
+      if (step.q.indexOf("LIGHTS ARE OFF") !== -1) lightsOff(0);
       showOptions(step.o, 0);
       let sel = 0;
       const choice = promptChoice();
@@ -1828,6 +1980,7 @@
     await sleep(600);
     giantJumpscare();
     await sleep(1800);
+    lightsOn();
     termStatus.textContent = "SESSION LOGGED";
     await addLine("", "THE PREVIEW ENDS HERE. THE FULL SESSION HAS 100 QUESTIONS.", 32);
     await addLine("", "IT HEARS EVERYTHING.", 32);

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=22">
+  <link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
 
@@ -56,6 +56,7 @@
   <div class="gif-scare" id="gifScare" aria-hidden="true"><img src="img/jumpscare.gif" alt="" draggable="false"></div>
   <div class="static-scare" id="staticScare" aria-hidden="true"><canvas id="staticCnv"></canvas></div>
   <div class="crt-glare" id="crtGlare" aria-hidden="true"></div>
+  <div class="lights-out" id="lightsOut" aria-hidden="true"></div>
   <audio id="gifScareAudio" src="jumpscare.mp3" preload="auto"></audio>
 
   <header class="nav" id="nav">
@@ -67,36 +68,36 @@
       </div>
     </div>
     <div class="contents" id="contents">
-      <a class="contents-link" href="#home">HOME</a>
-      <a class="contents-link" href="#about">ABOUT / HISTORY</a>
-      <a class="contents-link" href="#sessions">SESSIONS</a>
-      <a class="contents-link" href="#evidence">EVIDENCE</a>
-      <a class="contents-link" href="#ambience">AMBIENCE</a>
-      <a class="contents-link" href="#quotes">QUOTES</a>
-      <a class="contents-link" href="#concerns">CONCERNS</a>
-      <a class="contents-link" href="#transmission">TRANSMISSION</a>
-      <a class="contents-link" href="#preview">PREVIEW</a>
+      <a class="contents-link" href="#home"><span class="link-num">1</span> HOME</a>
+      <a class="contents-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
+      <a class="contents-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
+      <a class="contents-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
+      <a class="contents-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
+      <a class="contents-link" href="#quotes"><span class="link-num">6</span> QUOTES</a>
+      <a class="contents-link" href="#concerns"><span class="link-num">7</span> CONCERNS</a>
+      <a class="contents-link" href="#transmission"><span class="link-num">8</span> TRANSMISSION</a>
+      <a class="contents-link" href="#preview"><span class="link-num">9</span> PREVIEW</a>
       <a class="contents-link logs-link hidden" href="#logs">LOGS</a>
       <a class="contents-link" href="#dev">THE DEV</a>
-      <a class="contents-link" href="#download">DOWNLOAD</a>
+      <a class="contents-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
     </div>
   </header>
 
   <nav class="side-panel" id="sidePanel" aria-label="Site navigation">
     <div class="side-head"><span class="red">&gt;</span> NAVIGATION</div>
     <div class="side-links">
-      <a class="side-link" href="#home">HOME</a>
-      <a class="side-link" href="#about">ABOUT / HISTORY</a>
-      <a class="side-link" href="#sessions">SESSIONS</a>
-      <a class="side-link" href="#evidence">EVIDENCE</a>
-      <a class="side-link" href="#ambience">AMBIENCE</a>
-      <a class="side-link" href="#quotes">QUOTES</a>
-      <a class="side-link" href="#concerns">CONCERNS</a>
-      <a class="side-link" href="#transmission">TRANSMISSION</a>
-      <a class="side-link" href="#preview">SESSION PREVIEW</a>
+      <a class="side-link" href="#home"><span class="link-num">1</span> HOME</a>
+      <a class="side-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
+      <a class="side-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
+      <a class="side-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
+      <a class="side-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
+      <a class="side-link" href="#quotes"><span class="link-num">6</span> QUOTES</a>
+      <a class="side-link" href="#concerns"><span class="link-num">7</span> CONCERNS</a>
+      <a class="side-link" href="#transmission"><span class="link-num">8</span> TRANSMISSION</a>
+      <a class="side-link" href="#preview"><span class="link-num">9</span> SESSION PREVIEW</a>
       <a class="side-link logs-link hidden" href="#logs">LOGS</a>
       <a class="side-link" href="#dev">THE DEV</a>
-      <a class="side-link" href="#download">DOWNLOAD</a>
+      <a class="side-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
     </div>
     <div class="side-foot">NEPTUNE PRODUCTIONS [C]</div>
   </nav>
@@ -795,7 +796,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/config.js?v=22"></script>
-  <script src="js/main.js?v=22"></script>
+  <script src="js/config.js?v=23"></script>
+  <script src="js/main.js?v=23"></script>
 </body>
 </html>
