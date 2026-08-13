@@ -111,8 +111,11 @@ button{font-family:inherit}
   position:fixed;inset:0;z-index:9990;background:#000;
   opacity:0;pointer-events:none;
 }
-.blink-flash.go{animation:eyeblink .18s ease-out}
-@keyframes eyeblink{0%{opacity:0}25%{opacity:.9}55%{opacity:.9}100%{opacity:0}}
+.blink-flash.go{animation:eyeblink .9s ease-in-out}
+@keyframes eyeblink{0%{opacity:0}30%{opacity:.95}70%{opacity:.95}100%{opacity:0}}
+
+main.blinkworld{filter:hue-rotate(175deg) saturate(1.3)}
+body.huepass{filter:hue-rotate(45deg)}
 
 .scare{
   position:fixed;inset:0;z-index:9996;

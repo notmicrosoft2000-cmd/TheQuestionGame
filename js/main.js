@@ -483,30 +483,53 @@
     const pool = $$(DETACH_POOL);
     const visible = pool.filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
+      return r.width > 0 && r.height > 0 &&
+        r.top < innerHeight && r.bottom > 0 && r.left < innerWidth && r.right > 0;
     });
     if (!visible.length) return;
     detachLock = true;
     const el = visible[Math.floor(Math.random() * visible.length)];
     const dir = Math.random() < 0.5 ? -1 : 1;
-    const dx = dir * rand(45, 100);
-    const dy = rand(-14, 14);
-    const rot = (Math.random() < 0.5 ? -1 : 1) * rand(2, 6);
-    el.style.transition = "transform .45s cubic-bezier(.2,.85,.3,1.1), box-shadow .45s ease";
-    el.style.transform = "translate(" + dx.toFixed(1) + "px," + dy.toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg) scale(.98)";
-    el.style.zIndex = "60";
-    el.style.boxShadow = "0 30px 90px rgba(200,0,0,.3)";
+    const dx = dir * rand(120, 260);
+    const dy = rand(-26, 26);
+    const rot = (Math.random() < 0.5 ? -1 : 1) * rand(6, 12);
+    el.dataset.detached = "1";
+    el.style.transition = "transform .5s cubic-bezier(.2,.85,.3,1.15), box-shadow .5s ease, filter .5s ease";
+    el.style.transform = "translate(" + dx.toFixed(1) + "px," + dy.toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg) scale(.96)";
+    el.style.zIndex = "80";
+    el.style.boxShadow = "0 30px 120px rgba(200,0,0,.45)";
+    el.style.filter = "hue-rotate(140deg) saturate(1.8)";
     sfx.glitch();
-    setTimeout(() => {
-      el.style.transition = "transform .5s cubic-bezier(.3,1.6,.4,1), box-shadow .5s ease";
+
+    const glitchIv = setInterval(() => {
+      if (el.dataset.detached !== "1") return;
+      const jx = rand(-7, 7), jy = rand(-7, 7), jr = rand(-2.5, 2.5);
+      el.style.transform = "translate(" + (dx + jx).toFixed(1) + "px," + (dy + jy).toFixed(1) + "px) rotate(" + (rot + jr).toFixed(1) + "deg) scale(.96)";
+      el.style.boxShadow = Math.random() < 0.35 ? "0 30px 120px rgba(200,0,0,.75)" : "0 30px 120px rgba(200,0,0,.3)";
+    }, 90);
+
+    function restoreDetached(instant) {
+      if (el.dataset.detached !== "1") return;
+      clearInterval(glitchIv);
+      delete el.dataset.detached;
+      el.style.transition = instant ? "none" : "transform .55s cubic-bezier(.3,1.7,.4,1), box-shadow .55s ease, filter .55s ease";
       el.style.transform = "";
       el.style.boxShadow = "";
+      el.style.filter = "";
       el.style.zIndex = "";
       setTimeout(() => {
         el.style.transition = "";
         detachLock = false;
-      }, 620);
-    }, 800);
+      }, 720);
+    }
+
+    el.addEventListener("click", () => {
+      sfx.glitch();
+      restoreDetached(true);
+    }, { once: true });
+    setTimeout(() => {
+      restoreDetached(false);
+    }, 2600);
   }
 
   const GHOST_TYPES = [
@@ -567,6 +590,7 @@
   const mockPop = $("#mockPop");
   const mockBody = $("#mockBody");
   let mockTimer = null;
+  let mockAuto = null;
   function mockMachine() {
     if (document.hidden || !mockPop || mockTimer) return;
     mockTimer = setTimeout(() => {
@@ -579,11 +603,21 @@
     if (!mockPop) return;
     mockBody.textContent = "";
     mockPop.classList.remove("hidden");
+    const w = Math.min(340, innerWidth * 0.86);
+    const h = Math.max(180, mockPop.offsetHeight || 190);
+    mockPop.style.left = rand(12, Math.max(12, innerWidth - w - 12)).toFixed(0) + "px";
+    mockPop.style.top = rand(12, Math.max(12, innerHeight - h - 12)).toFixed(0) + "px";
+    mockPop.style.right = "auto";
+    mockPop.style.bottom = "auto";
     sfx.glitch();
     typeNode(mockBody, line, 20);
+    clearTimeout(mockAuto);
+    mockAuto = setTimeout(hideMock, 5200);
   }
   function hideMock() {
     if (!mockPop) return;
+    clearTimeout(mockAuto);
+    mockAuto = null;
     mockPop.classList.add("hidden");
     mockBody.textContent = "";
   }
@@ -809,37 +843,41 @@
     blinkFlash.classList.remove("go");
     void blinkFlash.offsetWidth;
     blinkFlash.classList.add("go");
-    setTimeout(() => blinkFlash.classList.remove("go"), 200);
+    setTimeout(() => blinkFlash.classList.remove("go"), 1000);
   }
 
   let blinkOn = false;
   function blinkApply() {
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.classList.add("blinkworld");
     const heroH1 = $$(".hero h1.glitch")[0];
     const sessionCode = $("#sessions .session .session-code");
     const sessionName = $("#sessions .session .session-name");
     const quoteBy = $$(".quote-by")[0];
     const hudVer = $(".hud-bl");
     const r = Math.random();
-    if (heroH1 && r < 0.3) {
+    if (heroH1 && r < 0.25) {
       heroH1.setAttribute("data-blink", heroH1.textContent);
       heroH1.setAttribute("data-blink-text", heroH1.getAttribute("data-text"));
       heroH1.textContent = "THE ANSWER";
       heroH1.setAttribute("data-text", "THE ANSWER");
-    } else if (sessionCode && r < 0.5) {
+    } else if (sessionCode && r < 0.45) {
       sessionCode.setAttribute("data-blink", sessionCode.textContent);
       sessionCode.textContent = "SESSION 00";
-    } else if (sessionName && r < 0.7) {
+    } else if (sessionName && r < 0.65) {
       sessionName.setAttribute("data-blink", sessionName.textContent);
       sessionName.textContent = "A QUIET END";
-    } else if (quoteBy && r < 0.85) {
+    } else if (quoteBy && r < 0.8) {
       quoteBy.setAttribute("data-blink", quoteBy.textContent);
       quoteBy.textContent = "— SESSION LOG 999 · SUBJECT \"K\"";
     } else if (hudVer) {
       hudVer.setAttribute("data-blink", hudVer.textContent);
-      hudVer.textContent = "v2.05";
+      hudVer.textContent = "v2.99";
     }
   }
   function blinkRevert() {
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.classList.remove("blinkworld");
     $$("[data-blink]").forEach((el) => {
       el.textContent = el.getAttribute("data-blink");
       if (el.hasAttribute("data-blink-text")) {
@@ -900,7 +938,7 @@
   function cardShift() {
     const pool = $$(".session, .release, .stat, .platform-card, .quote").filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && !el.dataset.shift;
+      return r.width > 0 && r.height > 0 && !el.dataset.shift && !el.dataset.detached;
     });
     if (!pool.length) return;
     const el = pool[Math.floor(Math.random() * pool.length)];
@@ -951,6 +989,53 @@
     if (document.hidden) return;
     if (Math.random() < 0.05) sigCrack();
   }, 4000);
+
+  function fontSwap() {
+    const pool = $$(".about-copy p, .quote-text, .platform-desc, .concern-body, .signal-disclosure").filter((el) => el.textContent.trim());
+    if (!pool.length) return;
+    const el = pool[Math.floor(Math.random() * pool.length)];
+    const saved = el.style.fontFamily;
+    el.style.fontFamily = "serif";
+    setTimeout(() => { el.style.fontFamily = saved; }, 450);
+  }
+
+  const TITLE_BASE = document.title;
+  function tabTitleShift() {
+    document.title = Math.random() < 0.5 ? "THE QUESTION GAME_" : "NEPTUNE PRODUCTIONS";
+    setTimeout(() => { document.title = TITLE_BASE; }, 900);
+  }
+
+  function barFlip() {
+    const bars = $$(".session-progress .bar").filter((el) => el.style.getPropertyValue("--w"));
+    if (!bars.length) return;
+    const el = bars[Math.floor(Math.random() * bars.length)];
+    const base = el.style.getPropertyValue("--w");
+    const num = parseFloat(base) + (Math.random() < 0.5 ? -1 : 1);
+    el.style.setProperty("--w", Math.max(0, Math.min(100, num)).toFixed(0) + "%");
+    setTimeout(() => el.style.setProperty("--w", base), 800);
+  }
+
+  function bgHue() {
+    document.body.classList.add("huepass");
+    setTimeout(() => document.body.classList.remove("huepass"), 250);
+  }
+
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.05) fontSwap();
+  }, 5000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.05) tabTitleShift();
+  }, 9000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.07) barFlip();
+  }, 7000);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.06) bgHue();
+  }, 6000);
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
