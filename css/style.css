@@ -1094,6 +1094,86 @@ body.modal-open{overflow:hidden}
 .mock-btn.ghost{color:var(--dim);border-color:var(--line-bright)}
 .mock-btn.ghost:hover{color:var(--text);border-color:#555}
 
+.detach-ghost{
+  position:fixed!important;margin:0!important;pointer-events:none;
+  box-sizing:border-box;z-index:78;
+  opacity:.22;mix-blend-mode:screen;
+  filter:hue-rotate(60deg) saturate(2);
+  box-shadow:0 0 40px rgba(255,0,0,.4);
+}
+
+.dvd-logo{
+  position:fixed;top:0;left:0;z-index:9972;pointer-events:none;
+  font-family:var(--vt);font-size:2.6rem;letter-spacing:.1em;
+  padding:.35rem .9rem;border:2px solid currentColor;
+  background:rgba(0,0,0,.75);will-change:transform,color;
+  text-shadow:0 0 14px currentColor;
+  animation:dvd-spin 2.4s linear infinite;
+}
+.dvd-logo.gone{opacity:0;transition:opacity .5s}
+@keyframes dvd-spin{
+  0%{transform:rotate(-2deg)}
+  50%{transform:rotate(2deg)}
+  100%{transform:rotate(-2deg)}
+}
+
+.ghost-nav{
+  color:var(--red)!important;text-shadow:0 0 8px rgba(255,0,0,.6);
+  opacity:0;animation:navghost-in 1.4s ease;
+}
+@keyframes navghost-in{
+  0%{opacity:0;transform:translateX(-6px)}
+  30%{opacity:1}
+  80%{opacity:1}
+  100%{opacity:0}
+}
+
+/* ---------- Boss fight (session keeper) ---------- */
+.boss-overlay{
+  position:fixed;inset:0;z-index:9985;background:rgba(0,0,0,.93);
+  display:flex;align-items:center;justify-content:center;padding:1rem;
+}
+.boss-overlay.hidden{display:none}
+.boss-box{
+  width:min(560px,94vw);border:1px solid var(--red);
+  background:#0a0000;box-shadow:0 0 5rem rgba(200,0,0,.35);
+  font-family:var(--vt);
+}
+.boss-head{
+  display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;
+  padding:.7rem 1rem;border-bottom:1px solid var(--dark-red);background:#120000;
+}
+.boss-title{font-size:1.35rem;letter-spacing:.18em;color:var(--red);text-shadow:var(--glow-red)}
+.boss-sub{font-size:.85rem;color:var(--dim);letter-spacing:.08em}
+.boss-status{display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding:.6rem 1rem}
+.boss-hearts{color:var(--red);letter-spacing:.2em;font-size:1.1rem;text-shadow:var(--glow-red)}
+.boss-meter{color:var(--dim);letter-spacing:.1em;font-size:.95rem}
+.boss-track{
+  position:relative;height:52px;margin:0 1rem;border:1px solid var(--line-bright);
+  background:rgba(255,0,0,.04);overflow:hidden;cursor:pointer;touch-action:manipulation;
+}
+.boss-zone{
+  position:absolute;top:0;bottom:0;left:38%;width:22%;
+  background:rgba(0,220,0,.16);
+  border-left:1px solid rgba(0,220,0,.5);border-right:1px solid rgba(0,220,0,.5);
+}
+.boss-needle{
+  position:absolute;top:0;bottom:0;left:0;width:8px;margin-left:-4px;
+  background:var(--red);box-shadow:0 0 12px var(--red);
+}
+.boss-msg{
+  font-size:1.05rem;letter-spacing:.06em;color:#e0e0e0;line-height:1.6;
+  padding:1rem 1.1rem .4rem;min-height:3.6em;
+}
+.boss-msg.denied{text-align:center}
+.boss-403{
+  font-size:4.5rem;letter-spacing:.2em;color:var(--red);text-align:center;
+  text-shadow:0 0 2rem rgba(255,0,0,.8);padding:.2rem 0 .4rem;line-height:1;
+}
+.boss-actions{display:flex;justify-content:flex-end;gap:.5rem;padding:.5rem 1rem 1rem;flex-wrap:wrap}
+.boss-overlay.won .boss-box{border-color:var(--green);box-shadow:0 0 5rem rgba(0,220,0,.3)}
+.boss-overlay.won .boss-title,.boss-overlay.won .boss-hearts{color:var(--green);text-shadow:var(--glow-green)}
+
 /* ---------- Card spotlight ---------- */
 .spotlight::after{  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;z-index:1;
   background:radial-gradient(250px circle at var(--mx,50%) var(--my,50%),rgba(0,220,0,.09),transparent 70%);

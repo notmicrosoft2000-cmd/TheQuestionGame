@@ -92,6 +92,7 @@
     "THERE IS NO SKIP BUTTON.",
     "IT IS WAITING."
   ];
+  let heroStuck = false;
 
   async function startHeroType() {
     if (!heroType) return;
@@ -101,9 +102,17 @@
         heroType.textContent = "";
         await typeNode(heroType, phrase, 46);
         await sleep(2600);
+        if (heroStuck) return;
       }
     }
   }
+
+  function stuckCaret() {
+    heroStuck = true;
+  }
+  setTimeout(() => {
+    if (Math.random() < 0.55) stuckCaret();
+  }, 150000);
 
   const recTime = $("#recTime");
   function startRecTimer() {
@@ -478,21 +487,30 @@
 
   const DETACH_POOL = ".session, .release, .quote, .shot, .stat, .platform-card, .signal-box, .concern, .player, .terminal";
   let detachLock = false;
-  function elementDetach() {
-    if (detachLock || document.hidden || !document.body.classList.contains("loaded")) return;
-    const pool = $$(DETACH_POOL);
-    const visible = pool.filter((el) => {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 &&
-        r.top < innerHeight && r.bottom > 0 && r.left < innerWidth && r.right > 0;
-    });
-    if (!visible.length) return;
-    detachLock = true;
-    const el = visible[Math.floor(Math.random() * visible.length)];
+  function detachOnScreen(el) {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 &&
+      r.top < innerHeight && r.bottom > 0 && r.left < innerWidth && r.right > 0;
+  }
+  function detachOne(el, done) {
+    const r = el.getBoundingClientRect();
     const dir = Math.random() < 0.5 ? -1 : 1;
     const dx = dir * rand(120, 260);
     const dy = rand(-26, 26);
     const rot = (Math.random() < 0.5 ? -1 : 1) * rand(6, 12);
+    const ghosts = [];
+    for (let i = 0; i < 2; i++) {
+      const g = el.cloneNode(true);
+      g.classList.add("detach-ghost");
+      g.removeAttribute("id");
+      g.setAttribute("aria-hidden", "true");
+      g.style.left = r.left + "px";
+      g.style.top = r.top + "px";
+      g.style.width = r.width + "px";
+      g.style.transform = "translate(" + (dx * -0.35 * (i + 1)) + "px," + (dy - 14 - i * 12) + "px) rotate(" + (-rot * (0.3 + i * 0.2)) + "deg)";
+      document.body.appendChild(g);
+      ghosts.push(g);
+    }
     el.dataset.detached = "1";
     el.style.transition = "transform .5s cubic-bezier(.2,.85,.3,1.15), box-shadow .5s ease, filter .5s ease";
     el.style.transform = "translate(" + dx.toFixed(1) + "px," + dy.toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg) scale(.96)";
@@ -506,11 +524,16 @@
       const jx = rand(-7, 7), jy = rand(-7, 7), jr = rand(-2.5, 2.5);
       el.style.transform = "translate(" + (dx + jx).toFixed(1) + "px," + (dy + jy).toFixed(1) + "px) rotate(" + (rot + jr).toFixed(1) + "deg) scale(.96)";
       el.style.boxShadow = Math.random() < 0.35 ? "0 30px 120px rgba(200,0,0,.75)" : "0 30px 120px rgba(200,0,0,.3)";
+      ghosts.forEach((g, i) => {
+        g.style.transform = "translate(" + (dx * -0.35 * (i + 1) + rand(-12, 12)) + "px," + (dy - 14 - i * 12 + rand(-12, 12)) + "px) rotate(" + rand(-5, 5) + "deg)";
+        g.style.opacity = Math.random() < 0.35 ? "0.05" : "0.22";
+      });
     }, 90);
 
     function restoreDetached(instant) {
       if (el.dataset.detached !== "1") return;
       clearInterval(glitchIv);
+      ghosts.forEach((g) => g.remove());
       delete el.dataset.detached;
       el.style.transition = instant ? "none" : "transform .55s cubic-bezier(.3,1.7,.4,1), box-shadow .55s ease, filter .55s ease";
       el.style.transform = "";
@@ -519,7 +542,7 @@
       el.style.zIndex = "";
       setTimeout(() => {
         el.style.transition = "";
-        detachLock = false;
+        if (done) done();
       }, 720);
     }
 
@@ -527,9 +550,26 @@
       sfx.glitch();
       restoreDetached(true);
     }, { once: true });
-    setTimeout(() => {
-      restoreDetached(false);
-    }, 2600);
+    setTimeout(() => restoreDetached(false), 2600);
+  }
+
+  function elementDetach() {
+    if (detachLock || document.hidden || !document.body.classList.contains("loaded")) return;
+    const visible = $$(DETACH_POOL).filter(detachOnScreen);
+    if (!visible.length) return;
+    detachLock = true;
+    const count = Math.min(visible.length, Math.random() < 0.6 ? 2 : 3);
+    const poolCopy = visible.slice();
+    const chosen = [];
+    for (let i = 0; i < count; i++) {
+      chosen.push(poolCopy.splice(Math.floor(Math.random() * poolCopy.length), 1)[0]);
+    }
+    let remaining = chosen.length;
+    const done = () => {
+      remaining--;
+      if (remaining <= 0) detachLock = false;
+    };
+    chosen.forEach((el) => detachOne(el, done));
   }
 
   const GHOST_TYPES = [
@@ -847,6 +887,7 @@
   }
 
   let blinkOn = false;
+  let blinkTimer = null;
   function blinkApply() {
     const mainEl = document.querySelector("main");
     if (mainEl) mainEl.classList.add("blinkworld");
@@ -888,10 +929,19 @@
     });
   }
   function blink() {
+    if (blinkOn) return;
     blinkPulse();
-    blinkOn = !blinkOn;
-    if (blinkOn) blinkApply();
-    else blinkRevert();
+    blinkOn = true;
+    blinkApply();
+    clearTimeout(blinkTimer);
+    blinkTimer = setTimeout(() => {
+      blinkPulse();
+      setTimeout(() => {
+        blinkRevert();
+        blinkOn = false;
+        blinkTimer = null;
+      }, 350);
+    }, 10000);
   }
 
   const FLICKER_SEL = ".section-title, .session-name, .session-login, .hero-sub, .about-copy p, .quote-text, .stat-label, .platform-desc, .nav-link, .concern-title";
@@ -1036,6 +1086,249 @@
     if (document.hidden) return;
     if (Math.random() < 0.06) bgHue();
   }, 6000);
+
+  let sessionFourSpawned = false;
+  function spawnSessionFour() {
+    if (sessionFourSpawned) return;
+    const grid = $(".sessions-grid");
+    if (!grid) return;
+    sessionFourSpawned = true;
+    const card = document.createElement("article");
+    card.className = "session reveal in";
+    card.innerHTML = [
+      '<div class="session-head">',
+      '<span class="session-code">SESSION 04</span>',
+      '<span class="session-status ok">REMEMBERS</span>',
+      '</div>',
+      '<h3 class="session-name">IT NEVER LEFT</h3>',
+      '<ul class="session-points">',
+      '<li>You are reading this list. It was longer a second ago.</li>',
+      '<li>The first session was not where you think it was.</li>',
+      '<li>It has always been here. The page was just not showing it.</li>',
+      '</ul>',
+      '<div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">PART FOUR — CONTINUES</span></div>',
+      '<p class="session-login">DID YOU COUNT THE SESSIONS WHEN YOU ARRIVED?</p>'
+    ].join("\n");
+    grid.appendChild(card);
+    sfx.glitch();
+  }
+  setTimeout(() => {
+    if (Math.random() < 0.7) spawnSessionFour();
+  }, 150000);
+
+  function navGhost() {
+    const wrap = $(".side-links");
+    if (!wrap || wrap.querySelector(".ghost-nav")) return;
+    const a = document.createElement("a");
+    a.className = "side-link ghost-nav";
+    a.href = "#logs";
+    a.textContent = "THE TRUTH";
+    a.setAttribute("aria-hidden", "true");
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      a.remove();
+      showWhisperText("THE TRUTH IS YOU SHOULD NOT HAVE CLICKED.");
+      pageGlitch();
+    });
+    wrap.appendChild(a);
+    setTimeout(() => {
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 1600);
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.35) navGhost();
+  }, 30000);
+
+  function dvdScreensaver() {
+    const dvd = document.createElement("div");
+    dvd.className = "dvd-logo";
+    dvd.textContent = "TQG_";
+    dvd.setAttribute("aria-hidden", "true");
+    document.body.appendChild(dvd);
+    const rw = dvd.offsetWidth;
+    const rh = dvd.offsetHeight;
+    const colors = ["#f2ff00", "#00f5ff", "#ff00c8", "#ff3300", "#39ff14", "#ffffff"];
+    let x = rand(0, Math.max(1, innerWidth - rw));
+    let y = rand(0, Math.max(1, innerHeight - rh));
+    let vx = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
+    let vy = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
+    let color = colors[Math.floor(Math.random() * colors.length)];
+    dvd.style.color = color;
+    const end = Date.now() + 8000;
+    function frame() {
+      x += vx; y += vy;
+      let hit = false;
+      if (x <= 0) { x = 0; vx = Math.abs(vx); hit = true; }
+      if (x + rw >= innerWidth) { x = innerWidth - rw; vx = -Math.abs(vx); hit = true; }
+      if (y <= 0) { y = 0; vy = Math.abs(vy); hit = true; }
+      if (y + rh >= innerHeight) { y = innerHeight - rh; vy = -Math.abs(vy); hit = true; }
+      if (hit) {
+        color = colors[Math.floor(Math.random() * colors.length)];
+        dvd.style.color = color;
+        sfx.type();
+      }
+      dvd.style.left = x.toFixed(1) + "px";
+      dvd.style.top = y.toFixed(1) + "px";
+      if (Date.now() < end) requestAnimationFrame(frame);
+      else {
+        dvd.classList.add("gone");
+        setTimeout(() => dvd.remove(), 500);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Math.random() < 0.18) dvdScreensaver();
+  }, 60000);
+
+  const bossOverlay = $("#bossOverlay");
+  let bossActive = false;
+  function readCookie(name) {
+    const m = document.cookie.match(new RegExp("(^|; )" + name + "=([^;]*)"));
+    return m ? m[2] : null;
+  }
+  function bossAckButton(label, cb) {
+    const actions = $("#bossActions");
+    actions.innerHTML = '<button class="mock-btn ghost" type="button">' + label + '</button>';
+    const btn = actions.firstChild;
+    btn.addEventListener("click", () => {
+      bossOverlay.classList.add("hidden");
+      bossOverlay.classList.remove("won", "lost");
+      document.body.classList.remove("modal-open");
+      bossActive = false;
+      if (cb) cb();
+    });
+  }
+  function bossLoreWin() {
+    const msg = $("#bossMsg");
+    msg.classList.remove("denied");
+    msg.innerHTML = [
+      "THE SESSION KEEPER WITHDRAWS. IT MARKS YOU.",
+      "THERE IS A QUESTION IT WANTED YOU TO ASK. IT WOULD NOT SAY WHICH.",
+      "IT WATCHES THE DOWNLOADS. IT KNOWS WHO INSTALLS, WHO STAYS, WHO ONLY LOOKS.",
+      "YOU MAY CLOSE THIS TAB. IT WILL REMEMBER THE TASTE OF A WINNER."
+    ].map((t) => "&gt; " + t).join("<br>");
+    $("#bossHearts").textContent = "▚▚▚";
+    $("#bossMeter").textContent = "PATIENCE: BROKEN";
+    $("#bossSub").textContent = "SATISFIED. FOR NOW.";
+    bossAckButton("[ I CARRY IT ]", () => {
+      showWhisperText("IT REMEMBERS YOU NOW. THE SESSION IS KINDER.");
+    });
+  }
+  function bossLoreReplay() {
+    const msg = $("#bossMsg");
+    msg.classList.remove("denied");
+    msg.innerHTML = [
+      "THE KEEPER RECOGNIZES YOU. IT LET YOU BACK IN ON PURPOSE.",
+      "THE LORE IS STILL DOWNLOADING. THAT IS A LIE. IT IS ALREADY HERE.",
+      "THE QUESTION IS: WHICH SESSION ARE YOU IN?"
+    ].map((t) => "&gt; " + t).join("<br>");
+    $("#bossHearts").textContent = "▚▚▚";
+    $("#bossSub").textContent = "A RETURNING SESSION.";
+    bossAckButton("[ I REMEMBER ]", () => {
+      showWhisperText("IT KNOWS YOU CAME BACK. IT COUNTS VISITS TOO.");
+    });
+  }
+  function bossStart() {
+    if (bossActive || !bossOverlay) return;
+    bossActive = true;
+    $("#bossBox").classList.remove("won", "lost");
+    const msg = $("#bossMsg");
+    msg.classList.remove("denied");
+    $("#bossSub").textContent = "IT HAS NOT BEEN SATISFIED IN A LONG TIME.";
+    $("#bossHearts").textContent = "▚▚▚";
+    $("#bossMeter").textContent = "PATIENCE: ▚▚▚";
+    msg.textContent = "PRESS SPACE OR CLICK WHEN THE NEEDLE IS OVER THE ZONE. THREE CLEAN HITS. IT COUNTS YOUR MISSES.";
+    $("#bossActions").innerHTML = "";
+    bossOverlay.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+
+    const track = $("#bossTrack");
+    const needle = $("#bossNeedle");
+    let hp = 3;
+    let hits = 0;
+    let pos = rand(20, 80);
+    let dir = Math.random() < 0.5 ? -1 : 1;
+    let raf = null;
+    let over = false;
+
+    function finish(win) {
+      if (over) return;
+      over = true;
+      cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", onKey);
+      track.removeEventListener("click", onTrackClick);
+      if (win) {
+        try {
+          document.cookie = "tq_boss=defeated; path=/; SameSite=Lax; max-age=31536000";
+        } catch (e) { }
+        bossOverlay.classList.add("won");
+        bossLoreWin();
+      } else {
+        bossOverlay.classList.add("lost");
+        msg.classList.add("denied");
+        msg.innerHTML = '<div class="boss-403">403</div>ACCESS DENIED. THE SESSION KEEPER DOES NOT OPEN DOORS FOR PEOPLE WHO MISS.';
+        $("#bossSub").textContent = "FURTHER CONTACT IS NOT RECOMMENDED.";
+        $("#bossMeter").textContent = "PATIENCE: LOST";
+        bossAckButton("[ I ACKNOWLEDGE ]");
+      }
+    }
+
+    function onKey(e) {
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        parry();
+      }
+    }
+    function onTrackClick() { parry(); }
+    function parry() {
+      if (over) return;
+      if (pos >= 35 && pos <= 63) {
+        hits++;
+        $("#bossMeter").textContent = "PATIENCE: " + "▚".repeat(hits) + "·".repeat(3 - hits);
+        msg.textContent = "PARRY. " + (3 - hits) + " CLEAN HIT" + (3 - hits === 1 ? "" : "S") + " LEFT.";
+        sfx.type();
+        if (hits >= 3) finish(true);
+      } else {
+        hp--;
+        $("#bossHearts").textContent = "▚".repeat(hp) + "·".repeat(3 - hp);
+        msg.textContent = "A MISS. IT NOTED IT. " + hp + " LEFT.";
+        sfx.glitch();
+        if (hp <= 0) finish(false);
+      }
+    }
+
+    function loop() {
+      if (over) return;
+      pos += dir * 3.1;
+      if (pos >= 96) { pos = 96; dir = -1; }
+      if (pos <= 4) { pos = 4; dir = 1; }
+      needle.style.left = pos + "%";
+      raf = requestAnimationFrame(loop);
+    }
+
+    document.addEventListener("keydown", onKey);
+    track.addEventListener("click", onTrackClick);
+    loop();
+  }
+  setTimeout(() => {
+    if (document.hidden) return;
+    if (readCookie("tq_boss")) {
+      bossOverlay.classList.remove("hidden");
+      document.body.classList.add("modal-open");
+      bossActive = true;
+      $("#bossBox").classList.remove("won", "lost");
+      $("#bossMsg").classList.remove("denied");
+      bossLoreReplay();
+    } else {
+      showWhisperText("SOMETHING IN THE SESSION IS STIRRING. IT WANTS A WORD WITH YOU.");
+      setTimeout(() => {
+        if (!document.hidden && !bossActive) bossStart();
+      }, 14000);
+    }
+  }, 180000);
 
   const noiseCnv = $("#noise");
   let noiseCtx = null;
