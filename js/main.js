@@ -2678,6 +2678,137 @@
           o.stop(s + 0.32);
         });
       } catch (e) { }
+    },
+    pew() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "square";
+        o.frequency.setValueAtTime(620, t);
+        o.frequency.exponentialRampToValueAtTime(1240, t + 0.09);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.09, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.11);
+      } catch (e) { }
+    },
+    dash() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const n = Math.floor(ctx.sampleRate * 0.18);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const f = ctx.createBiquadFilter();
+        f.type = "bandpass";
+        f.frequency.setValueAtTime(900, t);
+        f.frequency.exponentialRampToValueAtTime(220, t + 0.18);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.16, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+        src.connect(f);
+        f.connect(g);
+        g.connect(ctx.destination);
+        src.start(t);
+      } catch (e) { }
+    },
+    beamCharge() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sawtooth";
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(900, t + 0.75);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.07, t + 0.5);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.8);
+      } catch (e) { }
+    },
+    beam() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const master = ctx.createGain();
+        master.gain.setValueAtTime(0.0001, t);
+        master.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+        master.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+        master.connect(ctx.destination);
+        const o1 = ctx.createOscillator();
+        o1.type = "square";
+        o1.frequency.setValueAtTime(1500, t);
+        o1.frequency.exponentialRampToValueAtTime(90, t + 0.55);
+        o1.connect(master);
+        o1.start(t);
+        o1.stop(t + 0.6);
+        const n = Math.floor(ctx.sampleRate * 0.55);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.25, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+        src.connect(g);
+        g.connect(master);
+        src.start(t);
+      } catch (e) { }
+    },
+    boltHit() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "square";
+        o.frequency.setValueAtTime(880, t);
+        o.frequency.exponentialRampToValueAtTime(180, t + 0.1);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.13);
+      } catch (e) { }
+    },
+    land() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(130, t);
+        o.frequency.exponentialRampToValueAtTime(55, t + 0.07);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.14, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start(t);
+        o.stop(t + 0.1);
+      } catch (e) { }
     }
   };
 
@@ -2963,6 +3094,8 @@
   const bfLeftBtn = $("#bfLeft");
   const bfRightBtn = $("#bfRight");
   const bfCrouchBtn = $("#bfCrouch");
+  const bfDashBtn = $("#bfDash");
+  const bfFireBtn = $("#bfFire");
 
   const BF = {
     active: false, won: false, over: false,
@@ -2974,7 +3107,15 @@
     piston: { x: 0, y: 0, w: 0, h: 62, dir: 1, minX: 0, maxX: 0, speed: 0,
               slamTimer: 0, slamInterval: 2.6, slamPhase: 0, slamming: false, slammed: false },
     spikes: { floor: [], ceil: [] },
-    badge: { x: 0, y: 0, taken: false }
+    badge: { x: 0, y: 0, taken: false },
+    facing: 1,
+    shots: [],
+    bolts: [],
+    particles: [],
+    beam: { state: "idle", x: 0, t: 0, warnEl: null, beamEl: null },
+    dash: { on: false, t: 0, cd: 0, dir: 0 },
+    bossT: 0, nextBeam: 0, nextBolt: 0,
+    fireCd: 0, ghostAcc: 0, ghosts: 0
   };
   let bfStarted = false;
   const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -3046,10 +3187,13 @@
     BF.crouch = false;
     BF.grounded = true;
     BF.jumpHeld = false;
-    bfPlayerEl.classList.remove("crouch", "invuln");
+    BF.facing = 1;
+    BF.dash.on = false;
+    bfPlayerEl.classList.remove("crouch", "invuln", "running", "flip", "jump", "land", "dash", "dash-glow");
     if (death) {
       BF.invuln = 1.4;
       bfPlayerEl.classList.add("invuln");
+      bfSpawnBurst(BF.px + BF.pw / 2, BF.py + 18, true);
       bfFlashEl.classList.add("go");
       setTimeout(() => bfFlashEl.classList.remove("go"), 320);
     }
@@ -3067,6 +3211,235 @@
     sfx.slam();
   }
 
+  function bfSpawnPx(x, y, cls, vx, vy, life) {
+    if (BF.particles.length >= 60) {
+      const old = BF.particles.shift();
+      if (old.el && old.el.parentNode) old.el.parentNode.removeChild(old.el);
+    }
+    const el = document.createElement("div");
+    el.className = "bf-px " + cls;
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    bfArena.appendChild(el);
+    BF.particles.push({ x, y, vx, vy, life, max: life, el, cls });
+  }
+  function bfUpdateParticles(dt) {
+    for (let i = BF.particles.length - 1; i >= 0; i--) {
+      const p = BF.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        if (p.el.parentNode) p.el.parentNode.removeChild(p.el);
+        BF.particles.splice(i, 1);
+        continue;
+      }
+      p.vy += 520 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.el.style.left = p.x.toFixed(1) + "px";
+      p.el.style.top = p.y.toFixed(1) + "px";
+      p.el.style.opacity = String(Math.max(0, p.life / p.max));
+    }
+  }
+  function bfSpawnDust(x, y) {
+    for (let i = 0; i < 4; i++) {
+      bfSpawnPx(x + (Math.random() * 16 - 8), y - 2, "", (Math.random() * 120 - 60), -80 - Math.random() * 70, 0.32 + Math.random() * 0.2);
+    }
+  }
+  function bfSpawnBurst(x, y, red) {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + Math.random() * 0.5;
+      const sp = 90 + Math.random() * 130;
+      bfSpawnPx(x, y, red ? "red" : "green", Math.cos(a) * sp, Math.sin(a) * sp, 0.4 + Math.random() * 0.25);
+    }
+  }
+  function bfSpawnGhost() {
+    if (BF.ghosts >= 12) return;
+    BF.ghosts++;
+    const el = document.createElement("div");
+    el.className = "bf-ghost";
+    el.style.left = BF.px + "px";
+    el.style.top = BF.py + "px";
+    bfArena.appendChild(el);
+    setTimeout(() => {
+      BF.ghosts--;
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 320);
+  }
+
+  function bfTryDash() {
+    if (!BF.active || BF.over || BF.won) return;
+    if (BF.dash.on || BF.dash.cd > 0) return;
+    BF.dash.on = true;
+    BF.dash.t = 0.26;
+    BF.dash.dir = BF.facing;
+    BF.invuln = Math.max(BF.invuln, 0.3);
+    bfPlayerEl.classList.add("dash", "dash-glow");
+    sfx.dash();
+  }
+  function bfTryFire() {
+    if (!BF.active || BF.over || BF.won) return;
+    if (BF.fireCd > 0 || BF.shots.length >= 4) return;
+    BF.fireCd = 0.32;
+    const sx = BF.facing > 0 ? BF.px + BF.pw + 4 : BF.px - 14;
+    const sy = BF.py + (BF.crouch ? BF.phCrouch : BF.phStand) * 0.55;
+    const el = document.createElement("div");
+    el.className = "bf-shot";
+    el.textContent = "?";
+    el.style.left = sx + "px";
+    el.style.top = sy + "px";
+    bfArena.appendChild(el);
+    BF.shots.push({ x: sx, y: sy, vx: BF.facing * 560, life: 0.9, el });
+    sfx.pew();
+  }
+  function bfUpdateShots(dt) {
+    for (let i = BF.shots.length - 1; i >= 0; i--) {
+      const s = BF.shots[i];
+      s.life -= dt;
+      s.x += s.vx * dt;
+      if (s.life <= 0 || s.x < -20 || s.x > BF.W + 20) {
+        if (s.el.parentNode) s.el.parentNode.removeChild(s.el);
+        BF.shots.splice(i, 1);
+        continue;
+      }
+      s.el.style.left = s.x.toFixed(1) + "px";
+      s.el.style.top = s.y.toFixed(1) + "px";
+      for (let j = BF.bolts.length - 1; j >= 0; j--) {
+        const b = BF.bolts[j];
+        if (b.delay > 0) continue;
+        if (s.x > b.x - 10 && s.x < b.x + 12 && s.y > b.y - 10 && s.y < b.y + 12) {
+          bfSpawnBurst(b.x, b.y, true);
+          sfx.boltHit();
+          if (s.el.parentNode) s.el.parentNode.removeChild(s.el);
+          BF.shots.splice(i, 1);
+          if (b.el.parentNode) b.el.parentNode.removeChild(b.el);
+          BF.bolts.splice(j, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  function bfSprayBolts() {
+    const cx = BF.W / 2;
+    const cy = 90;
+    const tx = BF.px + BF.pw / 2;
+    const ty = BF.py + 18;
+    const n = 3 + (BF.tLeft <= 12 ? 2 : 0);
+    bfMsgEl.textContent = "IT SPITS.";
+    bfMsgEl.classList.add("show");
+    bfFaceEl.classList.add("attacking");
+    setTimeout(() => {
+      bfMsgEl.classList.remove("show");
+      bfFaceEl.classList.remove("attacking");
+    }, 1100);
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * 80;
+      const dx = tx + off - cx;
+      const dy = ty - cy;
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      const sp = 250 + Math.random() * 60;
+      bfAddBolt(cx + Math.random() * 30 - 15, cy, (dx / dist) * sp, (dy / dist) * sp + 40, 0.16 + i * 0.09);
+    }
+  }
+  function bfAddBolt(x, y, vx, vy, delay) {
+    if (BF.bolts.length >= 6) return;
+    const el = document.createElement("div");
+    el.className = "bf-bolt";
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    bfArena.appendChild(el);
+    BF.bolts.push({ x, y, vx, vy, delay, el });
+  }
+  function bfUpdateBolts(dt) {
+    for (let i = BF.bolts.length - 1; i >= 0; i--) {
+      const b = BF.bolts[i];
+      if (b.delay > 0) { b.delay -= dt; continue; }
+      b.vy += 240 * dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.y >= BF.floorY - 8) {
+        b.y = BF.floorY - 8;
+        bfSpawnBurst(b.x, b.y, true);
+        if (b.el.parentNode) b.el.parentNode.removeChild(b.el);
+        BF.bolts.splice(i, 1);
+        continue;
+      }
+      b.el.style.left = b.x.toFixed(1) + "px";
+      b.el.style.top = b.y.toFixed(1) + "px";
+      const phh = BF.crouch ? BF.phCrouch : BF.phStand;
+      if (BF.invuln <= 0 && b.x + 12 > BF.px && b.x < BF.px + BF.pw &&
+          b.y + 12 > BF.py && b.y < BF.py + phh) {
+        bfSpawnBurst(b.x, b.y, true);
+        if (b.el.parentNode) b.el.parentNode.removeChild(b.el);
+        BF.bolts.splice(i, 1);
+        bfDie();
+        continue;
+      }
+    }
+  }
+
+  function bfStartBeam() {
+    BF.beam.state = "telegraph";
+    BF.beam.t = 0;
+    BF.beam.x = BF.px + BF.pw / 2;
+    const warn = document.createElement("div");
+    warn.className = "bf-beam-warn";
+    warn.style.left = (BF.beam.x - 3) + "px";
+    bfArena.appendChild(warn);
+    BF.beam.warnEl = warn;
+    bfFaceEl.classList.add("attacking");
+    bfMsgEl.textContent = "IT GAZES.";
+    bfMsgEl.classList.add("show");
+    sfx.beamCharge();
+  }
+  function bfUpdateBeam(dt) {
+    const bm = BF.beam;
+    bm.t += dt;
+    if (bm.state === "telegraph" && bm.t >= 0.85) {
+      bm.state = "active";
+      bm.t = 0;
+      if (bm.warnEl && bm.warnEl.parentNode) bm.warnEl.parentNode.removeChild(bm.warnEl);
+      bm.warnEl = null;
+      const beam = document.createElement("div");
+      beam.className = "bf-beam";
+      beam.style.left = (bm.x - 45) + "px";
+      beam.style.width = "90px";
+      bfArena.appendChild(beam);
+      bm.beamEl = beam;
+      sfx.beam();
+      if (Math.abs(BF.px + BF.pw / 2 - bm.x) < 45 && BF.invuln <= 0 && !BF.won) {
+        bfDie();
+      }
+    } else if (bm.state === "active" && bm.t >= 0.6) {
+      bfClearBeam();
+    }
+  }
+  function bfClearBeam() {
+    const bm = BF.beam;
+    if (bm.warnEl && bm.warnEl.parentNode) bm.warnEl.parentNode.removeChild(bm.warnEl);
+    if (bm.beamEl && bm.beamEl.parentNode) bm.beamEl.parentNode.removeChild(bm.beamEl);
+    bm.warnEl = null;
+    bm.beamEl = null;
+    bm.state = "idle";
+    bm.t = 0;
+    bfFaceEl.classList.remove("attacking");
+    bfMsgEl.classList.remove("show");
+    BF.nextBeam = BF.bossT + 6.5 + Math.random() * 3;
+  }
+  function bfClearFx() {
+    bfClearBeam();
+    for (const s of BF.shots) if (s.el && s.el.parentNode) s.el.parentNode.removeChild(s.el);
+    BF.shots.length = 0;
+    for (const b of BF.bolts) if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el);
+    BF.bolts.length = 0;
+    for (const p of BF.particles) if (p.el && p.el.parentNode) p.el.parentNode.removeChild(p.el);
+    BF.particles.length = 0;
+    BF.dash.on = false;
+    BF.fireCd = 0;
+    BF.bossT = 0;
+    bfPlayerEl.classList.remove("dash", "dash-glow", "running", "flip", "jump", "land");
+  }
+
   function bfLoop(ts) {
     if (!BF.active) return;
     const dt = Math.min(0.05, (ts - BF.last) / 1000);
@@ -3081,7 +3454,7 @@
         BF.tLeft -= step;
         if (BF.tLeft < 0) BF.tLeft = 0;
         bfTimerEl.textContent = String(BF.tLeft);
-        bfTimerEl.classList.toggle("warn", BF.tLeft <= 5);
+        bfTimerEl.classList.toggle("warn", BF.tLeft <= 10);
         if (BF.tLeft === 0) { bfWin(); }
       }
     }
@@ -3090,6 +3463,10 @@
     if (BF.keys.left) move -= 1;
     if (BF.keys.right) move += 1;
     BF.crouch = BF.keys.crouch;
+
+    const wasGrounded = BF.grounded;
+    const wasVy = BF.vy;
+
     if (BF.keys.jump && BF.grounded && !BF.jumpHeld) {
       BF.vy = -400;
       BF.grounded = false;
@@ -3098,8 +3475,25 @@
     }
     if (!BF.keys.jump) BF.jumpHeld = false;
 
-    BF.px += move * 260 * dt;
+    if (BF.dash.on) {
+      BF.dash.t -= dt;
+      BF.px += BF.dash.dir * 830 * dt;
+      BF.ghostAcc += dt;
+      if (BF.ghostAcc >= 0.045) {
+        BF.ghostAcc = 0;
+        bfSpawnGhost();
+      }
+      if (BF.dash.t <= 0) {
+        BF.dash.on = false;
+        bfPlayerEl.classList.remove("dash", "dash-glow");
+        BF.dash.cd = 1.4;
+      }
+    } else {
+      BF.px += move * 260 * dt;
+      if (BF.dash.cd > 0) BF.dash.cd = Math.max(0, BF.dash.cd - dt);
+    }
     BF.px = Math.max(0, Math.min(BF.W - BF.pw, BF.px));
+    if (move !== 0) BF.facing = move < 0 ? -1 : 1;
 
     let g = 900;
     if (BF.jumpHeld && BF.vy < 0) g *= 0.6;
@@ -3113,7 +3507,21 @@
     } else {
       BF.grounded = false;
     }
+
+    if (!wasGrounded && BF.grounded && wasVy > 320) {
+      bfSpawnDust(BF.px + BF.pw / 2, BF.floorY);
+      bfPlayerEl.classList.add("land");
+      setTimeout(() => bfPlayerEl.classList.remove("land"), 120);
+      sfx.land();
+    }
+
     bfPlayerEl.classList.toggle("crouch", BF.crouch);
+    bfPlayerEl.classList.toggle("running", BF.grounded && (BF.keys.left || BF.keys.right));
+    bfPlayerEl.classList.toggle("flip", BF.facing < 0);
+    bfPlayerEl.classList.toggle("jump", !BF.grounded && BF.vy < 0);
+    bfPlayerEl.style.transform = "translate(" + BF.px.toFixed(1) + "px," + BF.py.toFixed(1) + "px)";
+
+    if (BF.fireCd > 0) BF.fireCd = Math.max(0, BF.fireCd - dt);
 
     if (BF.invuln > 0) {
       BF.invuln -= dt;
@@ -3137,23 +3545,48 @@
         const p = pw.slamPhase;
         if (p < 0.35) {
           pw.y = easeInOut(Math.min(1, p / 0.35)) * (BF.floorY - 18 - pw.h);
+          bfPistonEl.classList.add("warn");
+          bfPistonEl.classList.remove("slamming");
         } else if (p < 0.9) {
           pw.y = BF.floorY - 18 - pw.h;
+          bfPistonEl.classList.remove("warn");
+          bfPistonEl.classList.add("slamming");
           if (!pw.slammed) { pw.slammed = true; bfSlamImpact(); }
         } else if (p < 1.5) {
           pw.y = (1 - easeInOut(Math.min(1, (p - 0.9) / 0.6))) * (BF.floorY - 18 - pw.h);
+          bfPistonEl.classList.add("warn");
+          bfPistonEl.classList.remove("slamming");
         } else {
           pw.y = 0;
           pw.slamming = false;
           pw.slammed = false;
+          bfPistonEl.classList.remove("warn", "slamming");
         }
       }
     } else {
       pw.y = 0;
       pw.slamming = false;
       pw.slammed = false;
+      bfPistonEl.classList.remove("warn", "slamming");
     }
     bfPistonEl.style.transform = "translate(" + pw.x.toFixed(1) + "px," + pw.y.toFixed(1) + "px)";
+
+    if (!BF.won) {
+      BF.bossT += dt;
+      if (BF.beam.state === "idle" && BF.bossT >= BF.nextBeam) bfStartBeam();
+      if (BF.beam.state !== "idle") bfUpdateBeam(dt);
+      if (BF.bossT >= BF.nextBolt && BF.bolts.length < 5 && BF.beam.state === "idle") {
+        BF.nextBolt = BF.bossT + 6 + Math.random() * 4;
+        bfSprayBolts();
+      }
+      bfUpdateBolts(dt);
+    } else {
+      if (BF.beam.state !== "idle") bfClearBeam();
+      for (const b of BF.bolts) if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el);
+      BF.bolts.length = 0;
+    }
+    bfUpdateShots(dt);
+    bfUpdateParticles(dt);
 
     if (!BF.won) {
       const pistonBottom = pw.y + pw.h;
@@ -3193,6 +3626,11 @@
 
   function bfWin() {
     BF.won = true;
+    if (BF.beam.state !== "idle") bfClearBeam();
+    for (const b of BF.bolts) if (b.el && b.el.parentNode) b.el.parentNode.removeChild(b.el);
+    BF.bolts.length = 0;
+    bfPlayerEl.classList.remove("dash", "dash-glow");
+    BF.dash.on = false;
     bfTimerEl.textContent = "0";
     BF.badge.x = Math.max(0, Math.min(BF.W - 46, BF.px + BF.pw / 2 - 23));
     BF.badge.y = 0;
@@ -3220,38 +3658,47 @@
     BF.active = false;
     BF.over = true;
     cancelAnimationFrame(BF.raf);
+    bfClearFx();
     bfEl.classList.remove("go");
     document.body.classList.remove("modal-open");
     GAME_OVERLAY = false;
     bfFaceEl.classList.remove("gone");
     bfMsgEl.classList.remove("show");
     bfMsgEl.textContent = "";
-    bfTimerEl.textContent = "30";
+    bfTimerEl.textContent = "120";
     bfTimerEl.classList.remove("warn");
     bfPlayerEl.classList.remove("crouch", "invuln");
     bfBadgeEl.classList.remove("show");
+    bfPistonEl.classList.remove("warn", "slamming");
     BF.won = false;
-    BF.tLeft = 30;
+    BF.tLeft = 120;
     BF.acc = 0;
     bfStarted = false;
     BF.piston.y = 0;
     bfPistonEl.style.transform = "translate(0px,0px)";
+    bfPlayerEl.style.transform = "";
   }
 
   function bfStart() {
     if (bfStarted || !bfEl || !bfArena) return;
     bfStarted = true;
     GAME_OVERLAY = true;
+    bfClearFx();
     bfLayout();
     bfResetPlayer(false);
     BF.active = true;
     BF.over = false;
     BF.won = false;
-    BF.tLeft = 30;
+    BF.tLeft = 120;
     BF.acc = 0;
     BF.badge.taken = false;
     BF.keys.left = BF.keys.right = BF.keys.crouch = BF.keys.jump = false;
-    bfTimerEl.textContent = "30";
+    BF.dash.on = false;
+    BF.dash.cd = 0;
+    BF.fireCd = 0;
+    BF.nextBeam = 3.5;
+    BF.nextBolt = 4.5 + Math.random() * 2;
+    bfTimerEl.textContent = "120";
     bfEl.classList.add("go");
     document.body.classList.add("modal-open");
     if (bfAudioEl) {
@@ -3269,6 +3716,8 @@
     else if (k === "ArrowRight" || k === "d" || k === "D") BF.keys.right = true;
     else if (k === "ArrowDown" || k === "s" || k === "S") BF.keys.crouch = true;
     else if (k === " " || k === "ArrowUp" || k === "w" || k === "W") BF.keys.jump = true;
+    else if (k === "Shift") { if (!e.repeat) bfTryDash(); }
+    else if (k === "x" || k === "X" || k === "j" || k === "J" || k === "k" || k === "K") { if (!e.repeat) bfTryFire(); }
     if (k === " " || k.indexOf("Arrow") === 0) e.preventDefault();
   }
   function bfKeyUp(e) {
@@ -3292,6 +3741,17 @@
   if (bfLeftBtn) bfBindBtn(bfLeftBtn, "left");
   if (bfRightBtn) bfBindBtn(bfRightBtn, "right");
   if (bfCrouchBtn) bfBindBtn(bfCrouchBtn, "crouch");
+
+  if (bfDashBtn) {
+    bfDashBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); bfTryDash(); bfDashBtn.classList.add("press"); });
+    bfDashBtn.addEventListener("pointerup", (e) => { e.preventDefault(); bfDashBtn.classList.remove("press"); });
+    bfDashBtn.addEventListener("pointerleave", () => bfDashBtn.classList.remove("press"));
+  }
+  if (bfFireBtn) {
+    bfFireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); bfTryFire(); bfFireBtn.classList.add("press"); });
+    bfFireBtn.addEventListener("pointerup", (e) => { e.preventDefault(); bfFireBtn.classList.remove("press"); });
+    bfFireBtn.addEventListener("pointerleave", () => bfFireBtn.classList.remove("press"));
+  }
 
   const stageBtnEl = $("#stageBtn");
   if (stageBtnEl) {
