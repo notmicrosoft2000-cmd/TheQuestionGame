@@ -35,7 +35,7 @@ jobs:
         run: pip install --upgrade pip && pip install pyinstaller && pip install -r requirements-linux.txt
 
       - name: Build with PyInstaller
-        run: pyinstaller --clean --noconfirm TheQuestionGameRemastered-linux.spec
+        run: pyinstaller --clean --noconfirm games/remastered/TheQuestionGameRemastered-linux.spec
 
       - name: Package binary
         run: |
@@ -44,7 +44,7 @@ jobs:
           rm -rf linuxroot
           mkdir -p linuxroot
           cp dist/TheQuestionGameRemastered linuxroot/
-          cp readme_remastered.txt linuxroot/readme.txt
+          cp games/remastered/readme_remastered.txt linuxroot/readme.txt
           tar -czf TheQuestionGameRemastered-linux.tar.gz -C linuxroot .
 
       - name: Upload to release

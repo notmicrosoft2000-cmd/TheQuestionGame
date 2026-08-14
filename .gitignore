@@ -8,6 +8,13 @@ TheQuestionGameRemastered.zip
 __pycache__/
 *.py[cod]
 
+# File-manager folder metadata
+.directory
+
+# Local Python virtualenvs
+.venv/
+venv/
+
 # Mac build artifacts (py2app + hdiutil, produced by build-mac.yml)
 dist/
 build/

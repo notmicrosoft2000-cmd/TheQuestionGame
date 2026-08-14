@@ -28,8 +28,8 @@ jobs:
         run: |
           mkdir -p icon.iconset
           for s in 16 32 128 256 512; do
-            sips -z $s $s TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}.png >/dev/null
-            sips -z $((s * 2)) $((s * 2)) TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}@2x.png >/dev/null
+            sips -z $s $s games/remastered/TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}.png >/dev/null
+            sips -z $((s * 2)) $((s * 2)) games/remastered/TheQuestionGameRemastered/assets/windowq.png --out icon.iconset/icon_${s}x${s}@2x.png >/dev/null
           done
           iconutil -c icns icon.iconset -o icon.icns
 

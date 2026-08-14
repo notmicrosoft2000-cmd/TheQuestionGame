@@ -8,7 +8,7 @@ setup(
     name="TheQuestionGame",
     version="2.02",
     description="The Question Game",
-    app=[os.path.join(ROOT, "TheQuestionGame.py")],
+    app=[os.path.join(ROOT, "games", "classic", "TheQuestionGame.py")],
     options={
         "py2app": {
             "argv_emulation": True,
@@ -18,7 +18,7 @@ setup(
             "resources": [
                 os.path.join(ROOT, "windowq.png"),
                 os.path.join(ROOT, "logsmusic.ogg"),
-                os.path.join(ROOT, "readme.txt"),
+                os.path.join(ROOT, "games", "classic", "readme.txt"),
             ],
             "plist": {
                 "CFBundleName": "The Question Game",

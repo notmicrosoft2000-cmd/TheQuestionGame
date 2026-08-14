@@ -8,7 +8,7 @@ setup(
     name="TheQuestionGameRemastered",
     version="2.02",
     description="The Question Game Remastered",
-    app=[os.path.join(ROOT, "run_remastered.py")],
+    app=[os.path.join(ROOT, "games", "remastered", "run_remastered.py")],
     options={
         "py2app": {
             "argv_emulation": True,
@@ -16,7 +16,7 @@ setup(
             "packages": ["pygame", "numpy", "cv2", "requests"],
             "excludes": ["tkinter", "PyQt5", "PySide2", "matplotlib", "scipy"],
             "resources": [
-                os.path.join(ROOT, "TheQuestionGameRemastered", "assets"),
+                os.path.join(ROOT, "games", "remastered", "TheQuestionGameRemastered", "assets"),
             ],
             "plist": {
                 "CFBundleName": "The Question Game Remastered",

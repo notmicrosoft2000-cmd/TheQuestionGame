@@ -35,7 +35,7 @@ jobs:
         run: pip install --upgrade pip && pip install pyinstaller && pip install -r requirements-linux.txt
 
       - name: Build with PyInstaller
-        run: pyinstaller --clean --noconfirm TheQuestionGame-linux.spec
+        run: pyinstaller --clean --noconfirm games/classic/TheQuestionGame-linux.spec
 
       - name: Package binary
         run: |
@@ -45,7 +45,7 @@ jobs:
           mkdir -p linuxroot
           cp dist/TheQuestionGame linuxroot/
           cp windowq.png logsmusic.ogg linuxroot/
-          cp readme.txt linuxroot/
+          cp games/classic/readme.txt linuxroot/
           tar -czf TheQuestionGame-linux.tar.gz -C linuxroot .
 
       - name: Upload to release

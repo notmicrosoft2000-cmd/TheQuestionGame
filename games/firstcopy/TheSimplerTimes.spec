@@ -1,13 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
-
-hiddenimports = ['cv2', 'numpy', 'requests', 'pygame']
-hiddenimports += collect_submodules('pyttsx3')
+hiddenimports = ['pygame', 'numpy']
 
 
 a = Analysis(
-    ['TheQuestionGame.py'],
-    pathex=[],
+    ['run_firstcopy.py'],
+    pathex=['.'],
     binaries=[],
     datas=[],
     hiddenimports=hiddenimports,
@@ -26,7 +23,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='TheQuestionGame',
+    name='TheSimplerTimes',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -39,5 +36,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['TheQuestionGameRemastered\\assets\\windowq.ico'],
+    icon=['assets/windowq.ico'],
 )

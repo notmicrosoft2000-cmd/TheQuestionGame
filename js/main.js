@@ -61,14 +61,14 @@
 
   const BOOT_LINES = [
     ["INITIALIZING THE QUESTION GAME v2.04", ""],
-    ["CONNECTING TO LOCAL ENVIRONMENT METRICS ...", ""],
-    ["READING HARDWARE PROFILE ... OK", ""],
-    ["CALIBRATING INPUT PROTOCOL ... OK", ""],
-    ["SCANNING SESSION ARCHIVE ...", ""],
-    ["SESSION 001 READY.", ""],
+    ["CONNECTING TO YOUR COMPUTER", ""],
+    ["WARNING", ""],
+    ["This website contains flashing lights,", ""],
+    ["And jumpscares...", ""],
+    ["Viewer discretion advised.", ""],
     ["", ""],
-    ["THIS IS NOT THE FIRST TIME WE HAVE SPOKEN.", "red"],
-    ["ARE YOU SITTING COMFORTABLY?", "red"]
+    ["THE QUESTION GAME WEBSITE", "red"],
+    ["(c) Neptune Productions", "red"]
   ];
 
   async function runBoot() {
