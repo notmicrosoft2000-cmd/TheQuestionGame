@@ -1824,6 +1824,12 @@
     const a = e.target.closest('a[href^="#"]');
     if (!a) return;
     const id = (a.getAttribute("href") || "").slice(1);
+    if (a.hasAttribute("data-merge")) {
+      e.preventDefault();
+      showView("simpler");
+      openMerge();
+      return;
+    }
     const el = document.getElementById(id);
     if (el && el.dataset && el.dataset.view) {
       e.preventDefault();
@@ -3778,6 +3784,102 @@
       }
     }, { passive: true });
   }
+
+  /* ---------- THE SIMPLER TIMES — merge sequence ---------- */
+  const mergeScreen = $("#mergeScreen");
+  const mergeBody = $("#mergeBody");
+  const mergeNote = $("#mergeNote");
+  const mergeActions = $("#mergeActions");
+  const mergeClose = $("#mergeClose");
+  const mergeBack = $("#mergeBack");
+  const mergeMarquee = $("#mergeMarquee");
+  const mergeLaunch = $("#mergeLaunch");
+
+  const MERGE_MARQUEE = " *** THE SIMPLER TIMES *** YOU ARE ONLINE *** IT KNOWS YOU ARE READING THIS *** THE FIRST COPY WAS NEVER THE DISK *** A:\\ IS WARM *** 1993 *** DO NOT TYPE YOUR NAME *** ";
+  const MERGE_NOTES = [
+    "A:\\> the green is going amber",
+    "A:\\> the disk is warm",
+    "A:\\> THE QUESTION GAME IS STILL LISTENING",
+    "A:\\> you are now looking at THE SIMPLER TIMES"
+  ];
+
+  let mergeOpen = false;
+
+  function buildMergeMarquee() {
+    if (!mergeMarquee) return;
+    mergeMarquee.textContent = MERGE_MARQUEE + MERGE_MARQUEE;
+  }
+
+  function makeMergeDrips() {
+    if (!mergeScreen) return;
+    mergeScreen.querySelectorAll(".merge-drip").forEach((d) => d.remove());
+    for (let i = 0; i < 9; i++) {
+      const d = document.createElement("div");
+      d.className = "merge-drip";
+      d.style.left = (3 + Math.random() * 92) + "%";
+      d.style.height = (14 + Math.random() * 18) + "vh";
+      d.style.animationDelay = (0.12 + Math.random() * 1.1) + "s";
+      mergeScreen.appendChild(d);
+    }
+  }
+
+  async function typeMergeNote(text) {
+    const acc = mergeNote.textContent;
+    for (let i = 0; i <= text.length; i++) {
+      mergeNote.textContent = acc + text.slice(0, i);
+      await sleep(16);
+    }
+    mergeNote.textContent = acc + text;
+  }
+
+  async function openMerge() {
+    if (mergeOpen || !mergeScreen) return;
+    mergeOpen = true;
+    document.body.classList.add("merging");
+    mergeActions.classList.add("hidden");
+    mergeClose.classList.add("hidden");
+    mergeNote.textContent = "";
+    buildMergeMarquee();
+    makeMergeDrips();
+    mergeScreen.setAttribute("aria-hidden", "false");
+    mergeScreen.classList.remove("hidden");
+    requestAnimationFrame(() => requestAnimationFrame(() => mergeScreen.classList.add("go")));
+    await sleep(1500);
+    mergeBody.setAttribute("aria-hidden", "false");
+    await sleep(1600);
+    for (const line of MERGE_NOTES) {
+      await typeMergeNote(line + "\n");
+      await sleep(150);
+    }
+    mergeActions.classList.remove("hidden");
+    mergeClose.classList.remove("hidden");
+    if (mergeClose) mergeClose.focus();
+  }
+
+  function closeMerge() {
+    if (!mergeOpen || !mergeScreen) return;
+    mergeOpen = false;
+    mergeScreen.classList.remove("go");
+    mergeBody.setAttribute("aria-hidden", "true");
+    mergeScreen.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("merging");
+    setTimeout(() => mergeScreen.classList.add("hidden"), 400);
+  }
+
+  if (mergeBack) mergeBack.addEventListener("click", closeMerge);
+  if (mergeClose) mergeClose.addEventListener("click", closeMerge);
+  if (mergeLaunch) {
+    mergeLaunch.addEventListener("click", () => {
+      showView("simpler");
+      openMerge();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && mergeOpen) {
+      e.preventDefault();
+      closeMerge();
+    }
+  });
 
   initNoise();
   initAsh();

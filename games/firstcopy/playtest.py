@@ -85,6 +85,9 @@ class _Audio:
     def stop_all_loops(self, *a, **k):
         pass
 
+    def set_loop_volume(self, *a, **k):
+        pass
+
 
 def _screen():
     pygame.init()

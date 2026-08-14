@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=30">
+  <link rel="stylesheet" href="css/style.css?v=31">
 </head>
 <body>
 
@@ -70,7 +70,7 @@
     <div class="contents" id="contents">
       <a class="contents-link" href="#home"><span class="link-num">1</span> HOME</a>
       <a class="contents-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
-      <a class="contents-link" href="https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/" target="_blank" rel="noopener">THE SIMPLER TIMES ↗</a>
+      <a class="contents-link" href="#simpler" data-merge>THE SIMPLER TIMES</a>
       <a class="contents-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
       <a class="contents-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
       <a class="contents-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
@@ -89,7 +89,7 @@
     <div class="side-links">
       <a class="side-link" href="#home"><span class="link-num">1</span> HOME</a>
       <a class="side-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
-      <a class="side-link" href="https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/" target="_blank" rel="noopener">THE SIMPLER TIMES ↗</a>
+      <a class="side-link" href="#simpler" data-merge>THE SIMPLER TIMES</a>
       <a class="side-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
       <a class="side-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
       <a class="side-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
@@ -210,8 +210,8 @@
       <p class="section-sub reveal">The prequel has its own corner of the internet — a 1990s portal viewed through a CRT monitor. It has its own power button. It boots itself.</p>
 
       <div class="simpler-redirect reveal">
-        <a class="btn btn-primary" href="https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/" target="_blank" rel="noopener" style="font-size:clamp(1.1rem,2.4vw,1.6rem);padding:.7rem 1.6rem">→ VISIT THE SIMPLER TIMES WEBSITE</a>
-        <p class="dim" style="margin-top:.8rem;font-size:.8rem">WINDOWS · MACOS · LINUX — BUILDS AND DOWNLOADS LIVE THERE. THE QUESTION GAME KEEPS ITS OWN DOOR.</p>
+        <button class="btn btn-primary" id="mergeLaunch" type="button" style="font-size:clamp(1.1rem,2.4vw,1.6rem);padding:.7rem 1.6rem">→ MERGE WITH THE SIMPLER TIMES</button>
+        <p class="dim" style="margin-top:.8rem;font-size:.8rem">WATCH THE QUESTION GAME TURN AMBER. THE PREQUEL'S WEBSITE MELTS THROUGH THE SCREEN. <a href="https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/" target="_blank" rel="noopener" style="color:var(--green);text-shadow:var(--glow-green)">OR OPEN IT DIRECTLY ↗</a></p>
       </div>
 
       <div class="about-grid">
@@ -891,7 +891,25 @@
   </div>
   <audio id="bfAudio" src="bossfight.mp3" loop preload="auto"></audio>
 
-  <script src="js/config.js?v=29"></script>
-  <script src="js/main.js?v=29"></script>
+  <div class="merge-screen hidden" id="mergeScreen" role="dialog" aria-modal="true" aria-label="THE SIMPLER TIMES — merging" aria-hidden="true">
+    <div class="merge-band" aria-hidden="true"></div>
+    <div class="merge-body" aria-hidden="true">
+      <div class="merge-brand">A:\&gt; THE SIMPLER TIMES <span>— 1993</span></div>
+      <div class="merge-marquee" aria-hidden="true"><div class="merge-marquee-track" id="mergeMarquee"></div></div>
+      <div class="merge-inner">
+        <h1 class="merge-title" data-text="THE SIMPLER TIMES">THE SIMPLER TIMES</h1>
+        <p class="merge-tag">A 1993 floppy disk that is very aware it is running on your machine.</p>
+        <p class="merge-note" id="mergeNote" aria-live="polite"></p>
+        <div class="merge-actions hidden" id="mergeActions">
+          <a class="btn btn-primary" href="https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/" target="_blank" rel="noopener">[ ENTER THE SIMPLER TIMES ]</a>
+          <button class="btn btn-ghost" id="mergeBack" type="button">[ RETURN TO THE QUESTION GAME ]</button>
+        </div>
+      </div>
+    </div>
+    <button class="merge-close hidden" id="mergeClose" type="button" aria-label="Return to The Question Game">✕ RETURN</button>
+  </div>
+
+  <script src="js/config.js?v=31"></script>
+  <script src="js/main.js?v=31"></script>
 </body>
 </html>

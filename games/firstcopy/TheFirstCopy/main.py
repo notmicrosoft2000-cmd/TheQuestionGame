@@ -6,6 +6,7 @@ The title screen is a faithful homage to the original THE QUESTION GAME's
 menu: play / Settings / Help / About / exit, TAB+ENTER navigation, a
 glowing title, and the original's run-count degradation.
 """
+import math
 import time
 
 import pygame
@@ -72,6 +73,16 @@ def _chars_per_sec(state):
 
 
 class Game:
+    # per-mode ambient loops (name, loop volume). The machine is never silent.
+    AMBIENCE = {
+        TITLE: [("drone", 0.10)],
+        FAIR: [("buzz", 0.12), ("murmur", 0.07)],
+        BOOT: [("drone", 0.14)],
+        FILES: [("drone", 0.20), ("whirr", 0.09)],
+        CHAIR: [("theme", 0.28), ("breath", 0.22)],
+        ENDING: [("theme", 0.42)],
+    }
+
     def __init__(self, screen, state, audio_mgr):
         self.screen = screen
         self.state = state
@@ -80,10 +91,15 @@ class Game:
         self.wintrick = window.WindowTrick(
             guard_enabled=state.get("settings", {}).get("mouse_guard", True))
         geo.ensure_started()
+        ui.set_text_scale(state.get("settings", {}).get(
+            "text_size", config.DEFAULT_SETTINGS["text_size"]))
+        ui.clear_font_cache()
 
         self.mode = TITLE
         self.submode = ROOM
         self.timer = 0.0
+        self._loops_active = {}
+        self._tick_t = 0.0
         self.whisper = None        # (text, remaining_seconds)
         self.static_t = 0.0
         self.static_intensity = 0.0
@@ -132,6 +148,7 @@ class Game:
         self._earned = set(persistence.load_badges()["earned"])
         self._save_accum = 0.0
         self._set_badge_ttl = 0.0
+        self._set_ambience(self.mode)
 
     # ------------------------------------------------------------------ utils
     def play(self, name, volume=1.0):
@@ -181,19 +198,30 @@ class Game:
             if self.shell is None:
                 self.shell = self._make_shell()
             self.submode = ROOM
-            self.audio.start_loop("drone", 0.14)
-            self.audio.start_loop("whirr", 0.05)
             self.scare.note_activity()
         elif mode == CHAIR:
             self.eng.arrive("corridor")
-            self.audio.stop_all_loops()
-            self.audio.start_loop("theme", 0.18)
         elif mode == ENDING:
-            self.audio.stop_all_loops()
             self.ending_id = script.compute_ending(self.state)
             self.ending_i = 0
             self.ending_done = False
-            self.audio.start_loop("theme", 0.3)
+        self._set_ambience(mode)
+
+    def _set_ambience(self, mode):
+        """Keep the right ambient loops running for the current mode."""
+        specs = self.AMBIENCE.get(mode, ())
+        want = {name for name, _ in specs}
+        for name, vol in specs:
+            if name not in self._loops_active:
+                self.audio.start_loop(name, vol)
+                self._loops_active[name] = vol
+            elif self._loops_active[name] != vol:
+                self.audio.set_loop_volume(name, vol)
+                self._loops_active[name] = vol
+        for name in list(self._loops_active):
+            if name not in want:
+                self.audio.stop_loop(name)
+                self._loops_active.pop(name, None)
 
     def _make_shell(self):
         def on_run(f):
@@ -405,6 +433,9 @@ class Game:
         i = vals.index(cur) if cur in vals else 0
         i = (i + delta) % len(vals)
         s[key] = vals[i]
+        if key == "text_size":
+            ui.set_text_scale(vals[i])
+            ui.clear_font_cache()
         self.play("click")
 
     def _settings_rows(self):
@@ -514,6 +545,13 @@ class Game:
         if result is None:
             return
         t = result.get("type")
+        hid = result.get("hotspot")
+        if t == "go":
+            self.play("thud", 0.35)
+        elif hid == "clock":
+            self.play("tick", 0.5)
+        elif hid == "take":
+            self.play("write", 0.4)
         if t == "dos":
             self.submode = SHELL
             self.play("write")
@@ -528,6 +566,8 @@ class Game:
             self.save()
             self.switch(ENDING)
         elif t == "chair":
+            self.play("knock", 0.55)
+            self.play("thud", 0.4)
             self.save()
             self.switch(CHAIR)
         elif t == "dial":
@@ -535,6 +575,23 @@ class Game:
             self.message = result["text"].split("\n")
             self._start_fake({"kind": "dial", "t": 0.0, "done": False})
         self.award_pending_badges()
+
+    def _consume_scene_events(self):
+        """Plays one-shot sounds for scene transitions (doors, rooms)."""
+        if not self.eng:
+            return
+        for e in self.eng.events:
+            if e.get("type") == "arrive":
+                sid = e.get("scene")
+                if sid == "phone_booth":
+                    self.play("dialtone", 0.5)
+                elif sid in ("corridor",):
+                    self.play("knock", 0.7)
+                elif sid in ("chair_room", "closing_floor", "parking_out"):
+                    self.play("thud", 0.5)
+                elif sid == "home_desk":
+                    self.play("tick", 0.4)
+        self.eng.clear_events()
 
     # ---- files input
     def _files_input(self, ev):
@@ -698,6 +755,7 @@ class Game:
             self.play(e.get("sound"), e.get("volume", 0.6))
         elif t == "self_type":
             self.shell.output.append(("A:\\> " + e["line"], "dim"))
+            self.play("type", 0.45)
         elif t == "drive_light":
             self.set_status("A: WRITING...", 1.2)
         elif t == "rewrite":
@@ -820,7 +878,7 @@ class Game:
             self.title_t += dt
         elif self.mode == FAIR or self.mode == CHAIR:
             if self.eng:
-                self.eng.clear_events()
+                self._consume_scene_events()
         elif self.mode == BOOT:
             self._update_boot(dt)
         elif self.mode == FILES:
@@ -867,7 +925,7 @@ class Game:
         if g["i"] < len(g["cmd"]):
             self.shell.handle_char(g["cmd"][g["i"]])
             g["i"] += 1
-            self.play("click", 0.25)
+            self.play("type", 0.3)
         else:
             self.shell.handle_char("\r")
             self._process_shell_events()
@@ -918,6 +976,13 @@ class Game:
             return
         if self.submode == SHELL:
             self._process_shell_events()
+        elif self.submode == ROOM:
+            self._consume_scene_events()
+            # the clock that is stuck at 11:59 keeps ticking, somewhere
+            self._tick_t += dt
+            if self._tick_t >= 12.0:
+                self._tick_t = 0.0
+                self.play("tick", 0.35)
 
     def _update_reading(self, dt):
         cps = _chars_per_sec(self.state)
@@ -1009,8 +1074,11 @@ class Game:
             "a prequel to THE QUESTION GAME — FREE SOFTWARE. TAKE ONE.",
             True, config.DIM)
 
+        sx = int(math.sin(self.title_t * 1.8) * 5)
+        sy = int(math.cos(self.title_t * 1.2) * 3)
         if title is not None:
-            ui.draw_centered(s, title, cy=int(h * 0.10))
+            tw = title.get_width()
+            s.blit(title, ((w - tw) // 2 + sx, int(h * 0.10) + sy))
             ui.draw_centered(s, sub, cy=int(h * 0.10) + 54)
         else:
             for i, blk in enumerate(blocks):
@@ -1090,13 +1158,15 @@ class Game:
         rect = pygame.Rect(int(w * 0.14), int(h * 0.16),
                            w - 2 * int(w * 0.14), int(h * 0.68))
         y = rect.top
-        for ln in lines:
+        for i, ln in enumerate(lines):
             col = config.RED if ln == "" else (
                 config.TEXT_BRIGHT if ln.startswith("THE FIRST") or
                 ln.startswith("a prequel") or ln.startswith("Neptune")
                 else config.TEXT)
             surf = font.render(ln, True, col)
-            s.blit(surf, (rect.left, y))
+            dx = int(math.sin(self.timer * 0.8 + i * 0.6) * 2)
+            dy = int(math.cos(self.timer * 1.2 + i * 0.4) * 1)
+            s.blit(surf, (rect.left + dx, y + dy))
             y += font.get_linesize()
         ui.draw_centered(s, ui.get_font(12).render(
             "any key to return", True, config.RED),
@@ -1133,7 +1203,7 @@ class Game:
         desc_rect = pygame.Rect(rx, 60, rw, int(h * 0.42))
         ui.draw_wrapped(s, self.eng.description(), desc_font, config.TEXT,
                         desc_rect, elapsed=self.timer * 60 if self._just_arrived()
-                        else None, chars_per_sec=60)
+                        else None, chars_per_sec=60, sway=2, sway_t=self.timer)
 
         # hotspots (bottom bar)
         hs = self.eng.visible_hotspots()
@@ -1199,7 +1269,8 @@ class Game:
         ui.draw_wrapped(s, content, font, config.TEXT,
                         pygame.Rect(panel.left + 12, panel.top + 14,
                                     panel.width - 24, panel.height - 28),
-                        elapsed=revealed / float(max(1, cps)), chars_per_sec=cps)
+                        elapsed=revealed / float(max(1, cps)), chars_per_sec=cps,
+                        sway=2, sway_t=self.timer)
 
         prog = ui.get_font(12).render(
             f"READING {f['name']}.{f['ext']}   {revealed}/{len(content)}  ·  "
@@ -1223,7 +1294,8 @@ class Game:
         ui.draw_wrapped(s, prompt, ui.get_font(24), config.TEXT_BRIGHT,
                         pygame.Rect(panel.left + 20, panel.top + 20,
                                     panel.width - 40, panel.height - 90),
-                        elapsed=self.timer, chars_per_sec=cps // 2)
+                        elapsed=self.timer, chars_per_sec=cps // 2,
+                        sway=2, sway_t=self.timer)
         show = (int(self.timer * 2) % 2 == 0)
         if q["kind"] == "choice":
             for i, c in enumerate(q["choices"]):
@@ -1253,15 +1325,18 @@ class Game:
         count = 0
         done = True
         y = rect.top
-        for ln in lines:
+        for i, ln in enumerate(lines):
             surf = font.render(ln, True, config.TEXT if ln else config.BG)
+            dx = int(math.sin(self.timer * 0.8 + i * 0.6) * 2)
+            dy = int(math.cos(self.timer * 1.2 + i * 0.4) * 1)
             if count + len(ln) <= shown:
-                s.blit(surf, (rect.left, y))
+                s.blit(surf, (rect.left + dx, y + dy))
             else:
                 rem = max(0, shown - count)
                 if rem > 0:
                     tw = sum(font.size(ch)[0] for ch in ln[:rem])
-                    s.blit(surf, (rect.left, y), area=(0, 0, tw, surf.get_height()))
+                    s.blit(surf, (rect.left + dx, y + dy),
+                           area=(0, 0, tw, surf.get_height()))
                 done = False
             count += len(ln)
             y += font.get_linesize() + 3
@@ -1486,6 +1561,10 @@ class Game:
             self.static_t -= 1.0 / 60.0
             ui.draw_static(s, self.static_intensity)
         self._draw_fakepanel(s)
+        vhs = self.state.get("settings", {}).get(
+            "vhs_intensity", config.DEFAULT_SETTINGS["vhs_intensity"])
+        if vhs:
+            ui.draw_vhs(s, vhs, self.timer)
         ui.draw_scanlines(s)
         ui.draw_vignette(s, 0.65)
         if self.glitch_t > 0:
@@ -1545,9 +1624,12 @@ class Game:
                                w - 2 * (config.MARGIN + 20), box_h)
             ui.draw_terminal_panel(s, rect, title="YOU LOOK CLOSER")
             for i, ln in enumerate(lines):
+                dx = int(math.sin(self.timer * 0.8 + i * 0.6) * 1)
+                dy = int(math.cos(self.timer * 1.2 + i * 0.4) * 1)
                 for j, sub in enumerate(ui.word_wrap(ln, f, rect.width - 24)):
                     s.blit(f.render(sub, True, config.TEXT),
-                           (rect.left + 12, rect.top + 12 + (i * lh + j * lh)))
+                           (rect.left + 12 + dx, rect.top + 12 + dy
+                            + (i * lh + j * lh)))
             cont = ui.get_font(12).render("ENTER / click to continue", True, config.RED)
             s.blit(cont, (rect.left + 12, rect.bottom + 4))
 
@@ -1568,7 +1650,7 @@ def main():
     game = Game(screen, state, audio_mgr or type("_NoAudio", (), {
         "play": lambda *a, **k: None, "start_loop": lambda *a, **k: None,
         "stop_loop": lambda *a, **k: None, "stop_all_loops": lambda *a, **k: None,
-        "ok": False})())
+        "set_loop_volume": lambda *a, **k: None, "ok": False})())
 
     clock = pygame.time.Clock()
     running = True

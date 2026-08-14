@@ -4,6 +4,7 @@ Provides fonts, scanlines, vignette, static, glitch, glow text, wrapped
 typewriter drawing, terminal panels, and prompts. All overlays are cached
 and rebuilt only when the window size changes.
 """
+import math
 import random
 
 import numpy as np
@@ -16,6 +17,7 @@ from . import config
 # --------------------------------------------------------------------------
 _FONT_PATH = None
 _FONT_CACHE = {}
+_TEXT_SCALE = 1.0
 
 
 def _font_path():
@@ -29,14 +31,25 @@ def _font_path():
 
 
 def get_font(size):
-    """Return a cached monospace Font for the given pixel height."""
-    key = int(size)
+    """Return a cached monospace Font for the given pixel height, scaled by
+    the player's Text Size setting."""
+    key = int(size * _TEXT_SCALE)
     if key not in _FONT_CACHE:
         try:
             _FONT_CACHE[key] = pygame.font.Font(_font_path(), key)
         except Exception:
             _FONT_CACHE[key] = pygame.font.Font(None, key)
     return _FONT_CACHE[key]
+
+
+def set_text_scale(v):
+    """Set the global font-size multiplier (the Text Size setting)."""
+    global _TEXT_SCALE
+    _TEXT_SCALE = max(0.5, min(2.0, float(v)))
+
+
+def text_scale():
+    return _TEXT_SCALE
 
 
 def clear_font_cache():
@@ -70,9 +83,12 @@ def word_wrap(text, font, max_width):
 
 
 def draw_wrapped(screen, text, font, color, rect, elapsed=None,
-                 chars_per_sec=60, x_off=0, y_off=0, line_spacing=None):
+                 chars_per_sec=60, x_off=0, y_off=0, line_spacing=None,
+                 sway=0, sway_t=0.0):
     """Draw wrapped text inside rect. If elapsed is not None, reveal it
-    typewriter-style. Returns True once fully revealed."""
+    typewriter-style. If sway > 0, each line drifts with sin/cos waves like
+    the original THE QUESTION GAME (with a soft alpha pulse). Returns True
+    once fully revealed."""
     lines = word_wrap(text, font, rect.width)
     spacing = line_spacing or font.get_linesize()
     total_chars = sum(len(l) for l in lines)
@@ -83,16 +99,27 @@ def draw_wrapped(screen, text, font, color, rect, elapsed=None,
 
     y = rect.top + y_off
     count = 0
-    for ln in lines:
+    for i, ln in enumerate(lines):
         surf = font.render(ln, True, color)
-        x = rect.left + x_off
+        if sway:
+            dx = int(math.sin(sway_t * 0.8 + i * 0.6) * sway)
+            dy = int(math.cos(sway_t * 1.2 + i * 0.4) * sway * 0.4)
+            try:
+                surf.set_alpha(int(165 + 55 * (0.5 + 0.5 * math.sin(
+                    sway_t * 1.2 + i * 0.9))))
+            except Exception:
+                pass
+        else:
+            dx = dy = 0
+        x = rect.left + x_off + dx
+        yy = y + dy
         if count + len(ln) <= shown:
-            screen.blit(surf, (x, y))
+            screen.blit(surf, (x, yy))
         else:
             rem = max(0, shown - count)
             if rem > 0:
                 w = sum(font.size(ch)[0] for ch in ln[:rem])
-                screen.blit(surf, (x, y), area=(0, 0, w, surf.get_height()))
+                screen.blit(surf, (x, yy), area=(0, 0, w, surf.get_height()))
         count += len(ln)
         y += spacing
     return shown >= total_chars
@@ -248,6 +275,50 @@ def draw_glitch(screen, count=3, amount=24):
             slice_surf = screen.subsurface((0, y, w, sh)).copy()
             screen.blit(slice_surf, (dx, y))
     return random.random() < 0.25  # sometimes draw an inverse band
+
+
+# --------------------------------------------------------------------------
+# VHS static (driven by the VHS Static setting)
+# --------------------------------------------------------------------------
+_VHS_CACHE = {}
+
+
+def _vhs_overlay(size):
+    """A cached overlay of faint horizontal roll lines."""
+    key = size
+    ov = _VHS_CACHE.get(key)
+    if ov is None:
+        w, h = size
+        ov = pygame.Surface(size, pygame.SRCALPHA)
+        for y in range(0, h, 4):
+            pygame.draw.line(ov, (0, 0, 0, 46), (0, y), (w, y))
+        _VHS_CACHE[key] = ov
+    return ov
+
+
+def draw_vhs(screen, intensity, t):
+    """VHS-era artifacts: a sweeping scan band, roll lines, and glitch bars.
+    intensity: 0.0 = off; 1.0 = the default look; higher = more noise."""
+    if intensity <= 0:
+        return
+    w, h = screen.get_size()
+    k = min(1.0, intensity)
+    screen.blit(_alpha_copy(_vhs_overlay((w, h)), int(200 * k)), (0, 0))
+
+    bh = max(3, int(24 * k))
+    by = int((t * 130) % (h + bh)) - bh
+    pygame.draw.rect(screen, config.TEXT, (0, by, w, bh))
+
+    if random.random() < 0.55 * intensity:
+        gy = random.randint(0, max(0, h - 12))
+        gh = random.randint(2, max(3, int(10 * k)))
+        screen.fill((0, 0, 0), (0, gy, w, gh))
+    if random.random() < 0.35 * intensity:
+        sy = random.randint(0, h - 1)
+        pygame.draw.line(screen, config.TEXT_BRIGHT, (0, sy), (w, sy))
+    if intensity >= 1.4 and random.random() < 0.08:
+        gy = random.randint(0, h - 8)
+        screen.fill((30, 0, 0), (0, gy, w, random.randint(2, 8)))
 
 
 # --------------------------------------------------------------------------

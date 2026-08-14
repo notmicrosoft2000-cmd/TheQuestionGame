@@ -126,6 +126,8 @@ class SceneEngine:
             result = act_message(hotspot.get("desc", "..."))
         if result.get("type") == "message" and not result.get("text"):
             result["text"] = hotspot.get("desc", "...")
+        result["hotspot"] = hotspot.get("id")
+        result["from_scene"] = self.current
         self._apply(result)
         self.events.append(result)
         self.sel = 0

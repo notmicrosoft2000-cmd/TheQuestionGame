@@ -258,30 +258,139 @@ def gen_theme(dur=6.0, amp=0.30, sr=SR):
     return (wave * 32767).astype(np.int16)
 
 
+def gen_type(amp=0.6, sr=SR):
+    """Single keyboard strike: a short sharp noise click (for ghost typing)."""
+    return _noise(0.018, amp=amp, decay=0.006)
+
+
+def gen_thud(dur=0.4, amp=0.6, sr=SR):
+    """Heavy soft door/floor thud: a descending low thump."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    f = 95 * np.exp(-t * 3.0) + 30
+    wave = np.sin(2 * np.pi * np.cumsum(f) / sr) * np.exp(-t * 4.5)
+    return (wave * amp * 32767).astype(np.int16)
+
+
+def gen_knock(dur=1.1, amp=0.55, sr=SR, seed=17):
+    """Three slow knocks on wood: 140 Hz bursts with a soft body."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(seed)
+    wave = np.zeros(n)
+    body = _bandpass(rng.standard_normal(n) * 0.4, 120, 380, sr)
+    for start in (0.0, 0.38, 0.76):
+        i0 = int(sr * start)
+        i1 = min(n, i0 + int(sr * 0.14))
+        tt = t[i0:i1] - t[i0]
+        wave[i0:i1] += np.sin(2 * np.pi * 140 * tt) * np.exp(-tt / 0.03)
+    return ((wave + body * 0.5) * amp * 32767).astype(np.int16)
+
+
+def gen_breath(dur=4.0, amp=0.30, sr=SR, seed=19):
+    """Slow breathing loop: breathy filtered noise swelling in and out."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(seed)
+    noise = _bandpass(rng.standard_normal(n), 500, 1100, sr)
+    env = np.minimum(1.0, np.maximum(0.0, np.sin(
+        2 * np.pi * 0.21 * t - np.pi / 2)) ** 3 * 1.6)
+    wave = noise * env * amp
+    return (wave * 32767).astype(np.int16)
+
+
+def gen_tick(dur=0.045, amp=0.5, sr=SR):
+    """Clock tick: a bright 2 kHz blip."""
+    return _tone(2000, dur, shape="square", amp=amp, decay=dur * 0.6)
+
+
+def gen_buzz(dur=4.0, amp=0.22, sr=SR, seed=29):
+    """Fluorescent tube buzz: 100/120 Hz hum with faint hiss, loopable."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(seed)
+    ripple = 0.8 + 0.2 * np.sin(2 * np.pi * 100 * t)
+    hum = np.sin(2 * np.pi * 100 * t) + 0.5 * np.sin(2 * np.pi * 120 * t)
+    hiss = _bandpass(rng.standard_normal(n), 3000, 7000, sr) * 0.15
+    wave = (hum * 0.8 + hiss) * ripple * amp
+    return (wave * 32767).astype(np.int16)
+
+
+def gen_murmur(dur=4.0, amp=0.20, sr=SR, seed=31):
+    """Distant hall murmur: low band noise with a slow random swell, loopable."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(seed)
+    noise = _bandpass(rng.standard_normal(n), 200, 700, sr)
+    swell = 0.6 + 0.4 * np.sin(2 * np.pi * 0.13 * t + rng.uniform(0, 6.28))
+    wave = noise * swell * amp
+    return (wave * 32767).astype(np.int16)
+
+
+def gen_creak(dur=0.9, amp=0.40, sr=SR, seed=37):
+    """A slow floor/door creak: rising glide with noise."""
+    n = int(sr * dur)
+    t = np.arange(n) / sr
+    rng = np.random.default_rng(seed)
+    f = 90 + 160 * t
+    tone = np.sin(2 * np.pi * np.cumsum(f) / sr)
+    hiss = _bandpass(rng.standard_normal(n), 500, 1600, sr) * 0.4
+    env = np.sin(np.pi * np.minimum(1.0, t / dur)) ** 1.5
+    wave = (tone * 0.7 + hiss) * env * amp
+    return (wave * 32767).astype(np.int16)
+
+
 # --------------------------------------------------------------------------
 # pygame adapter
 # --------------------------------------------------------------------------
 class AudioManager:
     NAMES = ("beep", "bleep", "click", "static_burst", "write", "whirr",
              "heartbeat", "whisper", "drone", "theme",
-             "dialtone", "dial", "modem", "format", "boom", "panic")
+             "dialtone", "dial", "modem", "format", "boom", "panic",
+             "type", "thud", "knock", "breath", "tick", "buzz", "murmur",
+             "creak")
 
     def __init__(self, sample_rate=SR):
         import pygame
         self.sample_rate = sample_rate
         self._sounds = {}
         self._loops = {}
+        self._ok = False
         try:
             pygame.mixer.quit()
-            pygame.mixer.init(frequency=sample_rate, size=-16,
-                              channels=1, buffer=512)
-            self._ok = True
+            for buf in (512, 1024, 2048):
+                try:
+                    pygame.mixer.init(frequency=sample_rate, size=-16,
+                                      channels=1, buffer=buf)
+                    break
+                except pygame.error:
+                    continue
+            else:
+                pygame.mixer.init()
+            self._ok = pygame.mixer.get_init() is not None
         except Exception:
             self._ok = False
 
     @property
     def ok(self):
         return self._ok
+
+    @staticmethod
+    def _to_mixer_format(arr):
+        """Resample/remix a 22050 Hz mono int16 array to whatever format the
+        mixer actually opened with, so sound plays (not silence) even when
+        the preferred init failed and SDL fell back to its defaults."""
+        import pygame
+        init = pygame.mixer.get_init()
+        freq = init[0]
+        channels = init[2]
+        if freq != SR:
+            n = int(len(arr) * freq / SR)
+            idx = np.linspace(0, len(arr) - 1, n).astype(np.int64)
+            arr = arr[idx]
+        if channels == 2:
+            arr = np.repeat(arr[:, None], 2, axis=1)
+        return arr.astype(np.int16).tobytes()
 
     def build(self):
         if not self._ok:
@@ -295,10 +404,15 @@ class AudioManager:
             "dialtone": gen_dialtone(), "dial": gen_dial(),
             "modem": gen_modem(), "format": gen_format(),
             "boom": gen_boom(), "panic": gen_panic(),
+            "type": gen_type(), "thud": gen_thud(), "knock": gen_knock(),
+            "breath": gen_breath(), "tick": gen_tick(),
+            "buzz": gen_buzz(), "murmur": gen_murmur(),
+            "creak": gen_creak(),
         }
         import pygame
         for name, arr in gens.items():
-            self._sounds[name] = pygame.mixer.Sound(buffer=arr.tobytes())
+            self._sounds[name] = pygame.mixer.Sound(
+                buffer=self._to_mixer_format(arr))
 
     def play(self, name, volume=1.0):
         if not self._ok:

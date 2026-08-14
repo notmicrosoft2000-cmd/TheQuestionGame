@@ -32,14 +32,20 @@ WHISPERS = [
     {"stage": 0, "text": "we are here"},
     {"stage": 0, "text": "the drive is warm"},
     {"stage": 0, "text": "are you still there"},
+    {"stage": 0, "text": "someone is counting the keys you press"},
+    {"stage": 0, "text": "the hum is a voice"},
     {"stage": 1, "text": "you are getting interesting"},
     {"stage": 1, "text": "it asks what you keep"},
     {"stage": 1, "text": "the door is open"},
     {"stage": 1, "text": "we heard that"},
+    {"stage": 1, "text": "there is a second cursor. it is watching yours"},
+    {"stage": 1, "text": "the chair is still warm from the last of you"},
     {"stage": 2, "text": "we have you"},
     {"stage": 2, "text": "the first copy was you"},
     {"stage": 2, "text": "do not look behind you"},
     {"stage": 2, "text": "your name is in the collection now"},
+    {"stage": 2, "text": "we keep what you give us. even the lies"},
+    {"stage": 2, "text": "the disk is a door. you walked through"},
 ]
 
 SELF_TYPES = [
@@ -48,12 +54,17 @@ SELF_TYPES = [
     "you left the door open.",
     "it is counting your answers.",
     "TYPE 2013. YOU WANT TO SEE.",
+    "the machine hums in your voice now.",
+    "you typed your name once. it remembered.",
+    "do not delete the warm one.",
 ]
 
 GHOST_CMDS = [
     "del A:\\COMMAND.COM",
     "del A:\\AUTOEXEC.BAT",
     "format A:",
+    "run THEGAME.EXE",
+    "type A:\\YOU.001",
 ]
 
 FAKE_DOS_LINES = [
@@ -147,7 +158,7 @@ class ScareDirector:
         if part != "fair":
             self._update_idle(dt, ctx)
             self._update_presence()
-        if part == "files":
+        if part in ("fair", "files"):
             self._update_ambient(dt, ctx)
 
     def _update_presence(self):
@@ -167,13 +178,15 @@ class ScareDirector:
             self.fire_once("fake_panic", {"type": "fake_panic"})
         if p >= FAKE_FORMAT_PRESENCE:
             self.fire_once("fake_format", {"type": "fake_format"})
-        if p >= 10:
+        if p >= 10 and "know_where" not in self._once:
             where = self._where()
             if where:
-                self.fire_once("know_where", {
+                self._once.add("know_where")
+                self.queue({
                     "type": "whisper",
                     "text": "I know where you are. %s. "
                             "I have always known." % where})
+                self.queue({"type": "sound", "sound": "knock", "volume": 0.5})
         if p >= 16:
             self.fire_once("the_visit", {
                 "type": "web", "site": "index"})
@@ -210,19 +223,39 @@ class ScareDirector:
         self._ambient_timer -= dt
         if self._ambient_timer > 0:
             return
+        is_fair = ctx.get("part") == "fair"
+        if is_fair:
+            # the fair after dark: sounds with no source, nothing answered
+            self._ambient_timer = self.rng.uniform(40, 75)
+            roll = self.rng.random()
+            if roll < 0.25:
+                self.queue({"type": "sound", "sound": "thud", "volume": 0.30})
+            elif roll < 0.5:
+                self.queue({"type": "flicker", "duration": self.rng.uniform(0.08, 0.15)})
+            elif roll < 0.7:
+                self._whisper()
+                self.queue({"type": "sound", "sound": "whisper", "volume": 0.35})
+            elif roll < 0.9:
+                self.queue({"type": "sound", "sound": "tick", "volume": 0.40})
+            else:
+                self.queue({"type": "sound", "sound": "creak", "volume": 0.35})
+            return
         self._ambient_timer = self.rng.uniform(self.AMBIENT_MIN, self.AMBIENT_MAX)
         roll = self.rng.random()
-        if roll < 0.30:
+        if roll < 0.25:
             self.queue({"type": "flicker", "duration": self.rng.uniform(0.1, 0.25)})
-        elif roll < 0.55:
+        elif roll < 0.45:
             self.queue({"type": "static", "intensity": self.rng.uniform(0.15, 0.35),
                         "duration": self.rng.uniform(0.2, 0.5)})
-        elif roll < 0.80:
+        elif roll < 0.7:
             self._whisper()
             self.queue({"type": "sound", "sound": "whisper"})
-        else:
+        elif roll < 0.9:
             self.queue({"type": "drive_light"})
             self.queue({"type": "sound", "sound": "write"})
+        else:
+            self.queue({"type": "sound", "sound": "knock", "volume": 0.4})
+            self.queue({"type": "flicker", "duration": 0.12})
 
     # --- narrative hooks (called by main) ---
     def on_file_read(self, file_id):
