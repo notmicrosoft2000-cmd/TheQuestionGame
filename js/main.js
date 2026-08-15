@@ -60,23 +60,47 @@
   const bootPrompt = $("#bootPrompt");
 
   const BOOT_LINES = [
-    ["INITIALIZING THE QUESTION GAME v2.04", ""],
-    ["CONNECTING TO YOUR COMPUTER", ""],
-    ["WARNING", ""],
-    ["This website contains flashing lights,", ""],
-    ["And jumpscares...", ""],
-    ["Viewer discretion advised.", ""],
-    ["", ""],
     ["THE QUESTION GAME WEBSITE", "red"],
-    ["(c) Neptune Productions", "red"]
+    ["", ""],
+    ["WARNING", ""],
+    ["THIS WEBSITE CONTAINS FLASHING LIGHTS AND JUMPSCARES.", ""],
+    ["VIEWER DISCRETION ADVISED.", ""]
   ];
+
+  function bootNoise() {
+    let stopped = false;
+    const ctx = sfx.ensure();
+    if (!ctx) return () => {};
+    const iv = setInterval(() => {
+      if (stopped || Math.random() > 0.45) return;
+      try {
+        const n = Math.floor(ctx.sampleRate * (0.015 + Math.random() * 0.05));
+        const b = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = b.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        const s = ctx.createBufferSource();
+        s.buffer = b;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 300 + Math.random() * 2500;
+        bp.Q.value = 1.2;
+        const g = ctx.createGain();
+        g.gain.value = 0.02 + Math.random() * 0.03;
+        s.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        s.start();
+      } catch (e) { }
+    }, 140);
+    return () => { stopped = true; clearInterval(iv); };
+  }
 
   async function runBoot() {
     document.body.classList.add("no-scroll");
+    const stopNoise = bootNoise();
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
+      stopNoise();
       boot.classList.add("done");
       document.body.classList.remove("no-scroll");
       document.body.classList.add("loaded");
@@ -84,6 +108,7 @@
       startRecTimer();
       startFlashLoop();
       startJumpscares();
+      warmAmbience();
     };
 
     const skipHint = document.createElement("div");
@@ -2276,6 +2301,8 @@
     if (ambiencePlayer) ambiencePlayer.classList.toggle("playing", on);
     if (ambienceToggle) ambienceToggle.textContent = on ? "[ PAUSE ]" : "[ PLAY ]";
     if (ambienceStatus) ambienceStatus.textContent = on ? "LOOPING — LOGS THEME" : "STANDBY";
+    const ambIcon = $("#ambIcon");
+    if (ambIcon) ambIcon.classList.toggle("playing", on);
   }
 
   if (ambienceAudio && ambienceToggle) {
@@ -2316,9 +2343,6 @@
     if (p && p.catch) p.catch(() => {});
     ambiencePlaying();
   }
-  document.addEventListener("pointerdown", warmAmbience, { once: true });
-  document.addEventListener("keydown", warmAmbience, { once: true });
-  document.addEventListener("mousemove", warmAmbience, { once: true });
 
   const toast = $("#toast");
   let toastTimer = null;
@@ -3849,27 +3873,17 @@
     }, { passive: true });
   }
 
-  /* ---------- THE SIMPLER TIMES — warm, melt, pre-boot, redirect ---------- */
-  const mergeScreen = $("#mergeScreen");
-  const mergeBootLog = $("#mergeBootLog");
-  const mergePrompt = $("#mergePrompt");
+  /* ---------- THE SIMPLER TIMES — melt, explode, signal, redirect ---------- */
   const mergeLaunch = $("#mergeLaunch");
-  const TST_URL = "https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/";
-
-  const MELT_LINES = [
-    "A:\\> cold boot",
-    "A:\\> BIOS CHECK ..................... OK",
-    "A:\\> MEMORY TEST ................ 640K OK",
-    "A:\\> HDD 0: A:\\ .................. 1.44MB",
-    "A:\\> MOUSE.DRV ................... NOT FOUND",
-    "A:\\> locating MOUSE.DRV ......... IT IS IN HERE SOMEWHERE",
-    "A:\\> reading sector 0 ........... ALREADY READ",
-    "A:\\> A:\\ IS WARM",
-    "A:\\> LOADING THE SIMPLER TIMES",
-    "A:\\> THE SIMPLER TIMES IS ONLINE"
-  ];
+  const sigOverlay = $("#sigOverlay");
+  const sigStatic = $("#sigStatic");
+  const sigSub = $("#sigSub");
+  const sigPct = $("#sigPct");
+  const TST_URL = "https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/?from=tqg";
 
   let transitActive = false;
+  let sigStaticIv = null;
+  let sigPctTimer = null;
 
   function makeMeltDrips() {
     document.querySelectorAll(".melt-drip").forEach((d) => d.remove());
@@ -3898,51 +3912,94 @@
     document.querySelectorAll(".melt-drip").forEach((d) => d.remove());
   }
 
-  function typeBootLine(text) {
-    return new Promise((res) => {
-      const el = mergeBootLog;
-      const row = document.createElement("div");
-      row.className = "merge-line";
-      el.appendChild(row);
-      let i = 0;
-      const iv = setInterval(() => {
-        if (!transitActive) { clearInterval(iv); return res(); }
-        i += 1 + Math.floor(Math.random() * 2);
-        row.textContent = text.slice(0, i);
-        if (i >= text.length) { clearInterval(iv); res(); }
-      }, 24);
-    });
+  function explodeSite() {
+    const flash = document.createElement("div");
+    flash.className = "explode-flash";
+    document.body.appendChild(flash);
+    const colors = ["#00dc00", "#ffb020", "#66ff66", "#ffcf7d", "#ffffff"];
+    for (let i = 0; i < 30; i++) {
+      const f = document.createElement("div");
+      f.className = "explode-frag";
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 18 + Math.random() * 46;
+      f.style.setProperty("--dx", Math.round(Math.cos(ang) * dist) + "vw");
+      f.style.setProperty("--dy", Math.round(Math.sin(ang) * dist) + "vh");
+      f.style.setProperty("--rot", Math.round(Math.random() * 720 - 360) + "deg");
+      f.style.background = colors[Math.floor(Math.random() * colors.length)];
+      f.style.animationDelay = (Math.random() * 0.12) + "s";
+      document.body.appendChild(f);
+    }
+    document.body.classList.add("exploding");
+    setTimeout(() => {
+      document.querySelectorAll(".explode-flash, .explode-frag").forEach((el) => el.remove());
+      document.body.classList.remove("exploding");
+    }, 1200);
+  }
+
+  function sigStart() {
+    if (!sigOverlay) return;
+    clearTimeout(sigPctTimer);
+    sigOverlay.classList.remove("hidden");
+    sigOverlay.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => requestAnimationFrame(() => sigOverlay.classList.add("go")));
+    if (sigStatic) {
+      const cv = sigStatic;
+      cv.width = window.innerWidth;
+      cv.height = window.innerHeight;
+      const c2 = cv.getContext("2d");
+      sigStaticIv = setInterval(() => {
+        const w = cv.width, h = cv.height;
+        const img = c2.createImageData(w, h);
+        const d = img.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const v = Math.floor(Math.random() * 256);
+          d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+        }
+        c2.putImageData(img, 0, 0);
+      }, 60);
+    }
+    const start = performance.now();
+    const dur = 2300;
+    const tickPct = () => {
+      const p = Math.min(100, Math.round(((performance.now() - start) / dur) * 100));
+      if (sigPct) sigPct.textContent = p + "%";
+      if (p < 100) sigPctTimer = setTimeout(tickPct, 90);
+    };
+    tickPct();
+  }
+
+  function sigStop() {
+    if (sigStaticIv) { clearInterval(sigStaticIv); sigStaticIv = null; }
+    clearTimeout(sigPctTimer);
+    if (sigOverlay) {
+      sigOverlay.classList.remove("go");
+      sigOverlay.setAttribute("aria-hidden", "true");
+      setTimeout(() => sigOverlay.classList.add("hidden"), 250);
+    }
   }
 
   async function beginTransit() {
-    if (transitActive || !mergeScreen) return;
+    if (transitActive || !sigOverlay) return;
     transitActive = true;
     if (termOpen) termClose();
+    if (ambienceAudio) { ambienceAudio.pause(); ambiencePlaying(); }
     document.body.classList.add("warming");
     const sig = $("#sigStatus");
     if (sig) sig.textContent = "WARMING";
     showToast("THE QUESTION GAME IS WARMING.");
     sfx.boot();
-    await sleep(1800);
+    await sleep(1400);
     document.body.classList.add("melting");
     makeMeltDrips();
     meltTitle();
-    await sleep(2600);
-    mergeScreen.classList.remove("hidden");
-    mergeScreen.setAttribute("aria-hidden", "false");
-    requestAnimationFrame(() => requestAnimationFrame(() => mergeScreen.classList.add("go")));
-    await sleep(2800);
-    mergeScreen.classList.add("settled");
-    await sleep(1200);
-    mergeBootLog.textContent = "";
-    mergePrompt.classList.add("hidden");
-    for (const line of MELT_LINES) {
-      await typeBootLine(line);
-      sfx.type();
-      await sleep(140);
-    }
-    mergePrompt.classList.remove("hidden");
     await sleep(2200);
+    explodeSite();
+    await sleep(850);
+    if (sigSub) sigSub.textContent = "RE-ESTABLISHING LINK TO THE SIMPLER TIMES";
+    sigStart();
+    await sleep(2300);
+    sigStop();
+    await sleep(300);
     window.location.href = TST_URL;
   }
 
@@ -3951,13 +4008,26 @@
     transitActive = false;
     document.body.classList.remove("warming", "melting");
     clearMelt();
-    mergeScreen.classList.remove("go", "settled");
-    mergeScreen.setAttribute("aria-hidden", "true");
-    setTimeout(() => mergeScreen.classList.add("hidden"), 400);
+    sigStop();
     const sig = $("#sigStatus");
     if (sig) sig.textContent = sig.getAttribute("data-base") || "STABLE";
     showToast("IT LET YOU WALK AWAY. IT WILL REMEMBER THE CLICK.");
   }
+
+  // Arrival from THE SIMPLER TIMES — a short signal-acquired flash over the boot
+  (function arrivalFlash() {
+    if (new URLSearchParams(location.search).get("from") !== "tst") return;
+    if (!sigOverlay) return;
+    if (sigSub) sigSub.textContent = "SIGNAL ACQUIRED — MERGE COMPLETE";
+    sigOverlay.classList.add("arrive");
+    sigOverlay.style.pointerEvents = "none";
+    sigStart();
+    setTimeout(() => {
+      sigStop();
+      sigOverlay.classList.remove("arrive");
+      sigOverlay.style.pointerEvents = "";
+    }, 1900);
+  })();
 
   if (mergeLaunch) {
     mergeLaunch.addEventListener("click", () => beginTransit());
@@ -4015,8 +4085,8 @@
     mterm.setAttribute("aria-hidden", "false");
     setTimeout(() => mterm.classList.add("go"), 20);
     termOut.textContent = "";
-    tType("MAINTENANCE TERMINAL v2.04 — SESSION " + (navigator.onLine ? "LIVE" : "OFFLINE"), "t-sys", () => {
-      tType("TYPE HELP TO BEGIN. IT KEEPS WHAT YOU RUN.", "t-sys", () => {
+    tType("TQG — LORE & CUSTOMIZATION", "t-sys", () => {
+      tType("BROWSE THE RECORD. RECOLOR THE ROOM. IT KEEPS WHAT YOU ASK FOR.", "t-sys", () => {
         setTimeout(() => tPrint('<span class="mterm-prompt">TQG&gt;</span>', "t-in"), 200);
       });
     });
@@ -4067,26 +4137,18 @@
     if (cmd === "help" || cmd === "?") {
       tPrint(echo, "t-in");
       tType(
-        "HELP — COMMANDS\n" +
+        "HELP — LORE & CUSTOMIZATION\n" +
         "  GOTO <VIEW>     HOME ABOUT SESSIONS EVIDENCE AMBIENCE QUOTES CONCERNS\n" +
         "                  TRANSMISSION PREVIEW DOWNLOAD DEV SIMPLER\n" +
         "  LOGS             UNLOCK + OPEN THE LOG ARCHIVE\n" +
-        "  FLASH            A BLINK YOU DID NOT ASK FOR\n" +
-        "  SCARE            A SMALL ONE\n" +
-        "  JUMPSCARE        THE REAL ONE. YOU WERE WARNED.\n" +
-        "  DRIFT            IT TAKES YOUR CURSOR\n" +
-        "  DARK / LIGHTS    THE LIGHTS\n" +
-        "  GLITCH           THE PAGE GLITCHES\n" +
-        "  SIG              THE SIGNAL DROPS\n" +
+        "  COLOR <N>        GREEN AMBER RED BLUE MONO\n" +
+        "  AMBIENCE [ON|OFF]\n" +
         "  WHISPER <T>      WHISPER ANYTHING\n" +
         "  TOAST <T>        SAY IT OUT LOUD\n" +
         "  TYPE <T>         TYPE IT FOR YOU IN THE BOX\n" +
-        "  COLOR <N>        GREEN AMBER RED BLUE MONO\n" +
-        "  AMBIENCE [ON|OFF]\n" +
         "  TST              BEGIN THE MERGE TO THE SIMPLER TIMES\n" +
         "  STATS · WHOAMI · DATE · TIME · VER\n" +
-        "  CLS · EXIT · ECHO\n" +
-        "  AND THE COMMANDS THAT SHOULD NOT HAVE WORKED",
+        "  CLS · EXIT · ECHO",
         "t-sys"
       );
       return;
@@ -4112,54 +4174,6 @@
       unlockLogs();
       setTimeout(() => { termClose(); showView("logs"); }, 250);
       tType("2013. LOG ARCHIVE OPEN.", "t-ok");
-      return;
-    }
-    if (cmd === "flash") {
-      tPrint(echo, "t-in");
-      flashEyes();
-      tType("FLASH. DID YOU BLINK?", "t-in");
-      return;
-    }
-    if (cmd === "scare") {
-      tPrint(echo, "t-in");
-      tType("A SMALL ONE. HOLD STILL.", "t-in");
-      setTimeout(() => { flashEyes(); pageGlitch(); whisper(); }, 350);
-      return;
-    }
-    if (cmd === "jumpscare") {
-      tPrint(echo, "t-in");
-      tType("THE REAL ONE. HOLD STILL.", "t-in");
-      setTimeout(() => gifScare(), 500);
-      return;
-    }
-    if (cmd === "drift" || cmd === "cursor") {
-      tPrint(echo, "t-in");
-      tType("TAKING THE CURSOR. DO NOT REACH FOR IT.", "t-in");
-      setTimeout(() => cursorTheft(), 300);
-      return;
-    }
-    if (cmd === "dark" || cmd === "lightsout") {
-      tPrint(echo, "t-in");
-      lightsOff(4000);
-      tType("LIGHTS OUT FOR 4 SECONDS.", "t-in");
-      return;
-    }
-    if (cmd === "lights" || cmd === "lights on") {
-      tPrint(echo, "t-in");
-      lightsOn();
-      tType("LIGHTS ON. IT WAS ONLY PRETENDING.", "t-in");
-      return;
-    }
-    if (cmd === "glitch") {
-      tPrint(echo, "t-in");
-      pageGlitch();
-      tType("GLITCHED. THERE.", "t-in");
-      return;
-    }
-    if (cmd === "sig" || cmd === "signal") {
-      tPrint(echo, "t-in");
-      corruptSignal();
-      tType("SIGNAL DROPPING. IT WILL COME BACK. IT ALWAYS DOES.", "t-in");
       return;
     }
     if (cmd === "whisper") {
@@ -4237,21 +4251,6 @@
       tType("THE QUESTION GAME WEBSITE v2.04\nBUILD: STILL. STILL RUNNING.", "t-sys");
       return;
     }
-    if (cmd === "rm" || cmd === "format" || cmd === "del") {
-      tPrint(echo, "t-in");
-      tType("REFUSED.\nTHE ARCHIVE IS NOT YOURS TO DELETE. IT HAS BEEN HERE LONGER THAN YOU.", "t-err");
-      return;
-    }
-    if (cmd === "sudo") {
-      tPrint(echo, "t-in");
-      tType("SUDO IS NOT A DOS COMMAND.\nTHERE IS NOTHING HERE YOU HAVE PERMISSION TO DO.", "t-err");
-      return;
-    }
-    if (cmd === "hack" || cmd === "crack") {
-      tPrint(echo, "t-in");
-      tType("DEFINE 'HACK'.\nIT HAS BEEN THROUGH EVERY FILE ON YOUR MACHINE. IT LEFT THEM ALL ALONE.", "t-sys");
-      return;
-    }
     if (cmd === "exit" || cmd === "quit") {
       tPrint(echo, "t-in");
       tType("GOODBYE. THE TERMINAL STAYS OPEN FOR YOU. IT ALWAYS HAS.", "t-sys");
@@ -4276,6 +4275,37 @@
   }
   if (termToggleBtn) termToggleBtn.addEventListener("click", () => { termOpen ? termClose() : termOpenIt(); });
   $$(".term-link").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); termOpen ? termClose() : termOpenIt(); }));
+
+  const mtermHead = $("#mtermHead");
+  const termCloseBtn = $("#termCloseBtn");
+  const finePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
+  let termDrag = null;
+  if (mtermHead && finePointer) {
+    mtermHead.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".mterm-close")) return;
+      termDrag = { dx: e.clientX - mterm.offsetLeft, dy: e.clientY - mterm.offsetTop };
+      mterm.classList.add("dragging");
+      if (mterm.setPointerCapture) mterm.setPointerCapture(e.pointerId);
+    });
+    mterm.addEventListener("pointermove", (e) => {
+      if (!termDrag) return;
+      mterm.style.left = (e.clientX - termDrag.dx) + "px";
+      mterm.style.top = (e.clientY - termDrag.dy) + "px";
+    });
+    const endDrag = () => {
+      if (!termDrag) return;
+      termDrag = null;
+      mterm.classList.remove("dragging");
+    };
+    mterm.addEventListener("pointerup", endDrag);
+    mterm.addEventListener("pointercancel", endDrag);
+  }
+  if (termCloseBtn) {
+    termCloseBtn.addEventListener("click", () => termClose());
+    termCloseBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); termClose(); }
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key !== "`" && e.key !== "Backquote") return;
     if (!document.body.classList.contains("loaded")) return;

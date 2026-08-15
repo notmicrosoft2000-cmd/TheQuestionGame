@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=34">
+  <link rel="stylesheet" href="css/style.css?v=36">
 </head>
 <body>
 
@@ -63,6 +63,7 @@
     <div class="nav-row">
       <a class="nav-brand" href="#home">TQG<span class="blink">_</span></a>
       <div class="nav-right">
+        <span class="amb-icon" id="ambIcon" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
         <button class="mterm-toggle" id="termToggle" type="button" aria-label="Toggle maintenance terminal">[ TERM ]</button>
         <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation">[ NAV ]</button>
@@ -897,20 +898,22 @@
   <div class="melt-drain" aria-hidden="true"></div>
   <div class="melt-amber" aria-hidden="true"></div>
 
-  <div class="merge-screen hidden" id="mergeScreen" role="dialog" aria-modal="true" aria-label="THE SIMPLER TIMES — booting" aria-hidden="true">
-    <div class="merge-band" aria-hidden="true"></div>
-    <div class="merge-fringe" aria-hidden="true"></div>
-    <div class="merge-brand">A:\&gt; THE SIMPLER TIMES <span>— 1993</span></div>
-    <div class="merge-body" aria-hidden="false">
-      <div class="merge-bootlog" id="mergeBootLog" aria-live="polite"></div>
-      <div class="merge-prompt hidden" id="mergePrompt">&gt; REDIRECTING TO THE SIMPLER TIMES . . .</div>
+  <div class="sig-overlay hidden" id="sigOverlay" role="dialog" aria-modal="true" aria-label="SIGNAL INTERRUPTED" aria-hidden="true">
+    <canvas class="sig-static" id="sigStatic" aria-hidden="true"></canvas>
+    <div class="sig-crt" aria-hidden="true"></div>
+    <div class="sig-inner">
+      <div class="sig-title">SIGNAL INTERRUPTED</div>
+      <div class="sig-sub" id="sigSub">RE-ESTABLISHING LINK TO THE SIMPLER TIMES</div>
+      <div class="sig-pct" id="sigPct">0%</div>
     </div>
   </div>
 
   <div class="mterm hidden" id="mterm" role="dialog" aria-modal="true" aria-label="MAINTENANCE TERMINAL" aria-hidden="true">
-    <div class="mterm-head">
-      <span>MAINTENANCE TERMINAL v2.04 — SESSION LIVE</span>
-      <span class="mterm-head-r">[ ` ] CLOSE</span>
+    <div class="mterm-head" id="mtermHead">
+      <span class="mterm-title">TQG — LORE &amp; CUSTOMIZATION</span>
+      <span class="mterm-head-r">
+        <span class="mterm-close" id="termCloseBtn" role="button" tabindex="0" aria-label="Close">✕</span>
+      </span>
     </div>
     <div class="mterm-out" id="termOut" aria-live="polite"></div>
     <div class="mterm-line">
@@ -919,7 +922,7 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=34"></script>
-  <script src="js/main.js?v=34"></script>
+  <script src="js/config.js?v=36"></script>
+  <script src="js/main.js?v=36"></script>
 </body>
 </html>
