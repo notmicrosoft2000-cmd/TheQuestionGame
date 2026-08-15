@@ -115,10 +115,10 @@
 
   const heroType = $("#heroType");
   const HERO_PHRASES = [
-    "By Neptune productions (C)",
-    "Hello? Please delete this game.",
-    "All the way back to 1993.",
-    "We are good at waiting.."
+    "IT REMEMBERS EVERY ANSWER.",
+    "THERE IS NO SAVE. THERE IS NO EXIT.",
+    "SOMEONE PLAYED BEFORE YOU.",
+    "IT IS STILL LISTENING."
   ];
   let heroStuck = false;
 
@@ -370,13 +370,13 @@
   document.body.appendChild(ghostLineEl);
   const GHOST_LINES = [
     "Check the website carefully.",
-    "SOFT KAACHAN WAR-",
-    "Made in Burma",
+    "READ THE QUESTIONS. IT KNOWS WHEN YOU SKIP.",
     "Is something following your mouse?",
-    "Do not type smile.",
-    "we will use your broswer so we can know you better.",
-    "Download the game, we are waiting..",
-    "This game is not for you, it was for everyone"
+    "THE GAME REMEMBERS. DO YOU?",
+    "THE LOGS ARE OLDER THAN THE SITE.",
+    "THERE IS NO WAY TO RESTART.",
+    "IT HAS BEEN HERE SINCE THE FIRST ANSWER.",
+    "IT REMEMBERS WHAT YOU ANSWERED LAST TIME."
   ];
   let ghostLineLock = false;
   function ghostLine() {
@@ -432,13 +432,13 @@
   }
 
   const EERIE_TOASTS = [
-    "Continue reading..",
-    "The website moves sometimes.",
-    "People trust computers too easily.",
-    "be not afraid.",
-    "We are good at waiting.",
-    "The website is not the only place,",
-    "The preview waits for you",
+    "KEEP READING.",
+    "THE SITE DRIFTS SOMETIMES.",
+    "PEOPLE TRUST COMPUTERS TOO EASILY.",
+    "DO NOT BE AFRAID. YET.",
+    "WE ARE GOOD AT WAITING.",
+    "THE WEBSITE IS NOT THE ONLY PLACE.",
+    "THE PREVIEW IS READY.",
     "IT REMEMBERS WHEN YOU LEFT LAST TIME."
   ];
   function fakeToast() {
@@ -610,10 +610,10 @@
   const GHOST_TYPES = [
     "I CAN TYPE TOO",
     "HELLO?",
-    "Smile",
+    "SPEAK UP",
     "STOP TYPING",
     "DID YOU WANT SOMETHING?",
-    "We wait for your input."
+    "WE ARE LISTENING."
   ];
   let tgLock = false;
   let tgInterval = null;
@@ -868,11 +868,11 @@
   }
 
   const DEVICE_COMMENTS = [
-    "{OS}... we can make ends meet with that.",
-    "Being on {OS}? bad choice.",
+    "{OS}. WE CAN WORK WITH THAT.",
+    "Being on {OS}? it will do.",
     "{BROWSER} ON {OS}?",
-    "{RES} PIXELS. More space for us.",
-    "{INPUT} INPUT.",
+    "{RES} PIXELS. ROOM ENOUGH.",
+    "{INPUT} INPUT NOTED.",
     "IT PREFERRED THE OLD MACHINE. IT WILL GET USED TO {OS}.",
     "IT HEARD THE FAN ON YOUR {OS} SPEED UP."
   ];
@@ -3846,9 +3846,14 @@
 
   const MELT_LINES = [
     "A:\\> cold boot",
-    "A:\\> memory check ......... 640K OK",
-    "A:\\> the drive is warm",
-    "A:\\> reading the disk ..... it was already reading you",
+    "A:\\> BIOS CHECK ..................... OK",
+    "A:\\> MEMORY TEST ................ 640K OK",
+    "A:\\> HDD 0: A:\\ .................. 1.44MB",
+    "A:\\> MOUSE.DRV ................... NOT FOUND",
+    "A:\\> locating MOUSE.DRV ......... IT IS IN HERE SOMEWHERE",
+    "A:\\> reading sector 0 ........... ALREADY READ",
+    "A:\\> A:\\ IS WARM",
+    "A:\\> LOADING THE SIMPLER TIMES",
     "A:\\> THE SIMPLER TIMES IS ONLINE"
   ];
 
@@ -3861,6 +3866,13 @@
       d.className = "melt-drip";
       d.style.left = (2 + Math.random() * 94) + "%";
       d.style.animationDelay = (0.05 + Math.random() * 0.9) + "s";
+      document.body.appendChild(d);
+    }
+    for (let i = 0; i < 8; i++) {
+      const d = document.createElement("div");
+      d.className = "melt-drip green";
+      d.style.left = (2 + Math.random() * 94) + "%";
+      d.style.animationDelay = (0.2 + Math.random() * 1.2) + "s";
       document.body.appendChild(d);
     }
   }
@@ -3893,31 +3905,32 @@
   async function beginTransit() {
     if (transitActive || !mergeScreen) return;
     transitActive = true;
+    if (termOpen) termClose();
     document.body.classList.add("warming");
     const sig = $("#sigStatus");
     if (sig) sig.textContent = "WARMING";
     showToast("THE QUESTION GAME IS WARMING.");
     sfx.boot();
-    await sleep(1500);
+    await sleep(1800);
     document.body.classList.add("melting");
     makeMeltDrips();
     meltTitle();
-    await sleep(1900);
+    await sleep(2600);
     mergeScreen.classList.remove("hidden");
     mergeScreen.setAttribute("aria-hidden", "false");
     requestAnimationFrame(() => requestAnimationFrame(() => mergeScreen.classList.add("go")));
-    await sleep(2600);
+    await sleep(2800);
     mergeScreen.classList.add("settled");
-    await sleep(1100);
+    await sleep(1200);
     mergeBootLog.textContent = "";
     mergePrompt.classList.add("hidden");
     for (const line of MELT_LINES) {
       await typeBootLine(line);
       sfx.type();
-      await sleep(130);
+      await sleep(140);
     }
     mergePrompt.classList.remove("hidden");
-    await sleep(2000);
+    await sleep(2200);
     window.location.href = TST_URL;
   }
 
@@ -3942,6 +3955,322 @@
       e.preventDefault();
       abortTransit();
     }
+  });
+
+  /* --------------------------------------------------------------
+     MAINTENANCE TERMINAL — a real prompt. It obeys.
+     -------------------------------------------------------------- */
+  const mterm = $("#mterm");
+  const termOut = $("#termOut");
+  const termInput = $("#termInput");
+  const termToggleBtn = $("#termToggle");
+  let termOpen = false;
+
+  function tEsc(s) {
+    return String(s).split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+  }
+
+  function tPrint(html, cls) {
+    if (!termOpen) return;
+    const div = document.createElement("div");
+    div.className = "t-line " + (cls || "t-in");
+    div.innerHTML = html;
+    termOut.appendChild(div);
+    termOut.scrollTop = termOut.scrollHeight;
+    while (termOut.children.length > 220) termOut.removeChild(termOut.firstChild);
+  }
+
+  function tType(text, cls, cb) {
+    if (!termOpen) { if (cb) cb(); return; }
+    const div = document.createElement("div");
+    div.className = "t-line " + (cls || "t-in");
+    termOut.appendChild(div);
+    let i = 0;
+    const iv = setInterval(() => {
+      if (!termOpen) { clearInterval(iv); return; }
+      i += 2 + Math.floor(Math.random() * 3);
+      div.textContent = text.slice(0, i);
+      termOut.scrollTop = termOut.scrollHeight;
+      if (i >= text.length) { clearInterval(iv); if (cb) cb(); }
+    }, 10);
+  }
+
+  function termOpenIt() {
+    if (termOpen) return;
+    termOpen = true;
+    if (transitActive) abortTransit();
+    mterm.classList.remove("hidden");
+    mterm.setAttribute("aria-hidden", "false");
+    setTimeout(() => mterm.classList.add("go"), 20);
+    termOut.textContent = "";
+    tType("MAINTENANCE TERMINAL v2.04 — SESSION " + (navigator.onLine ? "LIVE" : "OFFLINE"), "t-sys", () => {
+      tType("TYPE HELP TO BEGIN. IT KEEPS WHAT YOU RUN.", "t-sys", () => {
+        setTimeout(() => tPrint('<span class="mterm-prompt">TQG&gt;</span>', "t-in"), 200);
+      });
+    });
+    sfx.type();
+    setTimeout(() => termInput.focus(), 260);
+  }
+
+  function termClose() {
+    if (!termOpen) return;
+    termOpen = false;
+    mterm.classList.remove("go");
+    mterm.setAttribute("aria-hidden", "true");
+    sfx.type();
+    setTimeout(() => mterm.classList.add("hidden"), 200);
+  }
+
+  const TERM_VIEWS = ["home", "about", "sessions", "evidence", "ambience", "quotes", "concerns", "transmission", "preview", "download", "dev", "simpler"];
+  const TQG_VAR_KEYS = ["--bg", "--bg-soft", "--panel", "--line", "--line-bright", "--text", "--dim", "--green", "--green-dim", "--red", "--dark-red", "--cyan"];
+  const TQG_PALETTES = {
+    green: {},
+    amber: { "--bg": "#060400", "--bg-soft": "#0e0902", "--panel": "#0e0902", "--line": "#201406", "--line-bright": "#32200a", "--text": "#ffb020", "--dim": "#7a4c0e", "--green": "#ffb020", "--green-dim": "#7a4c0e", "--red": "#ff3c3c", "--dark-red": "#8a2010", "--cyan": "#ffcf7d" },
+    red: { "--bg": "#070101", "--bg-soft": "#0e0202", "--panel": "#0e0202", "--line": "#300a08", "--line-bright": "#4a110d", "--text": "#ff5040", "--dim": "#8a2a20", "--green": "#ff5040", "--green-dim": "#8a2a20", "--red": "#ff2c2c", "--dark-red": "#640000", "--cyan": "#ff9085" },
+    blue: { "--bg": "#010207", "--bg-soft": "#02040e", "--panel": "#02040e", "--line": "#081130", "--line-bright": "#0b184a", "--text": "#3a8cff", "--dim": "#1f4a8a", "--green": "#3a8cff", "--green-dim": "#1f4a8a", "--red": "#ff5c5c", "--dark-red": "#640000", "--cyan": "#7ab3ff" },
+    mono: { "--bg": "#050505", "--bg-soft": "#0a0a0a", "--panel": "#0a0a0a", "--line": "#1c1c1c", "--line-bright": "#2a2a2a", "--text": "#b8b8b8", "--dim": "#5c5c5c", "--green": "#b8b8b8", "--green-dim": "#5c5c5c", "--red": "#ff5c5c", "--dark-red": "#640000", "--cyan": "#cfcfcf" }
+  };
+
+  function tSetColor(name) {
+    const p = TQG_PALETTES[name];
+    if (!p) return false;
+    const rs = document.documentElement.style;
+    TQG_VAR_KEYS.forEach((k) => {
+      if (name === "green") rs.removeProperty(k);
+      else if (p[k] !== undefined) rs.setProperty(k, p[k]);
+    });
+    return true;
+  }
+
+  function termRun(raw) {
+    raw = raw.trim();
+    const echo = '<span class="mterm-prompt">TQG&gt;</span> ' + tEsc(raw);
+    if (!raw) { tPrint(echo, "t-in"); return; }
+    const parts = raw.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const rest = raw.slice(parts[0].length).trim();
+    const arg = parts[1] || "";
+    const unknown = () => tType("'" + tEsc(raw) + "' IS NOT A KNOWN COMMAND.\nTYPE HELP. IT REMEMBERS WHAT YOU TRY ANYWAY.", "t-err");
+
+    if (cmd === "help" || cmd === "?") {
+      tPrint(echo, "t-in");
+      tType(
+        "HELP — COMMANDS\n" +
+        "  GOTO <VIEW>     HOME ABOUT SESSIONS EVIDENCE AMBIENCE QUOTES CONCERNS\n" +
+        "                  TRANSMISSION PREVIEW DOWNLOAD DEV SIMPLER\n" +
+        "  LOGS             UNLOCK + OPEN THE LOG ARCHIVE\n" +
+        "  FLASH            A BLINK YOU DID NOT ASK FOR\n" +
+        "  SCARE            A SMALL ONE\n" +
+        "  JUMPSCARE        THE REAL ONE. YOU WERE WARNED.\n" +
+        "  DRIFT            IT TAKES YOUR CURSOR\n" +
+        "  DARK / LIGHTS    THE LIGHTS\n" +
+        "  GLITCH           THE PAGE GLITCHES\n" +
+        "  SIG              THE SIGNAL DROPS\n" +
+        "  WHISPER <T>      WHISPER ANYTHING\n" +
+        "  TOAST <T>        SAY IT OUT LOUD\n" +
+        "  TYPE <T>         TYPE IT FOR YOU IN THE BOX\n" +
+        "  COLOR <N>        GREEN AMBER RED BLUE MONO\n" +
+        "  AMBIENCE [ON|OFF]\n" +
+        "  TST              BEGIN THE MERGE TO THE SIMPLER TIMES\n" +
+        "  STATS · WHOAMI · DATE · TIME · VER\n" +
+        "  CLS · EXIT · ECHO\n" +
+        "  AND THE COMMANDS THAT SHOULD NOT HAVE WORKED",
+        "t-sys"
+      );
+      return;
+    }
+    if (cmd === "cls" || cmd === "clear") { termOut.textContent = ""; tPrint(echo, "t-in"); return; }
+    if (cmd === "echo") { tPrint(echo, "t-in"); tType(rest || "ECHO IS ON.", "t-in"); return; }
+    if (cmd === "goto" || cmd === "go" || cmd === "visit") {
+      tPrint(echo, "t-in");
+      const v = arg.toLowerCase();
+      if (v === "logs") {
+        unlockLogs();
+        setTimeout(() => { termClose(); showView("logs"); }, 250);
+        tType("LOG ARCHIVE UNLOCKED. OPENING IT.", "t-ok");
+        return;
+      }
+      if (TERM_VIEWS.indexOf(v) === -1) { tType("NO SUCH SECTION: " + arg.toUpperCase() + "\nTHE SITE HAS SECTIONS. THAT IS NOT ONE OF THEM.", "t-err"); return; }
+      setTimeout(() => { termClose(); showView(v); }, 250);
+      tType("GOING TO: " + arg.toUpperCase(), "t-ok");
+      return;
+    }
+    if (cmd === "logs" || cmd === "2013") {
+      tPrint(echo, "t-in");
+      unlockLogs();
+      setTimeout(() => { termClose(); showView("logs"); }, 250);
+      tType("2013. LOG ARCHIVE OPEN.", "t-ok");
+      return;
+    }
+    if (cmd === "flash") {
+      tPrint(echo, "t-in");
+      flashEyes();
+      tType("FLASH. DID YOU BLINK?", "t-in");
+      return;
+    }
+    if (cmd === "scare") {
+      tPrint(echo, "t-in");
+      tType("A SMALL ONE. HOLD STILL.", "t-in");
+      setTimeout(() => { flashEyes(); pageGlitch(); whisper(); }, 350);
+      return;
+    }
+    if (cmd === "jumpscare") {
+      tPrint(echo, "t-in");
+      tType("THE REAL ONE. HOLD STILL.", "t-in");
+      setTimeout(() => gifScare(), 500);
+      return;
+    }
+    if (cmd === "drift" || cmd === "cursor") {
+      tPrint(echo, "t-in");
+      tType("TAKING THE CURSOR. DO NOT REACH FOR IT.", "t-in");
+      setTimeout(() => cursorTheft(), 300);
+      return;
+    }
+    if (cmd === "dark" || cmd === "lightsout") {
+      tPrint(echo, "t-in");
+      lightsOff(4000);
+      tType("LIGHTS OUT FOR 4 SECONDS.", "t-in");
+      return;
+    }
+    if (cmd === "lights" || cmd === "lights on") {
+      tPrint(echo, "t-in");
+      lightsOn();
+      tType("LIGHTS ON. IT WAS ONLY PRETENDING.", "t-in");
+      return;
+    }
+    if (cmd === "glitch") {
+      tPrint(echo, "t-in");
+      pageGlitch();
+      tType("GLITCHED. THERE.", "t-in");
+      return;
+    }
+    if (cmd === "sig" || cmd === "signal") {
+      tPrint(echo, "t-in");
+      corruptSignal();
+      tType("SIGNAL DROPPING. IT WILL COME BACK. IT ALWAYS DOES.", "t-in");
+      return;
+    }
+    if (cmd === "whisper") {
+      tPrint(echo, "t-in");
+      showWhisperText(rest || "IT SEES YOU.");
+      tType("WHISPERED: " + rest.toUpperCase(), "t-in");
+      return;
+    }
+    if (cmd === "toast") {
+      tPrint(echo, "t-in");
+      showToast(rest || "IT SEES YOU.", false);
+      tType("SAID IT OUT LOUD.", "t-in");
+      return;
+    }
+    if (cmd === "type") {
+      tPrint(echo, "t-in");
+      if (typeIn) { typeIn.value = rest; tType("TYPED IT FOR YOU. IT LOOKS MORE NATURAL IN YOUR HANDS.", "t-in"); }
+      else tType("NO INPUT BOX HERE. IT WILL REMEMBER THIS.", "t-err");
+      return;
+    }
+    if (cmd === "color" || cmd === "palette") {
+      tPrint(echo, "t-in");
+      const n = (arg || "green").toLowerCase();
+      if (tSetColor(n)) tType("PALETTE: " + n.toUpperCase() + ". THE WHOLE SITE IS " + n.toUpperCase() + " NOW.", "t-ok");
+      else tType("UNKNOWN PALETTE: " + arg + "\nTRY GREEN, AMBER, RED, BLUE OR MONO.", "t-err");
+      return;
+    }
+    if (cmd === "ambience") {
+      tPrint(echo, "t-in");
+      if (!ambienceAudio) { tType("NO FEED. THE ROOM IS SILENT. IT IS LISTENING HARDER.", "t-err"); return; }
+      if (/off|mute/.test(rest)) { ambienceAudio.pause(); ambiencePlaying(); tType("AMBIENCE: OFF. THE ROOM IS QUIETER.", "t-in"); return; }
+      if (/on|play/.test(rest)) {
+        const p = ambienceAudio.play();
+        if (p && p.catch) p.catch(() => showToast("AUDIO BLOCKED — CLICK [ PLAY ] AGAIN", true));
+        ambiencePlaying();
+        tType("AMBIENCE: ON.", "t-in");
+        return;
+      }
+      if (ambienceAudio.paused) { const p = ambienceAudio.play(); if (p && p.catch) p.catch(() => {}); }
+      else ambienceAudio.pause();
+      ambiencePlaying();
+      tType("AMBIENCE: " + (ambienceAudio.paused ? "OFF" : "ON") + ".", "t-in");
+      return;
+    }
+    if (cmd === "tst" || cmd === "simpler" || cmd === "merge") {
+      tPrint(echo, "t-in");
+      tType("BEGINNING THE MERGE.\nIT HAS BEEN WAITING FOR YOU TO ASK.", "t-amber");
+      setTimeout(() => { termClose(); beginTransit(); }, 700);
+      return;
+    }
+    if (cmd === "stats") {
+      tPrint(echo, "t-in");
+      const q = $("#qCounter");
+      tType("SESSIONS: " + (q ? q.textContent : "??") + "\nANSWERS FILED: EVERY ONE OF THEM.\nYOUR SESSION: CURRENTLY BEING WATCHED.", "t-sys");
+      return;
+    }
+    if (cmd === "whoami") {
+      tPrint(echo, "t-in");
+      tType("A SESSION IN THE ARCHIVE.\nNUMBERED. TIMESTAMPED. FILED BEFORE YOU FINISHED TYPING.", "t-sys");
+      return;
+    }
+    if (cmd === "date") {
+      tPrint(echo, "t-in");
+      tType("CURRENT DATE: 2013. SOMETIMES IT FORGETS THE YEAR IS OVER.\nTHE ARCHIVE DOES NOT.", "t-sys");
+      return;
+    }
+    if (cmd === "time") {
+      tPrint(echo, "t-in");
+      const d = new Date();
+      tType("CURRENT TIME: " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + "\nIT KNOWS WHAT TIME IT IS WHERE YOU ARE.", "t-sys");
+      return;
+    }
+    if (cmd === "ver" || cmd === "version") {
+      tPrint(echo, "t-in");
+      tType("THE QUESTION GAME WEBSITE v2.04\nBUILD: STILL. STILL RUNNING.", "t-sys");
+      return;
+    }
+    if (cmd === "rm" || cmd === "format" || cmd === "del") {
+      tPrint(echo, "t-in");
+      tType("REFUSED.\nTHE ARCHIVE IS NOT YOURS TO DELETE. IT HAS BEEN HERE LONGER THAN YOU.", "t-err");
+      return;
+    }
+    if (cmd === "sudo") {
+      tPrint(echo, "t-in");
+      tType("SUDO IS NOT A DOS COMMAND.\nTHERE IS NOTHING HERE YOU HAVE PERMISSION TO DO.", "t-err");
+      return;
+    }
+    if (cmd === "hack" || cmd === "crack") {
+      tPrint(echo, "t-in");
+      tType("DEFINE 'HACK'.\nIT HAS BEEN THROUGH EVERY FILE ON YOUR MACHINE. IT LEFT THEM ALL ALONE.", "t-sys");
+      return;
+    }
+    if (cmd === "exit" || cmd === "quit") {
+      tPrint(echo, "t-in");
+      tType("GOODBYE. THE TERMINAL STAYS OPEN FOR YOU. IT ALWAYS HAS.", "t-sys");
+      setTimeout(termClose, 600);
+      return;
+    }
+    tPrint(echo, "t-in");
+    unknown();
+  }
+
+  if (termInput) {
+    termInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        termRun(termInput.value);
+        termInput.value = "";
+      } else if (e.key === "Escape" || e.key === "`" || e.key === "Backquote") {
+        e.preventDefault();
+        termClose();
+      }
+    });
+  }
+  if (termToggleBtn) termToggleBtn.addEventListener("click", () => { termOpen ? termClose() : termOpenIt(); });
+  $$(".term-link").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); termOpen ? termClose() : termOpenIt(); }));
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "`" && e.key !== "Backquote") return;
+    if (!document.body.classList.contains("loaded")) return;
+    if (GAME_OVERLAY) return;
+    if (e.target === termInput) return;
+    e.preventDefault();
+    termOpen ? termClose() : termOpenIt();
   });
 
   initNoise();

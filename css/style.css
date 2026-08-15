@@ -1650,9 +1650,77 @@ body.warming .hud,body.warming .nav-status{color:#ffb020}
 }
 @keyframes merge-blink{50%{opacity:0}}
 
+/* the two sites swap — green drains away while amber rises in */
+.melt-drain,.melt-amber{
+  position:fixed;left:0;right:0;z-index:140;pointer-events:none;height:0;
+}
+.melt-drain{
+  top:0;background:linear-gradient(180deg,#00dc00 0%,rgba(0,220,0,.55) 55%,rgba(0,220,0,0) 100%);
+  box-shadow:0 0 50px rgba(0,220,0,.3);
+}
+.melt-amber{
+  bottom:0;background:linear-gradient(0deg,#ffb020 0%,rgba(255,176,32,.55) 55%,rgba(255,176,32,0) 100%);
+  box-shadow:0 0 50px rgba(255,176,32,.3);
+}
+body.melting .melt-drain{height:100%;transition:height 3.4s cubic-bezier(.6,.05,.4,1)}
+body.melting .melt-amber{height:100%;transition:height 3.4s cubic-bezier(.6,.05,.4,1)}
+.melt-drip.green{background:linear-gradient(180deg,rgba(0,220,0,0),#00dc00)}
+
+/* ---------------------------------------------------------------
+   MAINTENANCE TERMINAL — type ` or [ TERM ]. A real prompt.
+   --------------------------------------------------------------- */
+.mterm-toggle{
+  font-family:var(--mono);font-size:.78rem;letter-spacing:.08em;
+  color:var(--green);background:transparent;border:1px solid var(--line-bright);
+  padding:.15rem .55rem;cursor:pointer;
+  transition:color .15s,border-color .15s,box-shadow .15s;
+}
+.mterm-toggle:hover{color:#fff;border-color:var(--green);box-shadow:0 0 10px rgba(0,220,0,.3)}
+
+.mterm{
+  position:fixed;inset:0;z-index:150;display:flex;flex-direction:column;
+  background:rgba(1,8,1,.97);font-family:var(--mono);
+  font-size:clamp(.8rem,1.5vw,.98rem);
+  color:var(--green);opacity:0;pointer-events:none;
+  transition:opacity .2s ease;
+}
+.mterm.go{opacity:1;pointer-events:auto}
+.mterm-head{
+  flex:0 0 auto;display:flex;justify-content:space-between;gap:1rem;
+  padding:.4rem .8rem;border-bottom:1px solid var(--green-dim);
+  background:#021002;color:#66ff66;
+  font-family:var(--vt);letter-spacing:.1em;font-size:clamp(.85rem,1.6vw,1.05rem);
+}
+.mterm-head-r{color:var(--green-dim)}
+.mterm-out{
+  flex:1;overflow-y:auto;padding:.6rem .8rem;line-height:1.55;
+  white-space:pre-wrap;
+  scrollbar-width:thin;scrollbar-color:var(--green-dim) #000;
+}
+.mterm-out::-webkit-scrollbar{width:10px;background:#000}
+.mterm-out::-webkit-scrollbar-thumb{background:var(--green-dim);border:2px solid #000}
+.mterm-line{
+  flex:0 0 auto;display:flex;align-items:center;gap:.4rem;
+  padding:.5rem .8rem .7rem;border-top:1px solid var(--green-dim);
+}
+.mterm-prompt{color:#66ff66;text-shadow:0 0 8px rgba(0,220,0,.6)}
+.mterm-input{
+  flex:1;background:transparent;border:0;outline:0;
+  color:var(--green);font-family:var(--mono);font-size:1em;caret-color:var(--green);
+}
+.mterm-input::selection{background:var(--green);color:#000}
+.t-echo{color:var(--dim)}
+.t-in{color:#8cff8c}
+.t-ok{color:var(--green)}
+.t-sys{color:var(--dim)}
+.t-err{color:var(--red);text-shadow:0 0 8px rgba(200,0,0,.4)}
+.t-red{color:var(--red)}
+.t-amber{color:#ffb020}
+
 @media (prefers-reduced-motion:reduce){
   .merge-screen.go .merge-band{transition:none;height:100%}
   .merge-fringe{animation:none !important}
   .hero h1.melt,.section-title.melt,.melt-drip,.merge-prompt{animation:none !important}
   .merge-screen.settled .merge-band{transition:none;opacity:0}
+  body.melting .melt-drain,body.melting .melt-amber{transition:none;height:100%}
 }
