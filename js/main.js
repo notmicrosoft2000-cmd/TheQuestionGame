@@ -2308,6 +2308,18 @@
     });
   }
 
+  let ambienceWarmed = false;
+  function warmAmbience() {
+    if (ambienceWarmed || !ambienceAudio) return;
+    ambienceWarmed = true;
+    const p = ambienceAudio.play();
+    if (p && p.catch) p.catch(() => {});
+    ambiencePlaying();
+  }
+  document.addEventListener("pointerdown", warmAmbience, { once: true });
+  document.addEventListener("keydown", warmAmbience, { once: true });
+  document.addEventListener("mousemove", warmAmbience, { once: true });
+
   const toast = $("#toast");
   let toastTimer = null;
   function showToast(text, isRed) {
