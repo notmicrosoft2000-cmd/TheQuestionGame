@@ -1558,14 +1558,44 @@ body.touch-device .bossfight .bf-touch{display:flex}
 .bossfight .bf-face .face{animation:face-in .09s steps(2) infinite}
 
 /* ---------------------------------------------------------------
-   THE SIMPLER TIMES — in-site merge sequence (no iframes).
-   A band of the prequel's amber palette melts down over the page;
-   the site underneath shifts green→amber while the guest portal
-   types itself in. Pure CSS/JS, all local assets.
+   THE SIMPLER TIMES — warm, melt, pre-boot.
+   The whole page goes amber, the hero melts, an amber band rolls
+   down over the screen, recedes into the prequel's boot screen, and
+   the disk boots itself. Pure CSS/JS, all local assets.
    --------------------------------------------------------------- */
+
+/* the page underneath turns amber while it warms */
+body.warming{
+  --bg:#060400;--bg-soft:#0e0902;--panel:#0e0902;--line:#201406;--line-bright:#32200a;
+  --text:#ffb020;--dim:#7a4c0e;--green:#ffb020;--green-dim:#7a4c0e;
+  --glow-green:0 0 12px rgba(255,176,32,.35);
+}
+body.warming .hero h1{
+  color:#ffd660;
+  text-shadow:0 0 24px rgba(255,176,32,.55),0 0 64px rgba(255,176,32,.28);
+  transition:color 1s ease,text-shadow 1s ease;
+}
+body.warming .hud,body.warming .nav-status{color:#ffb020}
+
+/* the melt — the title slips and stretches downward */
+@keyframes melt-title{
+  0%{transform:scale(1) skewX(0);filter:blur(0);opacity:1}
+  100%{transform:scale(1.3,.42) skewX(7deg) translateY(8vh);filter:blur(2px);opacity:.5}
+}
+.hero h1.melt,.section-title.melt{animation:melt-title 1.7s ease-in forwards;transform-origin:50% 0}
+.hero h1.melt::before,.hero h1.melt::after,.section-title.melt::before,.section-title.melt::after{animation:inherit}
+
+.melt-drip{
+  position:fixed;top:-14vh;width:4px;z-index:150;pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,176,32,0),#ffb020);
+  opacity:0;animation:meltdrip 1.5s linear forwards;
+}
+@keyframes meltdrip{0%{opacity:0}20%{opacity:.85}100%{top:115vh;opacity:.35}}
+
+/* the transit overlay — first the amber band, then the boot screen */
 .merge-screen{
   position:fixed;inset:0;z-index:200;overflow:hidden;
-  background:var(--bg);color:var(--green);
+  background:#060400;color:#ffd660;
   font-family:var(--mono);
   opacity:0;pointer-events:none;
   display:flex;flex-direction:column;
@@ -1580,6 +1610,7 @@ body.touch-device .bossfight .bf-touch{display:flex}
   box-shadow:0 0 40px rgba(255,176,32,.5);
 }
 .merge-screen.go .merge-band{height:100%;transition:height 2.6s cubic-bezier(.7,.05,.9,.3)}
+.merge-screen.settled .merge-band{opacity:0;transition:opacity .8s ease .05s}
 .merge-fringe{
   position:absolute;bottom:-14px;left:-4%;width:108%;height:28px;
   background:
@@ -1594,71 +1625,34 @@ body.touch-device .bossfight .bf-touch{display:flex}
   75%{transform:translate(-4px,2px)}
   100%{transform:translate(0,0)}
 }
-.merge-drip{
-  position:absolute;top:-12vh;width:3px;
-  background:linear-gradient(180deg,rgba(255,176,32,0),#ffb020);
-  opacity:0;animation:drip 1.7s linear forwards;
-}
-@keyframes drip{0%{opacity:0}15%{opacity:.9}100%{top:112vh;opacity:.55}}
-
-.merge-body{
-  position:relative;flex:1;display:flex;flex-direction:column;
-  opacity:0;transform:translateY(10px);
-  transition:opacity .6s ease,transform .6s ease;
-}
-.merge-screen.go .merge-body{opacity:1;transform:none}
 .merge-brand{
-  flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
+  position:relative;z-index:2;flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
   border-bottom:1px solid #32200a;background:#0e0902;
   padding:.45rem clamp(1rem,3vw,2rem);
   font-family:var(--vt);font-size:clamp(1rem,2.2vw,1.4rem);letter-spacing:.14em;color:#ffd660;
 }
 .merge-brand span{color:#7a4c0e;font-size:.8em;letter-spacing:.1em}
-.merge-marquee{
-  flex:0 0 auto;overflow:hidden;white-space:nowrap;border-bottom:1px solid #201406;
-  background:#0e0902;font-family:var(--vt);font-size:clamp(.8rem,1.5vw,1rem);
-  letter-spacing:.08em;color:#7a4c0e;padding:.14rem .5rem;
+.merge-body{
+  position:relative;z-index:2;flex:1;display:flex;flex-direction:column;
+  max-width:900px;width:100%;margin:0 auto;box-sizing:border-box;
+  padding:clamp(1.4rem,4vw,3rem) clamp(1.2rem,5vw,2.6rem);
+  opacity:0;transition:opacity .5s ease;
 }
-.merge-marquee-track{display:inline-block;animation:merge-marquee 42s linear infinite}
-@keyframes merge-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-
-.merge-inner{
-  flex:1;overflow-y:auto;max-width:880px;margin:0 auto;
-  padding:clamp(1.2rem,3.5vw,2.6rem) clamp(1.2rem,5vw,2.6rem);
+.merge-screen.settled .merge-body{opacity:1}
+.merge-bootlog{
+  flex:1;font-size:clamp(.95rem,1.6vw,1.15rem);
+  color:#ffd660;line-height:1.95;min-height:9em;white-space:pre-wrap;
+  text-shadow:0 0 10px rgba(255,176,32,.35);
 }
-.merge-title{
-  font-family:var(--vt);font-weight:400;letter-spacing:.06em;line-height:1;
-  font-size:clamp(2.4rem,8vw,5.6rem);color:#ffd660;
-  text-shadow:0 0 18px rgba(255,176,32,.5);position:relative;margin:.2rem 0 .6rem;
+.merge-prompt{
+  margin-top:1.8rem;font-size:clamp(1rem,2vw,1.35rem);font-weight:700;color:#fff;
+  animation:merge-blink 1s steps(2) infinite;
 }
-.merge-title::before,.merge-title::after{content:attr(data-text);position:absolute;inset:0;opacity:.7;pointer-events:none}
-.merge-title::before{color:#ff3c3c;transform:translate(2px,0);z-index:-1}
-.merge-title::after{color:#00dc00;transform:translate(-2px,0);z-index:-2}
-.merge-tag{font-size:clamp(.95rem,1.8vw,1.15rem);color:#ffcf7d;max-width:640px;margin-bottom:1.4rem}
-.merge-note{min-height:2.6em;font-size:.95rem;color:#ffb020;max-width:640px;white-space:pre-wrap;line-height:1.8}
-.merge-actions{display:flex;flex-wrap:wrap;gap:1rem;margin-top:2rem}
-.merge-close{
-  position:absolute;top:.6rem;right:.8rem;z-index:5;
-  border:1px solid #32200a;background:#0e0902;color:#7a4c0e;
-  font-family:var(--vt);letter-spacing:.1em;font-size:.85rem;padding:.3rem .7rem;
-}
-.merge-close:hover{color:#ffd660;border-color:#ffb020}
-
-.merge-screen .btn{border-color:#32200a;color:#ffb020;box-shadow:2px 2px 0 #000,inset 0 0 0 1px rgba(255,176,32,.1)}
-.merge-screen .btn:hover{background:rgba(255,176,32,.12);color:#ffd660;text-shadow:var(--glow-green)}
-.merge-screen .btn-primary{background:#ffb020;color:#1a0f00;box-shadow:2px 2px 0 #000,0 0 14px rgba(255,176,32,.35)}
-.merge-screen .btn-primary:hover{background:#ffd660;color:#1a0f00}
-.merge-screen .btn-ghost:hover{border-color:#ff3c3c;color:#ff3c3c;background:rgba(255,60,60,.06)}
-
-/* the page underneath turns amber while the prequel melts through */
-body.merging{
-  --bg:#060400;--bg-soft:#0e0902;--panel:#0e0902;--line:#201406;--line-bright:#32200a;
-  --text:#ffb020;--dim:#7a4c0e;--green:#ffb020;--green-dim:#7a4c0e;
-  --glow-green:0 0 12px rgba(255,176,32,.35);
-  transition:background .9s ease,color .9s ease;
-}
+@keyframes merge-blink{50%{opacity:0}}
 
 @media (prefers-reduced-motion:reduce){
   .merge-screen.go .merge-band{transition:none;height:100%}
-  .merge-fringe,.merge-drip,.merge-marquee-track{animation:none !important}
+  .merge-fringe{animation:none !important}
+  .hero h1.melt,.section-title.melt,.melt-drip,.merge-prompt{animation:none !important}
+  .merge-screen.settled .merge-band{transition:none;opacity:0}
 }

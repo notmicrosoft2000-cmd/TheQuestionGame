@@ -115,10 +115,10 @@
 
   const heroType = $("#heroType");
   const HERO_PHRASES = [
-    "IT REMEMBERS. DO YOU?",
-    "ANSWER HONESTLY.",
-    "THERE IS NO SKIP BUTTON.",
-    "IT IS WAITING."
+    "By Neptune productions (C)",
+    "Hello? Please delete this game.",
+    "All the way back to 1993.",
+    "We are good at waiting.."
   ];
   let heroStuck = false;
 
@@ -369,14 +369,14 @@
   ghostLineEl.setAttribute("aria-hidden", "true");
   document.body.appendChild(ghostLineEl);
   const GHOST_LINES = [
-    "IT IS IN THE WALLS",
-    "THE FILE OPENED ITSELF",
-    "YOUR NAME WAS ALREADY HERE",
-    "THE SECOND HAND IS A HEARTBEAT",
-    "IT HAS BEEN WATCHING SINCE THE BOOT",
-    "THE QUESTION BEFORE THIS ONE WAS ABOUT YOU",
-    "YOU DID NOT CLOSE THE DOOR",
-    "THE LIGHT IN THE HALLWAY IS OUT NOW"
+    "Check the website carefully.",
+    "SOFT KAACHAN WAR-",
+    "Made in Burma",
+    "Is something following your mouse?",
+    "Do not type smile.",
+    "we will use your broswer so we can know you better.",
+    "Download the game, we are waiting..",
+    "This game is not for you, it was for everyone"
   ];
   let ghostLineLock = false;
   function ghostLine() {
@@ -432,14 +432,14 @@
   }
 
   const EERIE_TOASTS = [
-    "IT NOTICED YOU STOPPED READING",
-    "SOMETHING MOVED BEHIND THE TEXT",
-    "IT COUNTED YOUR BLINKS",
-    "THE SESSION ARCHIVE JUST GREW",
-    "IT KNOWS YOU ARE ON THIS PAGE",
-    "DON'T LET THE SCREEN GO DARK",
-    "YOUR EARLIER ANSWERS HAVE BEEN SORTED",
-    "IT REMEMBERS WHEN YOU LEFT LAST TIME"
+    "Continue reading..",
+    "The website moves sometimes.",
+    "People trust computers too easily.",
+    "be not afraid.",
+    "We are good at waiting.",
+    "The website is not the only place,",
+    "The preview waits for you",
+    "IT REMEMBERS WHEN YOU LEFT LAST TIME."
   ];
   function fakeToast() {
     if (document.hidden || GAME_OVERLAY) return;
@@ -610,10 +610,10 @@
   const GHOST_TYPES = [
     "I CAN TYPE TOO",
     "HELLO?",
-    "I CAN SEE YOUR HANDS",
+    "Smile",
     "STOP TYPING",
     "DID YOU WANT SOMETHING?",
-    "IT GETS QUIETER IN HERE"
+    "We wait for your input."
   ];
   let tgLock = false;
   let tgInterval = null;
@@ -868,11 +868,11 @@
   }
 
   const DEVICE_COMMENTS = [
-    "{OS}. IT COUNTS THOSE, TOO.",
-    "IT CAN SEE YOU ARE ON {OS}.",
-    "{BROWSER} ON {OS}. THAT WAS NOT A CHOICE.",
-    "{RES} PIXELS. IT CAN FIT MORE QUESTIONS THERE.",
-    "{INPUT} INPUT. IT KNOWS HOW YOU REACH FOR IT.",
+    "{OS}... we can make ends meet with that.",
+    "Being on {OS}? bad choice.",
+    "{BROWSER} ON {OS}?",
+    "{RES} PIXELS. More space for us.",
+    "{INPUT} INPUT.",
     "IT PREFERRED THE OLD MACHINE. IT WILL GET USED TO {OS}.",
     "IT HEARD THE FAN ON YOUR {OS} SPEED UP."
   ];
@@ -1827,7 +1827,7 @@
     if (a.hasAttribute("data-merge")) {
       e.preventDefault();
       showView("simpler");
-      openMerge();
+      beginTransit();
       return;
     }
     const el = document.getElementById(id);
@@ -2177,7 +2177,7 @@
     btn.removeAttribute("aria-disabled");
     btn.classList.remove("platform-miss");
     btn.textContent = "DOWNLOAD " + os + " ⤓";
-    setStatus(status, "READY — DIRECT LINK");
+    setStatus(status, "READY");
   }
 
   async function loadReleaseFromTag(tag, dom, fb) {
@@ -2477,6 +2477,58 @@
         g.connect(ctx.destination);
         o.start();
         o.stop(ctx.currentTime + 0.035);
+      } catch (e) { }
+    },
+    boot() {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const t = ctx.currentTime;
+        const osc = (f, ms, vol, type, when, slide) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = type || "square";
+          o.frequency.setValueAtTime(f, t + (when || 0));
+          if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + (when || 0) + ms / 1000);
+          g.gain.setValueAtTime(vol, t + (when || 0));
+          g.gain.exponentialRampToValueAtTime(0.0001, t + (when || 0) + ms / 1000);
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.start(t + (when || 0));
+          o.stop(t + (when || 0) + ms / 1000 + 0.02);
+        };
+        osc(70, 90, 0.12, "square", 0);
+        osc(55, 120, 0.1, "square", 0.05);
+        osc(880, 90, 0.07, "square", 0.5);
+        osc(880, 90, 0.07, "square", 0.85);
+        const n = Math.floor(ctx.sampleRate * 2.2);
+        const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.setValueAtTime(120, t);
+        lp.frequency.linearRampToValueAtTime(900, t + 1.6);
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0, t);
+        ng.gain.linearRampToValueAtTime(0.06, t + 0.8);
+        ng.gain.linearRampToValueAtTime(0.02, t + 2.0);
+        src.connect(lp); lp.connect(ng); ng.connect(ctx.destination);
+        src.start(t); src.stop(t + 2.2);
+        for (let i = 0; i < 8; i++) {
+          const dt = 0.8 + Math.random() * 1.4;
+          const s = ctx.createBufferSource();
+          s.buffer = buf;
+          const bp = ctx.createBiquadFilter();
+          bp.type = "bandpass";
+          bp.frequency.value = 700 + Math.random() * 1400;
+          const sg = ctx.createGain();
+          sg.gain.value = 0.045;
+          s.connect(bp); bp.connect(sg); sg.connect(ctx.destination);
+          s.start(t + dt); s.stop(t + dt + 0.03);
+        }
       } catch (e) { }
     },
     scare() {
@@ -3785,99 +3837,110 @@
     }, { passive: true });
   }
 
-  /* ---------- THE SIMPLER TIMES — merge sequence ---------- */
+  /* ---------- THE SIMPLER TIMES — warm, melt, pre-boot, redirect ---------- */
   const mergeScreen = $("#mergeScreen");
-  const mergeBody = $("#mergeBody");
-  const mergeNote = $("#mergeNote");
-  const mergeActions = $("#mergeActions");
-  const mergeClose = $("#mergeClose");
-  const mergeBack = $("#mergeBack");
-  const mergeMarquee = $("#mergeMarquee");
+  const mergeBootLog = $("#mergeBootLog");
+  const mergePrompt = $("#mergePrompt");
   const mergeLaunch = $("#mergeLaunch");
+  const TST_URL = "https://notmicrosoft2000-cmd.github.io/TheSimplerTimes/";
 
-  const MERGE_MARQUEE = " *** THE SIMPLER TIMES *** YOU ARE ONLINE *** IT KNOWS YOU ARE READING THIS *** THE FIRST COPY WAS NEVER THE DISK *** A:\\ IS WARM *** 1993 *** DO NOT TYPE YOUR NAME *** ";
-  const MERGE_NOTES = [
-    "A:\\> the green is going amber",
-    "A:\\> the disk is warm",
-    "A:\\> THE QUESTION GAME IS STILL LISTENING",
-    "A:\\> you are now looking at THE SIMPLER TIMES"
+  const MELT_LINES = [
+    "A:\\> cold boot",
+    "A:\\> memory check ......... 640K OK",
+    "A:\\> the drive is warm",
+    "A:\\> reading the disk ..... it was already reading you",
+    "A:\\> THE SIMPLER TIMES IS ONLINE"
   ];
 
-  let mergeOpen = false;
+  let transitActive = false;
 
-  function buildMergeMarquee() {
-    if (!mergeMarquee) return;
-    mergeMarquee.textContent = MERGE_MARQUEE + MERGE_MARQUEE;
-  }
-
-  function makeMergeDrips() {
-    if (!mergeScreen) return;
-    mergeScreen.querySelectorAll(".merge-drip").forEach((d) => d.remove());
-    for (let i = 0; i < 9; i++) {
+  function makeMeltDrips() {
+    document.querySelectorAll(".melt-drip").forEach((d) => d.remove());
+    for (let i = 0; i < 10; i++) {
       const d = document.createElement("div");
-      d.className = "merge-drip";
-      d.style.left = (3 + Math.random() * 92) + "%";
-      d.style.height = (14 + Math.random() * 18) + "vh";
-      d.style.animationDelay = (0.12 + Math.random() * 1.1) + "s";
-      mergeScreen.appendChild(d);
+      d.className = "melt-drip";
+      d.style.left = (2 + Math.random() * 94) + "%";
+      d.style.animationDelay = (0.05 + Math.random() * 0.9) + "s";
+      document.body.appendChild(d);
     }
   }
 
-  async function typeMergeNote(text) {
-    const acc = mergeNote.textContent;
-    for (let i = 0; i <= text.length; i++) {
-      mergeNote.textContent = acc + text.slice(0, i);
-      await sleep(16);
-    }
-    mergeNote.textContent = acc + text;
+  function meltTitle() {
+    document.querySelectorAll(".hero h1, .section-title").forEach((el) => el.classList.add("melt"));
   }
 
-  async function openMerge() {
-    if (mergeOpen || !mergeScreen) return;
-    mergeOpen = true;
-    document.body.classList.add("merging");
-    mergeActions.classList.add("hidden");
-    mergeClose.classList.add("hidden");
-    mergeNote.textContent = "";
-    buildMergeMarquee();
-    makeMergeDrips();
-    mergeScreen.setAttribute("aria-hidden", "false");
-    mergeScreen.classList.remove("hidden");
-    requestAnimationFrame(() => requestAnimationFrame(() => mergeScreen.classList.add("go")));
-    await sleep(1500);
-    mergeBody.setAttribute("aria-hidden", "false");
-    await sleep(1600);
-    for (const line of MERGE_NOTES) {
-      await typeMergeNote(line + "\n");
-      await sleep(150);
-    }
-    mergeActions.classList.remove("hidden");
-    mergeClose.classList.remove("hidden");
-    if (mergeClose) mergeClose.focus();
+  function clearMelt() {
+    document.querySelectorAll(".hero h1.melt, .section-title.melt").forEach((el) => el.classList.remove("melt"));
+    document.querySelectorAll(".melt-drip").forEach((d) => d.remove());
   }
 
-  function closeMerge() {
-    if (!mergeOpen || !mergeScreen) return;
-    mergeOpen = false;
-    mergeScreen.classList.remove("go");
-    mergeBody.setAttribute("aria-hidden", "true");
-    mergeScreen.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("merging");
-    setTimeout(() => mergeScreen.classList.add("hidden"), 400);
-  }
-
-  if (mergeBack) mergeBack.addEventListener("click", closeMerge);
-  if (mergeClose) mergeClose.addEventListener("click", closeMerge);
-  if (mergeLaunch) {
-    mergeLaunch.addEventListener("click", () => {
-      showView("simpler");
-      openMerge();
+  function typeBootLine(text) {
+    return new Promise((res) => {
+      const el = mergeBootLog;
+      const row = document.createElement("div");
+      row.className = "merge-line";
+      el.appendChild(row);
+      let i = 0;
+      const iv = setInterval(() => {
+        if (!transitActive) { clearInterval(iv); return res(); }
+        i += 1 + Math.floor(Math.random() * 2);
+        row.textContent = text.slice(0, i);
+        if (i >= text.length) { clearInterval(iv); res(); }
+      }, 24);
     });
   }
+
+  async function beginTransit() {
+    if (transitActive || !mergeScreen) return;
+    transitActive = true;
+    document.body.classList.add("warming");
+    const sig = $("#sigStatus");
+    if (sig) sig.textContent = "WARMING";
+    showToast("THE QUESTION GAME IS WARMING.");
+    sfx.boot();
+    await sleep(1500);
+    document.body.classList.add("melting");
+    makeMeltDrips();
+    meltTitle();
+    await sleep(1900);
+    mergeScreen.classList.remove("hidden");
+    mergeScreen.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => requestAnimationFrame(() => mergeScreen.classList.add("go")));
+    await sleep(2600);
+    mergeScreen.classList.add("settled");
+    await sleep(1100);
+    mergeBootLog.textContent = "";
+    mergePrompt.classList.add("hidden");
+    for (const line of MELT_LINES) {
+      await typeBootLine(line);
+      sfx.type();
+      await sleep(130);
+    }
+    mergePrompt.classList.remove("hidden");
+    await sleep(2000);
+    window.location.href = TST_URL;
+  }
+
+  function abortTransit() {
+    if (!transitActive) return;
+    transitActive = false;
+    document.body.classList.remove("warming", "melting");
+    clearMelt();
+    mergeScreen.classList.remove("go", "settled");
+    mergeScreen.setAttribute("aria-hidden", "true");
+    setTimeout(() => mergeScreen.classList.add("hidden"), 400);
+    const sig = $("#sigStatus");
+    if (sig) sig.textContent = sig.getAttribute("data-base") || "STABLE";
+    showToast("IT LET YOU WALK AWAY. IT WILL REMEMBER THE CLICK.");
+  }
+
+  if (mergeLaunch) {
+    mergeLaunch.addEventListener("click", () => beginTransit());
+  }
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && mergeOpen) {
+    if (e.key === "Escape" && transitActive) {
       e.preventDefault();
-      closeMerge();
+      abortTransit();
     }
   });
 
