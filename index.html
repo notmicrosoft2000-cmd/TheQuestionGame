@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=44">
+  <link rel="stylesheet" href="css/style.css?v=45">
 </head>
 <body>
 
@@ -80,6 +80,7 @@
       <a class="contents-link" href="#preview"><span class="link-num">9</span> PREVIEW</a>
       <a class="contents-link" href="#intel"><span class="link-num">10</span> INTEL</a>
       <a class="contents-link paper-link" href="#story">YANGON TIMES</a>
+      <a class="contents-link forum-link" href="#forum">FORUM</a>
       <a class="contents-link logs-link hidden" href="#logs">LOGS</a>
       <a class="contents-link" href="#dev">THE DEV</a>
       <a class="contents-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
@@ -100,6 +101,7 @@
       <a class="side-link" href="#preview"><span class="link-num">9</span> SESSION PREVIEW</a>
       <a class="side-link" href="#intel"><span class="link-num">10</span> INTEL</a>
       <a class="side-link paper-link" href="#story">YANGON TIMES</a>
+      <a class="side-link forum-link" href="#forum">FORUM</a>
       <a class="side-link logs-link hidden" href="#logs">LOGS</a>
       <a class="side-link" href="#dev">THE DEV</a>
       <a class="side-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
@@ -692,6 +694,67 @@
       </div>
     </section>
 
+    <section class="section view forum-view" id="forum" data-view="forum">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE FORUM</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">A friendly webring corner. No static, no sudden noises, no glitches — just people, chat, and files. Powered by GitHub Issues.</p>
+
+      <div class="forum-wrap reveal">
+        <div class="forum-auth" id="forumAuth">
+          <div class="forum-auth-tabs">
+            <button class="forum-auth-tab active" id="forumTabSignup" type="button">SIGN UP</button>
+            <button class="forum-auth-tab" id="forumTabLogin" type="button">LOG IN</button>
+          </div>
+          <form class="forum-auth-form" id="forumSignupForm">
+            <label>USERNAME
+              <input type="text" id="forumSignupName" autocomplete="username" maxlength="24" spellcheck="false" required>
+            </label>
+            <label>PASSWORD
+              <input type="password" id="forumSignupPass" autocomplete="new-password" maxlength="128" required>
+            </label>
+            <label>REPEAT PASSWORD
+              <input type="password" id="forumSignupPass2" autocomplete="new-password" maxlength="128" required>
+            </label>
+            <button type="submit">CREATE ACCOUNT</button>
+          </form>
+          <form class="forum-auth-form hidden" id="forumLoginForm">
+            <label>USERNAME
+              <input type="text" id="forumLoginName" autocomplete="username" maxlength="24" spellcheck="false" required>
+            </label>
+            <label>PASSWORD
+              <input type="password" id="forumLoginPass" autocomplete="current-password" maxlength="128" required>
+            </label>
+            <button type="submit">LOG IN</button>
+          </form>
+          <p class="forum-hint" id="forumAuthHint">Posting identity comes from a GitHub token — your messages show your GitHub avatar and name.</p>
+          <div class="forum-token hidden" id="forumTokenBox">
+            <label>GITHUB TOKEN <span class="forum-token-scope">(fine-grained: Issues read/write + Contents read/write on this repo)</span>
+              <input type="password" id="forumToken" autocomplete="off" placeholder="github_pat_..." spellcheck="false">
+            </label>
+            <button type="button" id="forumTokenSave">SAVE TOKEN</button>
+            <span class="forum-token-note">Stored in your browser only — never sent anywhere except GitHub's API.</span>
+          </div>
+        </div>
+
+        <div class="forum-chat">
+          <div class="forum-banner">
+            <span class="forum-banner-title">THE TQG WEBRING FORUM</span>
+            <span class="forum-banner-count" id="forumMsgCount"></span>
+          </div>
+          <div class="forum-msgs" id="forumMsgs" aria-live="polite"></div>
+          <div class="forum-compose">
+            <input type="text" id="forumMsg" maxlength="1000" placeholder="type a message..." aria-label="Message">
+            <button type="button" id="forumSend">POST</button>
+            <label class="forum-upload" id="forumUploadLabel">ATTACH<input type="file" id="forumFile" hidden></label>
+            <button type="button" id="forumRefresh">REFRESH</button>
+          </div>
+          <div class="forum-status" id="forumStatus">LOADING...</div>
+        </div>
+      </div>
+    </section>
+
     <section class="section view" id="download" data-view="download">
       <div class="section-head reveal">
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
@@ -1046,7 +1109,7 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=44"></script>
-  <script src="js/main.js?v=44"></script>
+  <script src="js/config.js?v=45"></script>
+  <script src="js/main.js?v=45"></script>
 </body>
 </html>

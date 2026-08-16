@@ -8,3 +8,13 @@ window.AI_CONFIG = {
   groqKey: "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",
   model: "llama-3.3-70b-versatile"
 };
+
+window.FORUM_CONFIG = {
+  owner: "notmicrosoft2000-cmd",
+  repo: "TheQuestionGame",
+  channelIssue: 1,
+  uploadsPath: "forum-uploads",
+  branch: "main",
+  api: "https://api.github.com",
+  raw: "https://raw.githubusercontent.com"
+};

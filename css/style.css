@@ -2257,3 +2257,183 @@ body.style-old .side-link.paper-link,body.style-old .side-link.paper-link:visite
 /* neptune productions imprint → hub link */
 .nep-link{color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto}
 .nep-link:hover{text-decoration:underline}
+
+/* ---------- Forum — the TQG webring ---------- */
+/* nav chip: warm webring look even inside the dark site */
+.contents-link.forum-link,
+.side-link.forum-link{
+  background:#fff8e7;color:#5e1f1f;border:1px solid #c0a878;
+  font-family:"Comic Sans MS","Comic Sans",cursive;font-weight:700;
+  letter-spacing:.09em;
+}
+.contents-link.forum-link:hover,
+.side-link.forum-link:hover{color:#8a2b2b;border-color:#8a2b2b;background:#f3e9d2}
+.contents-link.forum-link.active,
+.side-link.forum-link.active{color:#8a2b2b;border-color:#8a2b2b;background:#f3e9d2;box-shadow:none;text-shadow:none;animation:none}
+body.paper .contents-link.forum-link,
+body.paper .side-link.forum-link,
+body.forum .contents-link.forum-link,
+body.forum .side-link.forum-link{background:#fff8e7;color:#5e1f1f;border:1px solid #c0a878;padding:.3rem .7rem}
+body.paper .contents-link.forum-link.active,
+body.paper .side-link.forum-link.active,
+body.forum .contents-link.forum-link.active,
+body.forum .side-link.forum-link.active{border-color:#8a2b2b}
+
+/* body.forum — cozy retro webring theme */
+body.forum{
+  --bg:#f3e9d2;--bg-soft:#ecdfc4;--panel:#fff8e7;
+  --line:#d9c49a;--line-bright:#c0a878;
+  --text:#3b2f1e;--dim:#8a744f;
+  --green:#3a6b35;--green-dim:#7a9a6f;
+  --red:#8a2b2b;--dark-red:#5e1b1b;--cyan:#2c5e7a;
+  --glow-green:none;--glow-red:none;--glow-soft:none;
+  --mono:"Trebuchet MS","Segoe UI",Verdana,sans-serif;
+  --vt:"Comic Sans MS","Comic Sans",cursive;
+}
+body.forum .crt{display:none}
+body.forum .hud{display:none}
+body.forum .glitch::before,body.forum .glitch::after{display:none}
+body.forum .glitch,body.forum .hero h1,body.forum .melt,body.forum .melt-drip,body.forum .mterm-drip{animation:none !important}
+body.forum .hero h1{color:#5e1f1f;text-shadow:none}
+body.forum .led{animation:none;box-shadow:none}
+body.forum .nav{background:rgba(243,233,210,.97);border-bottom:2px solid #8a2b2b}
+body.forum .nav-brand{color:#5e1f1f;text-shadow:none;letter-spacing:.03em}
+body.forum .ticker{background:#8a2b2b;border:0}
+body.forum .ticker-item{color:#f3e9d2}
+body.forum .section-title,body.forum .t-title,body.forum .session-name,
+body.forum .release-version,body.forum .platform-os,body.forum .player-title,
+body.forum .intel-value{color:#5e1f1f;text-shadow:none}
+body.forum .section-line{background:linear-gradient(90deg,transparent,#c9a227 40%,#b07f2e 75%,transparent);animation:none}
+body.forum .section-sub{color:#6b5a3a}
+body.forum a{color:#0000cc}
+body.forum a:visited{color:#6a2c91}
+body.forum .contents-link:not(.paper-link):not(.forum-link),
+body.forum .side-link:not(.paper-link):not(.forum-link){
+  background:#fff8e7;border:1px solid #c0a878;color:#3b2f1e;
+}
+body.forum .contents-link:not(.paper-link):not(.forum-link):hover,
+body.forum .side-link:not(.paper-link):not(.forum-link):hover{color:#8a2b2b;border-color:#8a2b2b}
+body.forum .contents-link:not(.paper-link):not(.forum-link).active,
+body.forum .side-link:not(.paper-link):not(.forum-link).active{
+  background:#f3e9d2;color:#8a2b2b;border-color:#8a2b2b;box-shadow:none;text-shadow:none;animation:none;
+}
+body.forum .link-num{display:none}
+body.forum .btn,body.forum .asset-btn,body.forum .platform-btn,body.forum .dev-copy{
+  background:linear-gradient(to bottom,#fdf6e3,#e9dcbe);
+  color:#3b2f1e;border:1px solid #b07f2e;border-radius:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 2px 3px rgba(90,60,20,.25);
+  text-shadow:none;
+}
+body.forum .btn:hover,body.forum .asset-btn:hover,body.forum .platform-btn:hover{background:linear-gradient(to bottom,#fff9ec,#eedfc0);box-shadow:none;color:#5e1f1f}
+body.forum .btn::before,body.forum .btn-ghost::before{display:none}
+body.forum .btn-ghost:hover{color:#5e1f1f}
+body.forum .tag{border:1px solid #b07f2e;color:#6b5a3a;background:#fff8e7}
+body.forum .hero-badge{border:1px solid #c9a227;color:#8a2b2b;background:#fff8e7;box-shadow:none;text-shadow:none}
+body.forum .release,body.forum .platform-card,body.forum .session,
+body.forum .player,body.forum .stat,body.forum .dev-card,body.forum .modal{background:#fff8e7;border:1px solid #c0a878}
+body.forum .platform-card.is-current{background:#fbf3dc;border-color:#c9a227}
+body.forum .release::before,body.forum .story-game::before{background:repeating-linear-gradient(90deg,#8a2b2b 0 14px,#c9a227 14px 20px)}
+body.forum .stat-num,body.forum .hero-sub,body.forum .about-quote{color:#8a2b2b;text-shadow:none}
+body.forum .dev-list li,body.forum .feature-list li,body.forum .guide-steps,
+body.forum .story-para p,body.forum .platform-desc{color:#3b2f1e}
+body.forum .release-note{color:#6b5a3a;border-color:#c9a227;background:#fbf3dc}
+body.forum .modal-overlay{background:rgba(60,40,10,.5)}
+body.forum .modal-body{color:#3b2f1e}
+body.forum .mterm{background:#fff8e7;color:#3b2f1e;border:1px solid #c0a878;box-shadow:0 18px 60px rgba(60,40,10,.4)}
+body.forum .mterm-head{border-bottom-color:#c0a878}
+body.forum .mterm-prompt{color:#8a2b2b;text-shadow:none}
+body.forum .mterm-out{color:#3b2f1e}
+body.forum .guide-tab{color:#3b2f1e}
+body.forum .guide-tab:hover{color:#8a2b2b}
+body.forum .guide-tab[aria-selected="true"]{color:#8a2b2b;border-bottom-color:#8a2b2b}
+body.forum .side-panel{background:rgba(243,233,210,.99);border-left-color:#c0a878}
+body.forum .side-head{color:#5e1f1f}
+body.forum .side-foot,body.forum .footer-dim{color:#8a744f}
+body.forum footer p{color:#6b5a3a}
+body.forum .whisper,body.forum .ghostLine{display:none}
+body.forum #musicButton{background:#fff8e7;border-color:#c0a878;color:#8a2b2b;box-shadow:none}
+
+/* forum UI */
+.forum-wrap{display:grid;grid-template-columns:minmax(0,300px) 1fr;gap:1.4rem;align-items:start}
+.forum-auth{
+  border:1px solid #c0a878;background:#fff8e7;border-radius:8px;
+  padding:1.1rem;display:flex;flex-direction:column;gap:1rem;
+  box-shadow:0 2px 8px rgba(90,60,20,.12);
+}
+.forum-auth-tabs{display:flex;gap:.4rem;border-bottom:2px solid #8a2b2b;padding-bottom:.5rem}
+.forum-auth-tab{
+  flex:1;font-family:"Comic Sans MS","Comic Sans",cursive;font-size:.95rem;
+  background:none;border:0;color:#8a744f;padding:.35rem;cursor:pointer;
+  border-bottom:3px solid transparent;
+}
+.forum-auth-tab.active{color:#8a2b2b;border-bottom-color:#8a2b2b}
+.forum-auth-form{display:flex;flex-direction:column;gap:.7rem}
+.forum-auth-form label,.forum-token label{
+  display:flex;flex-direction:column;gap:.25rem;
+  font-size:.62rem;letter-spacing:.12em;color:#6b5a3a;
+}
+.forum-auth-form input,.forum-token input{
+  font-family:inherit;font-size:.85rem;color:#3b2f1e;background:#fffdf5;
+  border:1px solid #b58e5a;border-radius:4px;padding:.5rem .6rem;
+}
+.forum-auth-form button,.forum-token button{
+  font-family:"Comic Sans MS","Comic Sans",cursive;font-size:.9rem;
+  background:linear-gradient(to bottom,#fdf6e3,#e9dcbe);color:#5e1f1f;
+  border:1px solid #b07f2e;border-radius:6px;padding:.55rem;cursor:pointer;
+}
+.forum-auth-form button:hover,.forum-token button:hover{background:linear-gradient(to bottom,#fff9ec,#eedfc0)}
+.forum-hint{font-size:.68rem;color:#8a744f;line-height:1.5;margin:0}
+.forum-token{display:flex;flex-direction:column;gap:.55rem;border-top:1px dashed #c0a878;padding-top:.9rem}
+.forum-token-scope{font-size:.6rem;letter-spacing:.04em;color:#8a744f}
+.forum-token-note{font-size:.6rem;color:#8a744f;line-height:1.5}
+.forum-chat{display:flex;flex-direction:column;min-width:0}
+.forum-banner{
+  display:flex;justify-content:space-between;align-items:center;gap:.6rem;
+  background:linear-gradient(to bottom,#9b3b3b,#8a2b2b);
+  border:1px solid #5e1f1f;border-bottom:0;border-radius:8px 8px 0 0;
+  padding:.6rem .9rem;
+}
+.forum-banner-title{
+  font-family:"Comic Sans MS","Comic Sans",cursive;font-size:1.05rem;
+  color:#f3e9d2;letter-spacing:.04em;
+}
+.forum-banner-count{font-size:.66rem;letter-spacing:.12em;color:#e6c98f}
+.forum-msgs{
+  height:min(480px,60vh);overflow-y:auto;overscroll-behavior:contain;
+  background:#fffdf5;border:1px solid #c0a878;
+  padding:.8rem;display:flex;flex-direction:column;gap:.55rem;
+}
+.forum-msg{border:1px solid #e0cfae;border-radius:6px;background:#fff8e7;padding:.55rem .7rem}
+.forum-msg-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem}
+.forum-avatar{width:22px;height:22px;border-radius:50%;border:1px solid #c0a878}
+.forum-who{font-weight:700;color:#5e1f1f;font-size:.8rem}
+.forum-when{margin-left:auto;font-size:.6rem;color:#8a744f;letter-spacing:.04em}
+.forum-msg-body{font-size:.84rem;color:#3b2f1e;line-height:1.65;overflow-wrap:break-word}
+.forum-msg-body code{background:#f3e9d2;border:1px solid #d9c49a;border-radius:3px;padding:0 .25rem;font-size:.78rem}
+.forum-msg-body img.forum-img{max-width:100%;max-height:260px;border:1px solid #c0a878;border-radius:4px;margin-top:.3rem;display:block}
+.forum-empty{font-size:.8rem;color:#8a744f;text-align:center;padding:1.5rem 0;margin:0}
+.forum-compose{
+  display:flex;gap:.5rem;align-items:stretch;
+  background:#f3e9d2;border:1px solid #c0a878;border-top:0;border-radius:0 0 8px 8px;
+  padding:.6rem;
+}
+.forum-compose input[type="text"]{
+  flex:1;min-width:0;font-family:inherit;font-size:.86rem;color:#3b2f1e;
+  background:#fffdf5;border:1px solid #b58e5a;border-radius:4px;padding:.5rem .6rem;
+}
+.forum-compose button,.forum-upload{
+  font-family:"Comic Sans MS","Comic Sans",cursive;font-size:.85rem;cursor:pointer;
+  background:linear-gradient(to bottom,#fdf6e3,#e9dcbe);color:#5e1f1f;
+  border:1px solid #b07f2e;border-radius:6px;padding:.45rem .8rem;white-space:nowrap;
+}
+.forum-compose button:hover,.forum-upload:hover{background:linear-gradient(to bottom,#fff9ec,#eedfc0)}
+.forum-status{
+  font-size:.66rem;letter-spacing:.12em;color:#8a744f;padding:.45rem .3rem 0;min-height:1em;
+}
+.forum-status.show{color:#5e1f1f;font-weight:700}
+@media(max-width:820px){
+  .forum-wrap{grid-template-columns:1fr}
+  .forum-auth{max-width:520px}
+  .forum-compose{flex-wrap:wrap}
+  .forum-compose input[type="text"]{flex:1 1 100%;order:0}
+}

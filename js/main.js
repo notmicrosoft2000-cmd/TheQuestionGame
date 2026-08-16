@@ -1915,23 +1915,25 @@
     if (navToggle) navToggle.textContent = open ? "[ CLOSE ]" : "[ NAV ]";
   }
 
-  // The STORY page turns the whole site into the calm "paper" edition — the
-  // screen collapses to a glowing seam (like a TV off), the theme swaps, then
-  // the paper unfurls from the seam. Style presets (RETRO/CRT/OLD) pause while
-  // the paper edition is up and come back when you leave.
-  let paperTimer = null;
-  let paperSavedStyle = "dark";
-  function setPaperMode(on) {
-    if (document.body.classList.contains("paper") === on) return;
-    if (on) {
-      paperSavedStyle = tqgStyle;
+  // Calm pages (story/forum) each get their own theme. The screen collapses to
+  // a glowing seam (like a TV off), the theme swaps, then it unfurls from the
+  // seam. Style presets pause while a calm theme is up and come back on exit.
+  let themeTimer = null;
+  let themeSavedStyle = "dark";
+  function setThemeMode(theme) {
+    const cur = document.body.classList.contains("paper") ? "paper"
+      : document.body.classList.contains("forum") ? "forum" : "";
+    if (cur === theme) return;
+    if (theme) {
+      themeSavedStyle = tqgStyle;
       document.body.classList.remove("style-retro", "style-crt", "style-old");
     } else {
-      setStyle(paperSavedStyle || "dark", false);
+      document.body.classList.remove("paper", "forum");
+      setStyle(themeSavedStyle || "dark", false);
     }
     const wipe = document.createElement("div");
     wipe.className = "paper-wipe";
-    wipe.style.background = on ? "#efe9db" : "#040404";
+    wipe.style.background = THEME_FLASH[theme] || "#040404";
     document.body.appendChild(wipe);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -1939,9 +1941,10 @@
         wipe.classList.add("flash");
       });
     });
-    clearTimeout(paperTimer);
-    paperTimer = setTimeout(() => {
-      document.body.classList.toggle("paper", on);
+    clearTimeout(themeTimer);
+    themeTimer = setTimeout(() => {
+      document.body.classList.toggle("paper", theme === "paper");
+      document.body.classList.toggle("forum", theme === "forum");
       wipe.classList.remove("go");
       wipe.classList.add("out");
       setTimeout(() => {
@@ -1950,6 +1953,7 @@
     }, 480);
   }
 
+  const THEME_FLASH = { paper: "#efe9db", forum: "#f3e9d2" };
   const TQG_STYLES = ["dark", "retro", "crt", "old"];
   let tqgStyle = "dark";
   function setStyle(name, persist) {
@@ -1958,8 +1962,8 @@
     if (persist) {
       try { localStorage.setItem("tqg-style", name); } catch (e) {}
     }
-    if (document.body.classList.contains("paper")) {
-      paperSavedStyle = name;
+    if (document.body.classList.contains("paper") || document.body.classList.contains("forum")) {
+      themeSavedStyle = name;
       return true;
     }
     document.body.classList.toggle("style-retro", name === "retro");
@@ -1973,10 +1977,12 @@
     setStyle(TQG_STYLES.indexOf(saved) === -1 ? "dark" : saved, false);
   })();
 
+  const CALM_VIEWS = { story: "paper", forum: "forum" };
+
   function showView(name) {
-    safeZone = (name === "dev" || name === "story");
+    safeZone = name === "dev" || CALM_VIEWS[name] !== undefined;
     document.body.classList.toggle("quiet-view", safeZone);
-    setPaperMode(name === "story");
+    setThemeMode(CALM_VIEWS[name] || "");
     const target = $('[data-view="' + name + '"]');
     if (!target) return;
     $$(".view.active").forEach((v) => v.classList.remove("active"));
@@ -1989,6 +1995,7 @@
     setPanel(false);
     kbdTargetName = "";
     $$(".contents-link, .side-link").forEach((a) => a.classList.remove("kb-target"));
+    if (name === "forum") setTimeout(forumLoad, 80);
   }
 
   document.addEventListener("click", (e) => {
@@ -4280,7 +4287,7 @@
     setTimeout(() => mterm.classList.add("hidden"), 200);
   }
 
-  const TERM_VIEWS = ["home", "about", "sessions", "evidence", "ambience", "quotes", "concerns", "transmission", "preview", "download", "dev", "simpler"];
+  const TERM_VIEWS = ["home", "about", "sessions", "evidence", "ambience", "quotes", "concerns", "transmission", "preview", "download", "dev", "simpler", "forum", "story"];
   const TQG_VAR_KEYS = ["--bg", "--bg-soft", "--panel", "--line", "--line-bright", "--text", "--dim", "--green", "--green-dim", "--red", "--dark-red", "--cyan"];
   const TQG_PALETTES = {
     green: {},
@@ -4504,4 +4511,231 @@
     document.body.classList.remove("no-scroll");
     document.body.classList.add("loaded");
   });
+
+  /* ---------- Forum — GitHub Issues chat + uploads ---------- */
+  const FC = window.FORUM_CONFIG || {};
+  let forumUser = null;
+  let forumToken = "";
+  try { forumUser = JSON.parse(localStorage.getItem("tqg-forum-user") || "null"); } catch (e) {}
+  try { forumToken = localStorage.getItem("tqg-forum-token") || ""; } catch (e) {}
+
+  const forumAuth = $("#forumAuth");
+  const forumMsgs = $("#forumMsgs");
+  const forumMsg = $("#forumMsg");
+  const forumStatus = $("#forumStatus");
+  const forumTokenInput = $("#forumToken");
+  const forumTokenBox = $("#forumTokenBox");
+  const forumAuthHint = $("#forumAuthHint");
+  const forumSignupForm = $("#forumSignupForm");
+  const forumLoginForm = $("#forumLoginForm");
+  const forumSignupName = $("#forumSignupName");
+  const forumSignupPass = $("#forumSignupPass");
+  const forumSignupPass2 = $("#forumSignupPass2");
+  const forumLoginName = $("#forumLoginName");
+  const forumLoginPass = $("#forumLoginPass");
+
+  async function forumHash(pw, salt) {
+    const data = new TextEncoder().encode(salt + ":" + pw);
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  function forumAcctKey(name) { return "tqg-forum-acct-" + name.toLowerCase(); }
+  function forumGetUser(name) {
+    try { return JSON.parse(localStorage.getItem(forumAcctKey(name)) || "null"); } catch (e) { return null; }
+  }
+  function forumSetSession(u) {
+    forumUser = u;
+    try { localStorage.setItem("tqg-forum-user", JSON.stringify(u)); } catch (e) {}
+    if (forumTokenBox) forumTokenBox.classList.remove("hidden");
+    if (forumAuthHint) forumAuthHint.textContent = u
+      ? "Logged in as " + u.name + ". Add or update your GitHub token to post and upload."
+      : "Posting identity comes from a GitHub token — your messages show your GitHub avatar and name.";
+  }
+  function forumStatusMsg(t) {
+    if (forumStatus) { forumStatus.textContent = t; forumStatus.classList.add("show"); }
+  }
+
+  async function forumSignup(e) {
+    e.preventDefault();
+    const name = (forumSignupName.value || "").trim();
+    const pw = forumSignupPass.value || "";
+    const pw2 = forumSignupPass2.value || "";
+    if (pw !== pw2) { forumStatusMsg("PASSWORDS DO NOT MATCH."); return; }
+    if (!/^[A-Za-z0-9_\- ]{3,24}$/.test(name)) { forumStatusMsg("USERNAME MUST BE 3-24 CHARS: LETTERS, NUMBERS, _ - SPACE."); return; }
+    if (pw.length < 4) { forumStatusMsg("PASSWORD MUST BE AT LEAST 4 CHARACTERS."); return; }
+    if (forumGetUser(name)) { forumStatusMsg("THAT USERNAME IS TAKEN ON THIS DEVICE."); return; }
+    const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const hash = await forumHash(pw, salt);
+    const u = { name, salt, hash };
+    try { localStorage.setItem(forumAcctKey(name), JSON.stringify(u)); } catch (err) { forumStatusMsg("COULD NOT SAVE ACCOUNT."); return; }
+    forumSetSession(u);
+    forumSignupForm.reset();
+    forumStatusMsg("ACCOUNT CREATED. WELCOME, " + name.toUpperCase() + ".");
+    if (forumTokenInput) forumTokenInput.focus();
+  }
+
+  async function forumLogin(e) {
+    e.preventDefault();
+    const name = (forumLoginName.value || "").trim();
+    const pw = forumLoginPass.value || "";
+    const u = forumGetUser(name);
+    if (!u) { forumStatusMsg("NO ACCOUNT WITH THAT USERNAME ON THIS DEVICE."); return; }
+    const h = await forumHash(pw, u.salt);
+    if (h !== u.hash) { forumStatusMsg("WRONG PASSWORD."); return; }
+    forumSetSession(u);
+    forumLoginForm.reset();
+    forumStatusMsg("WELCOME BACK, " + u.name.toUpperCase() + ".");
+  }
+
+  function forumTokenSave() {
+    if (!forumTokenInput) return;
+    const t = forumTokenInput.value.trim();
+    if (!t) { forumStatusMsg("TYPE A TOKEN FIRST."); return; }
+    forumToken = t;
+    try { localStorage.setItem("tqg-forum-token", t); } catch (e) {}
+    forumTokenInput.value = "";
+    forumStatusMsg("TOKEN SAVED — YOU CAN NOW POST AND UPLOAD.");
+  }
+
+  async function forumApi(path, opts) {
+    const res = await fetch(FC.api + path, opts || {});
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.message || "GitHub error " + res.status);
+    return body;
+  }
+
+  async function forumLoad() {
+    if (!forumMsgs || !FC.channelIssue) return;
+    forumStatusMsg("LOADING...");
+    try {
+      const comments = await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
+      forumRender(comments || []);
+      forumStatusMsg("");
+    } catch (err) {
+      forumStatusMsg("COULDN'T REACH THE FORUM: " + err.message);
+    }
+  }
+
+  function forumRender(comments) {
+    forumMsgs.innerHTML = "";
+    const list = comments.slice().reverse();
+    if (!list.length) {
+      forumMsgs.innerHTML = '<p class="forum-empty">NO MESSAGES YET — BE THE FIRST.</p>';
+    }
+    list.forEach((c) => {
+      const div = document.createElement("div");
+      div.className = "forum-msg";
+      const who = (c.user && c.user.login) ? c.user.login : "GHOST";
+      const avatar = c.user && c.user.avatar_url;
+      const when = new Date(c.created_at).toLocaleString();
+      div.innerHTML =
+        '<div class="forum-msg-head">' +
+        (avatar ? '<img class="forum-avatar" src="' + avatar + '" alt="" loading="lazy">' : "") +
+        '<span class="forum-who">' + who + "</span>" +
+        '<span class="forum-when">' + when + "</span></div>" +
+        '<div class="forum-msg-body">' + forumRenderBody(c.body || "") + "</div>";
+      forumMsgs.appendChild(div);
+    });
+    const count = $("#forumMsgCount");
+    if (count) count.textContent = list.length + " POST" + (list.length === 1 ? "" : "S");
+    forumMsgs.scrollTop = forumMsgs.scrollHeight;
+  }
+
+  function forumRenderBody(text) {
+    return String(text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .split("\n").map((line) =>
+        line.replace(/https?:\/\/[^\s]+/g, (u) => {
+          if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(u)) {
+            return '<a href="' + u + '" target="_blank" rel="noopener"><img class="forum-img" src="' + u + '" alt="attachment" loading="lazy"></a>';
+          }
+          return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>";
+        })
+      ).join("<br>");
+  }
+
+  async function forumSend(text) {
+    const body = String(text !== undefined ? text : (forumMsg ? forumMsg.value : "")).trim();
+    if (!body) return;
+    if (!forumUser) { forumStatusMsg("SIGN UP OR LOG IN FIRST."); return; }
+    if (!forumToken) { forumStatusMsg("ADD YOUR GITHUB TOKEN TO POST."); return; }
+    try {
+      await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + forumToken,
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ body: "**" + forumUser.name + ":** " + body })
+      });
+      if (forumMsg) forumMsg.value = "";
+      forumLoad();
+    } catch (err) {
+      forumStatusMsg("POST FAILED: " + err.message + ". CHECK THE TOKEN SCOPES.");
+    }
+  }
+
+  async function forumUpload(file) {
+    if (!file) return;
+    if (!forumUser) { forumStatusMsg("SIGN UP OR LOG IN FIRST."); return; }
+    if (!forumToken) { forumStatusMsg("ADD YOUR GITHUB TOKEN TO UPLOAD."); return; }
+    if (file.size > 10 * 1024 * 1024) { forumStatusMsg("MAX 10 MB PER FILE."); return; }
+    forumStatusMsg("UPLOADING " + file.name.toUpperCase() + "...");
+    const base64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const path = FC.uploadsPath + "/" + Date.now() + "-" + String(file.name).replace(/[^\w.\- ]/g, "_");
+    try {
+      await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/contents/" + path, {
+        method: "PUT",
+        headers: {
+          "Authorization": "Bearer " + forumToken,
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message: "Forum upload: " + file.name, content: base64, branch: FC.branch })
+      });
+      const url = FC.raw + "/" + FC.owner + "/" + FC.repo + "/" + FC.branch + "/" + path;
+      forumStatusMsg("UPLOADED. POSTING LINK...");
+      forumSend("shared " + file.name + "\n" + url);
+    } catch (err) {
+      forumStatusMsg("UPLOAD FAILED: " + err.message + ". TOKEN NEEDS CONTENTS:WRITE.");
+    }
+  }
+
+  if (forumAuth && forumSignupForm && forumLoginForm) {
+    const tabSignup = $("#forumTabSignup");
+    const tabLogin = $("#forumTabLogin");
+    if (tabSignup) tabSignup.addEventListener("click", () => {
+      tabSignup.classList.add("active"); tabLogin.classList.remove("active");
+      forumLoginForm.classList.add("hidden"); forumSignupForm.classList.remove("hidden");
+    });
+    if (tabLogin) tabLogin.addEventListener("click", () => {
+      tabLogin.classList.add("active"); tabSignup.classList.remove("active");
+      forumSignupForm.classList.add("hidden"); forumLoginForm.classList.remove("hidden");
+    });
+    forumSignupForm.addEventListener("submit", forumSignup);
+    forumLoginForm.addEventListener("submit", forumLogin);
+    const tokenSave = $("#forumTokenSave");
+    if (tokenSave) tokenSave.addEventListener("click", forumTokenSave);
+    if (forumUser) forumSetSession(forumUser);
+  }
+  if (forumMsg) {
+    const sendBtn = $("#forumSend");
+    if (sendBtn) sendBtn.addEventListener("click", () => forumSend());
+    forumMsg.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); forumSend(); }
+    });
+  }
+  const fileInput = $("#forumFile");
+  if (fileInput) fileInput.addEventListener("change", (e) => forumUpload(e.target.files && e.target.files[0]));
+  const refreshBtn = $("#forumRefresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", forumLoad);
+  if (forumTokenInput && forumToken) forumTokenInput.placeholder = "TOKEN SAVED — CLEAR TO CHANGE";
 })();
