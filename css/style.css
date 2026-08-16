@@ -115,7 +115,18 @@ button{font-family:inherit}
 @keyframes eyeblink{0%{opacity:0}30%{opacity:.95}70%{opacity:.95}100%{opacity:0}}
 
 main.blinkworld{filter:hue-rotate(175deg) saturate(1.3)}
-body.huepass{filter:hue-rotate(45deg)}
+body.huepass{filter:hue-rotate(65deg) saturate(1.5)}
+body.flipwave{animation:flipwave-hue 1.6s steps(3) forwards}
+@keyframes flipwave-hue{
+  0%{filter:hue-rotate(0) saturate(1)}
+  30%{filter:hue-rotate(170deg) saturate(2.1)}
+  60%{filter:hue-rotate(300deg) saturate(1.7)}
+  100%{filter:hue-rotate(0) saturate(1)}
+}
+.flipped{
+  transform:scaleX(-1)!important;
+  transition:transform var(--flipd,900ms) steps(2);
+}
 
 .scare{
   position:fixed;inset:0;z-index:9996;
@@ -412,10 +423,36 @@ body.page-glitch .crt{animation:page-glitch .1s steps(2) infinite;filter:invert(
 .amb-icon i:nth-child(2){animation-delay:.16s}
 .amb-icon i:nth-child(3){animation-delay:.32s}
 .amb-icon.playing{opacity:1;filter:drop-shadow(0 0 4px rgba(0,220,0,.6))}
-.amb-icon:not(.playing) i{animation-play-state:paused}
-@keyframes amb-bounce{0%,100%{height:25%}50%{height:100%}}
+ .amb-icon:not(.playing) i{animation-play-state:paused}
+ @keyframes amb-bounce{0%,100%{height:25%}50%{height:100%}}
 
-/* ---------- Views ---------- */
+ /* ---------- Floating music button ---------- */
+ #musicButton{
+   position:fixed;bottom:1.05rem;left:50%;transform:translateX(-50%);
+   z-index:9960;cursor:pointer;
+   display:inline-flex;align-items:center;gap:.55rem;
+   font-family:var(--vt);font-size:.7rem;letter-spacing:.18em;
+   color:var(--green);background:rgba(6,10,8,.9);
+   border:1px solid var(--green-dim);padding:.45rem 1rem;
+   text-transform:uppercase;transition:all .2s;
+   box-shadow:0 0 14px rgba(0,220,0,.18);
+   user-select:none;-webkit-user-select:none;
+ }
+ #musicButton:hover{color:var(--green);border-color:var(--green);box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
+ #musicButton:active{transform:translateX(-50%) scale(.96)}
+ #musicButton.playing{color:var(--red);border-color:var(--red);box-shadow:var(--glow-red);text-shadow:0 0 8px rgba(255,0,0,.5)}
+ #musicButton .music-eq{display:inline-flex;align-items:flex-end;gap:2px;width:12px;height:11px;pointer-events:none}
+ #musicButton .music-eq i{display:block;width:2px;height:30%;background:currentColor;animation:mb-eq 1s ease-in-out infinite}
+ #musicButton .music-eq i:nth-child(2){animation-delay:.18s}
+ #musicButton .music-eq i:nth-child(3){animation-delay:.36s}
+ #musicButton .music-eq i:nth-child(4){animation-delay:.54s}
+ #musicButton:not(.playing) .music-eq i{animation-play-state:paused;height:25%}
+ @keyframes mb-eq{0%,100%{height:25%}50%{height:100%}}
+ @media (max-width:760px){
+   #musicButton{bottom:.8rem;padding:.5rem 1.1rem}
+ }
+
+ /* ---------- Views ---------- */
 .view{display:none}
 .view.active{display:block;animation:view-in .5s ease}
 .hero.view.active{display:flex}
@@ -601,9 +638,31 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
   display:block;font-family:var(--vt);font-size:clamp(2.4rem,5vw,3.4rem);
   color:var(--green);line-height:1;text-shadow:var(--glow-green);
 }
-.stat-label{display:block;margin-top:.5rem;font-size:.62rem;letter-spacing:.18em;color:var(--dim)}
+ .stat-label{display:block;margin-top:.5rem;font-size:.62rem;letter-spacing:.18em;color:var(--dim)}
 
-/* ---------- History ---------- */
+ /* ---------- Intel ---------- */
+ .intel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:1.2rem}
+ .intel-item{
+   border:1px solid var(--line);background:var(--panel);
+   padding:1rem 1.1rem;position:relative;overflow:hidden;
+   transition:border-color .25s,box-shadow .25s;
+ }
+ .intel-item:hover{border-color:var(--green-dim);box-shadow:var(--glow-soft)}
+ .intel-label{
+   display:block;font-size:.58rem;letter-spacing:.2em;color:var(--dim);
+   text-transform:uppercase;margin-bottom:.4rem;
+ }
+ .intel-value{
+   display:block;font-family:var(--vt);font-size:clamp(.95rem,2vw,1.15rem);
+   color:#e0e0e0;letter-spacing:.08em;word-break:break-all;
+   text-shadow:0 0 10px rgba(0,220,0,.25);
+ }
+ .intel-value.glow{color:var(--green);text-shadow:var(--glow-green)}
+ .intel-value.hot{color:var(--red);text-shadow:var(--glow-red)}
+ .intel-value.loc{color:var(--cyan);text-shadow:0 0 12px rgba(0,216,255,.4)}
+ .intel-foot{margin-top:1.4rem;font-size:.6rem;letter-spacing:.16em;color:var(--dim);text-align:center}
+
+ /* ---------- History ---------- */
 .timeline{
   --tl-pad:clamp(1.4rem,3vw,2.2rem);
   position:relative;margin-left:1rem;

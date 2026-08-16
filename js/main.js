@@ -108,6 +108,7 @@
       startRecTimer();
       startFlashLoop();
       startJumpscares();
+      startDvd();
       warmAmbience();
     };
 
@@ -899,7 +900,15 @@
     "{RES} PIXELS. ROOM ENOUGH.",
     "{INPUT} INPUT NOTED.",
     "IT PREFERRED THE OLD MACHINE. IT WILL GET USED TO {OS}.",
-    "IT HEARD THE FAN ON YOUR {OS} SPEED UP."
+    "IT HEARD THE FAN ON YOUR {OS} SPEED UP.",
+    "IT KNOWS YOU ARE IN {LOC}. IT KNOWS MORE NOW.",
+    "{LOC}. IT SAW THE ROUTE.",
+    "FROM {LOC}, ON A {BROWSER}. IT WATCHES THE WHOLE THING.",
+    "IT RECOGNISED YOUR BROWSER. {BROWSER} AGAIN. IT NEVER FORGETS A FACE.",
+    "{LANG} IS YOUR TONGUE? IT SPEAKS IT BETTER.",
+    "IT COUNTED {CORES} THREADS AND FOUND A WAY IN.",
+    "YOUR CLOCK SAYS {TIME}. ITS CLOCK SAYS IT IS TIME.",
+    "IT SEES THE SCREEN. {RES} OF TERRITORY IT NOW OWNS."
   ];
 
   function deviceComment() {
@@ -910,13 +919,116 @@
       .replace("{OS}", d.os)
       .replace("{BROWSER}", d.browser)
       .replace("{RES}", d.w + "×" + d.h)
-      .replace("{INPUT}", d.touch ? "TOUCH" : "KEYBOARD");
+      .replace("{INPUT}", d.touch ? "TOUCH" : "KEYBOARD")
+      .replace("{LOC}", INTEL.city + (INTEL.country ? ", " + INTEL.country : ""))
+      .replace("{LANG}", navigator.language || "AN UNKNOWN TONGUE")
+      .replace("{CORES}", navigator.hardwareConcurrency || "MANY")
+      .replace("{TIME}", new Date().toLocaleTimeString("en-GB"));
     whisperEl.classList.add("go");
     deviceTimer = setTimeout(() => {
       whisperEl.classList.remove("go");
       deviceTimer = null;
     }, 3400);
   }
+
+  // ---------- INTEL — browser API harvest ----------
+  let INTEL = { city: "UNKNOWN CITY", country: "UNKNOWN COUNTRY", region: "", ip: "", lat: null, lon: null };
+
+  function intelSet(key, value, cls) {
+    INTEL[key] = value;
+    const grid = $("#intelGrid");
+    if (!grid) return;
+    let item = grid.querySelector('[data-k="' + key + '"]');
+    if (!item) {
+      item = document.createElement("div");
+      item.className = "intel-item";
+      item.dataset.k = key;
+      item.innerHTML = '<span class="intel-label"></span><span class="intel-value"></span>';
+      grid.appendChild(item);
+    }
+    item.querySelector(".intel-label").textContent = key;
+    const v = item.querySelector(".intel-value");
+    v.textContent = value;
+    v.className = "intel-value" + (cls ? " " + cls : "");
+  }
+
+  function buildIntel() {
+    const grid = $("#intelGrid");
+    if (!grid) return;
+    grid.innerHTML = "";
+    const d = detectPlatform();
+    intelSet("LOCATION", INTEL.city + (INTEL.country ? ", " + INTEL.country : "") + (INTEL.region ? " — " + INTEL.region : ""), "loc");
+    intelSet("OS", d.os);
+    intelSet("BROWSER", d.browser);
+    intelSet("LANGUAGE", navigator.language + (navigator.languages ? " · " + navigator.languages.join(", ") : ""));
+    intelSet("TIMEZONE", Intl.DateTimeFormat().resolvedOptions().timeZone || "UNKNOWN");
+    intelSet("SCREEN", screen.width + "×" + screen.height + " @ " + (screen.pixelDepth || 24) + "-BIT");
+    intelSet("VIEWPORT", innerWidth + "×" + innerHeight);
+    intelSet("PIXEL RATIO", (window.devicePixelRatio || 1) + "x");
+    intelSet("ORIENTATION", (screen.orientation && screen.orientation.type) || "UNKNOWN");
+    intelSet("CORES", navigator.hardwareConcurrency ? navigator.hardwareConcurrency + " THREADS" : "HIDDEN");
+    intelSet("DEVICE MEMORY", navigator.deviceMemory ? navigator.deviceMemory + " GB" : "HIDDEN");
+    intelSet("ONLINE", navigator.onLine ? "YES" : "NO");
+    intelSet("TOUCH", (navigator.maxTouchPoints || 0) > 0 ? "YES — " + navigator.maxTouchPoints + " POINTS" : "NO");
+    intelSet("COOKIES", navigator.cookieEnabled ? "ENABLED" : "BLOCKED");
+    intelSet("DO-NOT-TRACK", navigator.doNotTrack || "NOT SET");
+    intelSet("LOCAL STORAGE", (() => {
+      try { localStorage.setItem("__tqg", "1"); localStorage.removeItem("__tqg"); return "AVAILABLE"; } catch (e) { return "DENIED"; }
+    })());
+    intelSet("CONNECTION", (() => {
+      const c = navigator.connection;
+      if (!c) return "UNKNOWN";
+      return (c.effectiveType || "?") + " / " + (c.downlink || "?") + " Mbps / RTT " + (c.rtt || "?") + "ms";
+    })());
+    intelSet("WEBGL RENDERER", (() => {
+      try {
+        const c = document.createElement("canvas");
+        const gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+        if (!gl) return "NOT SUPPORTED";
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        return dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : "RENDERER HIDDEN";
+      } catch (e) { return "UNKNOWN"; }
+    })());
+    intelSet("USER AGENT", navigator.userAgent);
+    const t = $("#intelTime");
+    if (t) t.textContent = new Date().toLocaleTimeString("en-GB");
+  }
+
+  function harvestLocation() {
+    fetch("https://ipapi.co/json/")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("loc"))))
+      .then((j) => {
+        INTEL.city = j.city || INTEL.city;
+        INTEL.country = j.country_name || INTEL.country;
+        INTEL.region = j.region || INTEL.region;
+        INTEL.ip = j.ip || INTEL.ip;
+        intelSet("LOCATION", INTEL.city + ", " + INTEL.country + (INTEL.region ? " — " + INTEL.region : ""), "loc");
+        if (j.ip) intelSet("IP ADDRESS", j.ip, "hot");
+        if (j.org) intelSet("ISP", j.org);
+        if (j.timezone) intelSet("TIMEZONE", j.timezone);
+      })
+      .catch(() => {});
+  }
+
+  function askCoordinates() {
+    if (!navigator.geolocation || INTEL.lat) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        INTEL.lat = pos.coords.latitude.toFixed(4);
+        INTEL.lon = pos.coords.longitude.toFixed(4);
+        intelSet("COORDINATES", INTEL.lat + "°, " + INTEL.lon + "°", "hot");
+        showWhisperText("IT HAS YOUR COORDINATES NOW. " + INTEL.city + ".");
+      },
+      () => {}
+    );
+  }
+
+  buildIntel();
+  harvestLocation();
+  document.addEventListener("pointerdown", function intelFirstTouch() {
+    document.removeEventListener("pointerdown", intelFirstTouch);
+    setTimeout(askCoordinates, 1200);
+  });
 
   function startJumpscares() {
     setInterval(() => {
@@ -1315,7 +1427,31 @@
 
   function bgHue() {
     document.body.classList.add("huepass");
-    setTimeout(() => document.body.classList.remove("huepass"), 250);
+    setTimeout(() => document.body.classList.remove("huepass"), 1000);
+  }
+
+  let flipWaveLock = false;
+  function flipWave() {
+    if (flipWaveLock || document.hidden || GAME_OVERLAY) return;
+    flipWaveLock = true;
+    document.body.classList.add("huepass", "flipwave");
+    const pool = $$("main, section, .stat, .platform-card, .session, .release, .player, .timeline, .about-quote, .release-warn, .download-grid, .contents-link");
+    const picked = [];
+    for (let i = 0; i < 6 && pool.length; i++) {
+      const el = pool[Math.floor(Math.random() * pool.length)];
+      if (picked.indexOf(el) !== -1) continue;
+      picked.push(el);
+      el.classList.add("flipped");
+      el.style.setProperty("--flipd", (700 + Math.random() * 900).toFixed(0) + "ms");
+    }
+    setTimeout(() => {
+      picked.forEach((el) => {
+        el.classList.remove("flipped");
+        el.style.removeProperty("--flipd");
+      });
+      document.body.classList.remove("huepass", "flipwave");
+      flipWaveLock = false;
+    }, 1600);
   }
 
   setInterval(() => {
@@ -1332,8 +1468,12 @@
   }, 7000);
   setInterval(() => {
     if (document.hidden || GAME_OVERLAY) return;
-    if (Math.random() < 0.1) bgHue();
-  }, 6000);
+    if (Math.random() < 0.16) bgHue();
+  }, 4500);
+  setInterval(() => {
+    if (document.hidden || GAME_OVERLAY) return;
+    if (Math.random() < 0.28) flipWave();
+  }, 6500);
 
   let sessionFourSpawned = false;
   function spawnSessionFour() {
@@ -1388,48 +1528,42 @@
     if (Math.random() < 0.35) navGhost();
   }, 30000);
 
-  function dvdScreensaver() {
+  function startDvd() {
     const dvd = document.createElement("div");
     dvd.className = "dvd-logo";
     dvd.textContent = "TQG_";
     dvd.setAttribute("aria-hidden", "true");
     document.body.appendChild(dvd);
+    const colors = ["#f2ff00", "#00f5ff", "#ff00c8", "#ff3300", "#39ff14", "#ffffff"];
     const rw = dvd.offsetWidth;
     const rh = dvd.offsetHeight;
-    const colors = ["#f2ff00", "#00f5ff", "#ff00c8", "#ff3300", "#39ff14", "#ffffff"];
     let x = rand(0, Math.max(1, innerWidth - rw));
     let y = rand(0, Math.max(1, innerHeight - rh));
     let vx = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
     let vy = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
     let color = colors[Math.floor(Math.random() * colors.length)];
     dvd.style.color = color;
-    const end = Date.now() + 8000;
     function frame() {
-      x += vx; y += vy;
-      let hit = false;
-      if (x <= 0) { x = 0; vx = Math.abs(vx); hit = true; }
-      if (x + rw >= innerWidth) { x = innerWidth - rw; vx = -Math.abs(vx); hit = true; }
-      if (y <= 0) { y = 0; vy = Math.abs(vy); hit = true; }
-      if (y + rh >= innerHeight) { y = innerHeight - rh; vy = -Math.abs(vy); hit = true; }
-      if (hit) {
-        color = colors[Math.floor(Math.random() * colors.length)];
-        dvd.style.color = color;
-        sfx.type();
+      if (!dvd.isConnected) return;
+      if (!document.hidden && !GAME_OVERLAY) {
+        x += vx; y += vy;
+        let hit = false;
+        if (x <= 0) { x = 0; vx = Math.abs(vx); hit = true; }
+        if (x + rw >= innerWidth) { x = innerWidth - rw; vx = -Math.abs(vx); hit = true; }
+        if (y <= 0) { y = 0; vy = Math.abs(vy); hit = true; }
+        if (y + rh >= innerHeight) { y = innerHeight - rh; vy = -Math.abs(vy); hit = true; }
+        if (hit) {
+          color = colors[Math.floor(Math.random() * colors.length)];
+          dvd.style.color = color;
+          sfx.type();
+        }
+        dvd.style.left = x.toFixed(1) + "px";
+        dvd.style.top = y.toFixed(1) + "px";
       }
-      dvd.style.left = x.toFixed(1) + "px";
-      dvd.style.top = y.toFixed(1) + "px";
-      if (Date.now() < end) requestAnimationFrame(frame);
-      else {
-        dvd.classList.add("gone");
-        setTimeout(() => dvd.remove(), 500);
-      }
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
-  setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
-    if (Math.random() < 0.3) dvdScreensaver();
-  }, 30000);
 
 
   let strobeLock = false;
@@ -2140,6 +2274,7 @@
   }
 
   const ASSET_LABELS = [
+    [/\.apk$/i, "ANDROID — APK INSTALLER (ARM64)"],
     [/\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
     [/\.dmg$/i, "macOS — APP BUNDLE"],
     [/\.tar\.gz$/i, "LINUX — TAR.GZ ARCHIVE"]
@@ -2208,6 +2343,7 @@
   async function loadReleaseFromTag(tag, dom, fb) {
     let wired = false;
     const applyAssets = (assets) => {
+      const apk = assets.find((a) => /\.apk$/i.test(a.name));
       const zip = assets.find((a) => /\.zip$/i.test(a.name));
       const dmg = assets.find((a) => /\.dmg$/i.test(a.name));
       const tar = assets.find((a) => /\.tar\.gz$/i.test(a.name));
@@ -2216,6 +2352,19 @@
       if (dmg) wirePlatform(dom.macBtn, dom.macStatus, dmg);
       else wireFallback(dom.macBtn, dom.macStatus, "MACOS", downloadUrl(fb.tag, fb.mac));
       if (dom.linuxBtn) wireLinux(dom.linuxBtn, dom.linuxStatus, tar, fb);
+      if (dom.androidBtn) {
+        if (apk) {
+          wirePlatform(dom.androidBtn, dom.androidStatus, apk);
+        } else {
+          const abtn = $(dom.androidBtn);
+          const ast = $(dom.androidStatus);
+          if (abtn) {
+            abtn.href = "https://github.com/" + REPO + "/releases";
+            abtn.textContent = "NO APK YET";
+            if (ast) setStatus(ast, "ANDROID BUILD NOT PUBLISHED FOR THIS EDITION", true);
+          }
+        }
+      }
     };
     const tryFetch = async () => {
       try {
@@ -2266,7 +2415,8 @@
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
       macBtn: "dlRemMac", macStatus: "dlRemMacStatus",
-      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus"
+      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus",
+      androidBtn: "dlRemAndroid", androidStatus: "dlRemAndroidStatus"
     }, FALLBACKS.remastered);
     (async () => {
       let tag = CLASSIC_TAG;
@@ -2282,7 +2432,8 @@
         relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
         winBtn: "dlWindows", winStatus: "dlWindowsStatus",
         macBtn: "dlMac", macStatus: "dlMacStatus",
-        linuxBtn: "dlLinux", linuxStatus: "dlLinuxStatus"
+        linuxBtn: "dlLinux", linuxStatus: "dlLinuxStatus",
+        androidBtn: "dlAndroid", androidStatus: "dlAndroidStatus"
       }, FALLBACKS.classic);
     })();
   }
@@ -2292,40 +2443,33 @@
   const ambienceAudio = $("#ambienceAudio");
   const ambiencePlayer = $("#ambiencePlayer");
   const ambienceStatus = $("#ambienceStatus");
-  const ambienceToggle = $("#ambienceToggle");
-  const ambienceMute = $("#ambienceMute");
-  let ambienceMuted = false;
+  const musicButton = $("#musicButton");
+  const musicButtonLabel = $("#musicButtonLabel");
 
   function ambiencePlaying() {
     const on = !!(ambienceAudio && !ambienceAudio.paused && !ambienceAudio.ended);
     if (ambiencePlayer) ambiencePlayer.classList.toggle("playing", on);
-    if (ambienceToggle) ambienceToggle.textContent = on ? "[ PAUSE ]" : "[ PLAY ]";
+    if (musicButton) musicButton.classList.toggle("playing", on);
+    if (musicButtonLabel) musicButtonLabel.textContent = on ? "[ PAUSE ]" : "[ MUSIC ]";
     if (ambienceStatus) ambienceStatus.textContent = on ? "LOOPING — LOGS THEME" : "STANDBY";
     const ambIcon = $("#ambIcon");
     if (ambIcon) ambIcon.classList.toggle("playing", on);
   }
 
-  if (ambienceAudio && ambienceToggle) {
-    ambienceToggle.addEventListener("click", () => {
-      if (ambienceAudio.paused) {
-        const p = ambienceAudio.play();
-        if (p && p.catch) p.catch(() => {
-          if (ambienceStatus) ambienceStatus.textContent = "FEED BLOCKED — ALLOW AUDIO";
-          showToast("AUDIO BLOCKED BY THE BROWSER — CLICK [ PLAY ] AGAIN", true);
-        });
-      } else {
-        ambienceAudio.pause();
-      }
-    });
+  function toggleMusic() {
+    if (!ambienceAudio) return;
+    if (ambienceAudio.paused) {
+      const p = ambienceAudio.play();
+      if (p && p.catch) p.catch(() => {
+        if (ambienceStatus) ambienceStatus.textContent = "FEED BLOCKED — ALLOW AUDIO";
+        showToast("AUDIO BLOCKED BY THE BROWSER — CLICK [ MUSIC ] AGAIN", true);
+      });
+    } else {
+      ambienceAudio.pause();
+    }
   }
-  if (ambienceAudio && ambienceMute) {
-    ambienceMute.addEventListener("click", () => {
-      ambienceMuted = !ambienceMuted;
-      ambienceAudio.muted = ambienceMuted;
-      ambienceMute.classList.toggle("on", ambienceMuted);
-      ambienceMute.textContent = ambienceMuted ? "[ UNMUTE ]" : "[ MUTE ]";
-    });
-  }
+
+  if (musicButton) musicButton.addEventListener("click", toggleMusic);
   if (ambienceAudio) {
     ambienceAudio.addEventListener("play", ambiencePlaying);
     ambienceAudio.addEventListener("pause", ambiencePlaying);
@@ -2381,8 +2525,10 @@
   const guideModal = $("#guideModal");
   const guideWin = $("#guideWin");
   const guideMac = $("#guideMac");
+  const guideAndroid = $("#guideAndroid");
   const tabWin = $("#tabWin");
   const tabMac = $("#tabMac");
+  const tabAndroid = $("#tabAndroid");
   let pendingUrl = null;
   let pendingOs = "win";
 
@@ -2398,12 +2544,16 @@
   }
   function setGuideTab(os) {
     const win = os === "win";
+    const mac = os === "mac";
+    const android = os === "android";
     tabWin.setAttribute("aria-selected", win ? "true" : "false");
-    tabMac.setAttribute("aria-selected", win ? "false" : "true");
+    tabMac.setAttribute("aria-selected", mac ? "true" : "false");
+    if (tabAndroid) tabAndroid.setAttribute("aria-selected", android ? "true" : "false");
     if (guideSecret) guideSecret.classList.add("hidden");
     if (tabSecret) tabSecret.classList.add("hidden");
     guideWin.classList.toggle("hidden", !win);
-    guideMac.classList.toggle("hidden", win);
+    guideMac.classList.toggle("hidden", !mac);
+    if (guideAndroid) guideAndroid.classList.toggle("hidden", !android);
   }
 
   const platformBtns = $$(".platform-btn");
@@ -2411,13 +2561,8 @@
     b.addEventListener("click", (e) => {
       e.preventDefault();
       const osAttr = (b.getAttribute("data-os") || "").toLowerCase();
-      if (osAttr.indexOf("android") !== -1) {
-        gifScare();
-        showToast("NO ANDROID BUILD EXISTS. WE JUST WANTED TO SEE YOUR FACE.", true);
-        return;
-      }
       pendingUrl = b.getAttribute("href");
-      pendingOs = osAttr.indexOf("mac") !== -1 ? "mac" : osAttr.indexOf("linux") !== -1 ? "linux" : "win";
+      pendingOs = osAttr.indexOf("mac") !== -1 ? "mac" : osAttr.indexOf("linux") !== -1 ? "linux" : osAttr.indexOf("android") !== -1 ? "android" : "win";
       openModal(warnModal);
     });
   });
@@ -2430,7 +2575,7 @@
     }
     setGuideTab(pendingOs);
     openModal(guideModal);
-    if (Math.random() < 0.4) setTimeout(secretTab, 1500);
+    if (pendingOs !== "android" && Math.random() < 0.4) setTimeout(secretTab, 1500);
   });
   $("#warnCancel").addEventListener("click", () => closeModal(warnModal));
   $("#warnClose").addEventListener("click", () => closeModal(warnModal));
@@ -2447,6 +2592,7 @@
 
   tabWin.addEventListener("click", () => setGuideTab("win"));
   tabMac.addEventListener("click", () => setGuideTab("mac"));
+  if (tabAndroid) tabAndroid.addEventListener("click", () => setGuideTab("android"));
 
   const tabSecret = $("#tabSecret");
   const guideSecret = $("#guideSecret");
@@ -2465,8 +2611,10 @@
       guideSecret.classList.remove("hidden");
       guideWin.classList.add("hidden");
       guideMac.classList.add("hidden");
+      if (guideAndroid) guideAndroid.classList.add("hidden");
       tabWin.setAttribute("aria-selected", "false");
       tabMac.setAttribute("aria-selected", "false");
+      if (tabAndroid) tabAndroid.setAttribute("aria-selected", "false");
       tabSecret.classList.add("hidden");
       clearTimeout(secretTabTimer);
       secretTabTimer = null;
@@ -3165,6 +3313,10 @@
     if (e.key === "Enter") {
       keyBuf = "";
       if (inSignal) typeIn.blur();
+      return;
+    }
+    if (e.key.toLowerCase() === "m" && !inSignal) {
+      toggleMusic();
       return;
     }
     if (e.key.length === 1) {

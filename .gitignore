@@ -21,3 +21,11 @@ build/
 *.dmg
 *.icns
 icon.iconset/
+
+# Android build artifacts (p4a/buildozer)
+.buildozer/
+bin/
+buildozer.spec
+*.apk
+p4a-recipes/
+cmdtools.*
