@@ -400,6 +400,15 @@ def _make_deep_rumble():
     env = np.exp(-t * 1.2)
     return pygame.mixer.Sound(buffer=np.int16(combined * env * 22000))
 
+def _make_low_drone():
+    """Low, unstable 45 Hz hum — Run 1 escalation."""
+    dur = 0.9
+    t = np.linspace(0, dur, int(22050 * dur), False)
+    freq = 45 + 3 * np.sin(2 * np.pi * 0.7 * t)
+    wave = np.sin(2 * np.pi * freq * t)
+    env = np.minimum(t / 0.2, 1.0) * np.exp(-t * 1.6)
+    return pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * env * 24000))
+
 def _make_reverse_chord():
     """Eerie reverse string sweep — used on lore payoff lines in Run 3."""
     dur = 1.2
@@ -434,6 +443,7 @@ def _build_sound_cache():
     _SOUND_CACHE["static_burst"] = [_make_static_burst() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["heartbeat"] = [_make_heartbeat() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["deep_rumble"] = [_make_deep_rumble() for _ in range(_POOL_SIZE)]
+    _SOUND_CACHE["low_drone"] = [_make_low_drone() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["reverse_chord"] = [_make_reverse_chord() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["static_scream"] = [_make_static_scream() for _ in range(_POOL_SIZE)]
 
@@ -468,6 +478,10 @@ def play_heartbeat():
 def play_deep_rumble():
     """Subsonic grinding — Run 3 transition moments."""
     random.choice(_SOUND_CACHE["deep_rumble"]).play().set_volume(0.5)
+
+def play_low_drone():
+    """Low unstable hum — Run 1 escalation ambient."""
+    random.choice(_SOUND_CACHE["low_drone"]).play().set_volume(0.4)
 
 def play_reverse_chord():
     """Eerie reverse string sweep — used on lore payoff lines in Run 3."""
@@ -2427,12 +2441,18 @@ darkness_active = False
 darkness_phase = "none"
 darkness_start = 0
 
-# Answer-reaction system — every answer triggers something (v2.03)
+# Answer-reaction system — every answer triggers something (v2.04)
 answer_count = 0
 corruption = 0
 last_ambient_reaction = None
 corruption_spikes_fired = set()
-reaction_fx = {"glitch_until": 0.0, "glitch_y": 0, "flicker_until": 0.0, "black_until": 0.0}
+reaction_fx = {"glitch_until": 0.0, "glitch_y": 0, "flicker_until": 0.0, "black_until": 0.0,
+               "colortear_until": 0.0, "colortear_y": 0, "colortear_color": (0, 0, 0),
+               "burst_until": 0.0, "milestone_until": 0.0, "milestone_text": ""}
+reaction_memory = {}
+ambient_boost = 0
+milestones_fired = set()
+memory_callbacks_fired = set()
 
 # Pending one-off reaction line (used by false memory, location-no, pre-knowledge-wrong)
 pending_reaction_line = None
@@ -2445,11 +2465,12 @@ clock = pygame.time.Clock()
 running = True
 last_frame_time = time.time()
 
-# --- Answer-reaction engine (v2.03) ---
+# --- Answer-reaction engine (v2.04) ---
 # Run 1 only. Every answered question triggers one ambient effect (sound /
 # window / in-window visual) plus, on key questions, a tailored spoken line.
 # A hidden corruption counter climbs with each answer and visibly degrades the
-# screen in stages, with scripted spikes at 20 / 50 / 80 answers.
+# screen in stages, with scripted spikes at 20 / 50 / 80 answers, pacing beats
+# at milestones, and memory callbacks that recall earlier answers.
 
 ANSWER_REACTIONS = {
     "sitting": {"No": "You will want to be seated\nfor what comes next."},
@@ -2482,25 +2503,78 @@ CORRUPTION_SPIKES = {
          "fx": "black"},
 }
 
-AMBIENT_POOL = [
-    ("static", 12),    # brief static burst sound
-    ("heartbeat", 7),  # single deep thud
-    ("rumble", 6),     # faint subsonic grind
-    ("beep", 7),       # mechanical beep
-    ("nudge", 9),      # window drifts a few px, then back
-    ("tear", 9),       # in-window horizontal glitch band + sound
-    ("title", 7),      # window title changed for a second
-    ("flicker", 8),    # quick screen dim flicker
-    ("cmd", 2),        # rare: flash a cmd/Terminal window
-    ("shake", 2),      # rare: small window shake
-    ("black", 2),      # rare: one-frame blackout
-]
+# Pacing beats (v2.04): a header card, title swap and heavier moment at milestones.
+# These replace the normal ambient for that answer so the beat lands cleanly.
+MILESTONES = {
+    10: {"q": "Ten already.\nYou are doing well.", "header": "QUESTION 10",
+         "title": "THE QUESTION GAME — QUESTION 10", "sound": "beep"},
+    25: {"q": "A quarter of the way.\nIt only gets stranger from here.", "header": "QUESTION 25",
+         "title": "THE QUESTION GAME — QUESTION 25", "sound": "heartbeat"},
+    40: {"q": "You are getting used to this.\nThat is exactly the problem.", "header": "QUESTION 40",
+         "title": "THE QUESTION GAME — QUESTION 40", "sound": "rumble"},
+    60: {"q": "Past halfway.\nThe questions are the easy part.", "header": "QUESTION 60",
+         "title": "THE QUESTION GAME — QUESTION 60", "sound": "heartbeat"},
+    75: {"q": "Into the final tier.\nDo not stop now.", "header": "QUESTION 75",
+         "title": "THE QUESTION GAME — QUESTION 75", "sound": "rumble"},
+    90: {"q": "The end is near.\nYou will not like it.", "header": "QUESTION 90",
+         "title": "THE QUESTION GAME — QUESTION 90", "sound": "scream"},
+}
+
+_MILESTONE_SOUNDS = {
+    "beep": play_mechanical_beep,
+    "heartbeat": play_heartbeat,
+    "rumble": play_deep_rumble,
+    "scream": play_static_scream,
+}
+
+# Memory callbacks (v2.04): recall an answer from earlier in the run.
+# Staggered against MILESTONES and CORRUPTION_SPIKES so beats never stack.
+MEMORY_CALLBACKS = {
+    15: {"recall": "alone", "lines": {
+        "Yes": "You said you are alone.\nJust you and me, then.",
+        "No": "You said you were not alone.\nWho else is in the room with you?"}},
+    30: {"recall": "door_locked", "lines": {
+        "Yes": "You lock your doors.\nKeep doing that.",
+        "No": "You said you leave your doors unlocked.\nI noticed."}},
+    45: {"recall": "trust_screen", "lines": {
+        "Yes": "You said you trust this screen.\nYou should not.",
+        "No": "You said you do not trust this screen.\nYou were right."}},
+    55: {"recall": "guilty", "lines": {
+        "Yes": "You said you feel guilty.\nHold onto that.",
+        "No": "You said you do not feel guilty.\nWe both know that is a lie."}},
+    70: {"recall": "mirror_dark", "lines": {
+        "Yes": "You have looked into the mirror in the dark.\nThen you know what it looks like.",
+        "No": "You have never looked.\nDo not start now."}},
+    85: {"recall": "ghosts", "lines": {
+        "Yes": "You believe in ghosts.\nYou are about to meet one.",
+        "No": "You do not believe in ghosts.\nPity. It will not matter."}},
+}
+
+# Ambient pool (v2.04): dict of effect -> weight. Heavier effects unlock as
+# corruption climbs, and milestones add weight on top (escalating density).
+AMBIENT_POOL = {
+    "static": 12,    # brief static burst sound
+    "heartbeat": 7,  # single deep thud
+    "rumble": 6,     # faint subsonic grind
+    "beep": 7,       # mechanical beep
+    "nudge": 9,      # window drifts a few px, then back
+    "tear": 9,       # in-window horizontal glitch band + sound
+    "title": 7,      # window title changed for a second
+    "flicker": 8,    # quick screen dim flicker
+    "colortear": 8,  # cyan/magenta color band + glitch sound
+    "drone": 5,      # low unstable hum
+    "cmd": 2,        # rare: flash a cmd/Terminal window
+    "shake": 2,      # rare: small window shake
+    "black": 2,      # rare: one-frame blackout
+}
 
 _FAST_ANSWER_LINES = [
     "That was fast.\nToo fast.",
     "You did not even think\nabout that one.",
     "Quick.\nDid you mean it?",
 ]
+
+_CORRUPT_GLYPHS = "ØÆ¤¦¥§@#%&"
 
 
 def _nudge_window():
@@ -2521,10 +2595,13 @@ def _nudge_window():
         pass
 
 
-def _swap_title():
+def _swap_title(text=None):
     try:
         _old = pygame.display.get_caption()
-        pygame.display.set_caption("THE QUESTION GAME — IT IS LISTENING")
+        if text:
+            pygame.display.set_caption(text)
+        else:
+            pygame.display.set_caption("THE QUESTION GAME — IT IS LISTENING")
         def _restore():
             time.sleep(0.9)
             try:
@@ -2538,11 +2615,20 @@ def _swap_title():
 
 def fire_ambient_reaction():
     """Pick one weighted micro-effect for the just-answered question. Never
-    repeats the same effect twice in a row."""
+    repeats the same effect twice in a row. Corruption unlocks heavier effects
+    and milestones boost their weights."""
     global last_ambient_reaction, reaction_fx
-    pool = [e for e in AMBIENT_POOL if e[0] != last_ambient_reaction]
-    names = [e[0] for e in pool]
-    weights = [e[1] for e in pool]
+    pool = dict(AMBIENT_POOL)
+    if corruption >= 40:
+        pool["glitchburst"] = 3
+    if corruption >= 70:
+        pool["scream"] = 2
+    for _heavy in ("cmd", "shake", "black", "glitchburst", "scream"):
+        if _heavy in pool:
+            pool[_heavy] += ambient_boost * 2
+    pool.pop(last_ambient_reaction, None)
+    names = list(pool)
+    weights = [pool[n] for n in names]
     fx = random.choices(names, weights=weights, k=1)[0]
     last_ambient_reaction = fx
     _now = time.time()
@@ -2565,6 +2651,21 @@ def fire_ambient_reaction():
         _swap_title()
     elif fx == "flicker":
         reaction_fx["flicker_until"] = _now + 0.1
+    elif fx == "colortear":
+        _w, _h = pygame.display.get_surface().get_size()
+        reaction_fx["colortear_until"] = _now + 0.15
+        reaction_fx["colortear_y"] = random.randint(int(_h * 0.05), int(_h * 0.9))
+        reaction_fx["colortear_color"] = random.choice([(0, 255, 255), (255, 0, 255), (0, 255, 0), (255, 255, 0)])
+        play_glitch_sound()
+    elif fx == "drone":
+        play_low_drone()
+    elif fx == "glitchburst":
+        reaction_fx["burst_until"] = _now + 0.2
+        play_glitch_sound()
+        play_heartbeat()
+    elif fx == "scream":
+        reaction_fx["flicker_until"] = _now + 0.15
+        play_static_scream()
     elif fx == "cmd":
         flash_cmd()
         play_error_sound()
@@ -2576,12 +2677,14 @@ def fire_ambient_reaction():
 
 
 def fire_answer_reaction(q_id, ans, elapsed):
-    """Every answer in run 1: raise corruption, fire one ambient effect, and
-    return a list of injected follow-up questions (tailored reactions and
-    corruption spikes). Empty list = ambient only."""
-    global answer_count, corruption
+    """Every answer in run 1: store it in memory, raise corruption, fire one
+    ambient effect, and return a list of injected follow-up questions
+    (tailored reactions, memory callbacks, pacing beats, corruption spikes).
+    Empty list = ambient only."""
+    global answer_count, corruption, ambient_boost
     answer_count += 1
     corruption = min(100, corruption + 1)
+    reaction_memory[q_id] = ans
 
     followups = []
 
@@ -2591,14 +2694,38 @@ def fire_answer_reaction(q_id, ans, elapsed):
         followups.append({"q": react_map[ans], "type": "choice", "opts": ["...", "Stop"],
                           "_id": "reaction_" + q_id, "_injected": True})
 
+    # Memory callback: recall an earlier answer (never fires twice)
+    cb = MEMORY_CALLBACKS.get(answer_count)
+    if cb and cb["recall"] in reaction_memory and answer_count not in memory_callbacks_fired:
+        memory_callbacks_fired.add(answer_count)
+        line = cb["lines"].get(reaction_memory[cb["recall"]])
+        if line:
+            followups.append({"q": line, "type": "choice", "opts": ["...", "I remember"],
+                              "_id": "memory_" + str(answer_count), "_injected": True})
+
     # Fast-answer callout (C) — never on injected lines, so it can't recurse
     if not followups and elapsed < 1.0 and random.random() < 0.3:
         followups.append({"q": random.choice(_FAST_ANSWER_LINES), "type": "choice",
                           "opts": ["...", "I was quick"], "_id": "fast_" + q_id,
                           "_injected": True})
 
-    # Ambient effect (B/D): exactly one per answer
-    fire_ambient_reaction()
+    # Pacing beat (D): milestone replaces this answer's ambient so it lands clean
+    milestone = MILESTONES.get(answer_count)
+    if milestone and answer_count not in milestones_fired:
+        milestones_fired.add(answer_count)
+        ambient_boost += 1
+        _now = time.time()
+        reaction_fx["milestone_until"] = _now + 1.6
+        reaction_fx["milestone_text"] = milestone["header"]
+        _swap_title(milestone["title"])
+        _msnd = _MILESTONE_SOUNDS.get(milestone["sound"])
+        if _msnd:
+            _msnd()
+        followups.append({"q": milestone["q"], "type": "choice", "opts": ["...", "I noticed"],
+                          "_id": "milestone_" + str(answer_count), "_injected": True})
+    else:
+        # Ambient effect (B/D): exactly one per answer
+        fire_ambient_reaction()
 
     # Corruption spikes (D): scripted heavier moments at thresholds
     spike = CORRUPTION_SPIKES.get(corruption)
@@ -3047,8 +3174,9 @@ while running:
                                     "_id": f"hesitation_{current_step}"
                                 })
 
-                            # Answer-reaction system (v2.03): every answer triggers
-                            # an ambient effect, plus tailored lines / corruption spikes
+                            # Answer-reaction system (v2.04): every answer triggers
+                            # an ambient effect, plus tailored lines / pacing /
+                            # memory callbacks / corruption spikes
                             if game_state["run_count"] == 1:
                                 followups.extend(fire_answer_reaction(q_id, ans, elapsed))
 
@@ -3375,9 +3503,13 @@ while running:
             _tspeed = game_state.get("settings", {}).get("text_speed", 0.04)
             if current_time - last_type_time > _tspeed:
                 if typing_index < len(target_text):
-                    typing_index += 1
-                    play_type_sound()
-                    last_type_time = current_time
+                    # Run-1 stutter: at high corruption the typewriter hitches
+                    if game_state["run_count"] == 1 and corruption > 40 and random.random() < 0.05:
+                        last_type_time = current_time
+                    else:
+                        typing_index += 1
+                        play_type_sound()
+                        last_type_time = current_time
                 else:
                     typing_state = "READY"
 
@@ -3387,13 +3519,36 @@ while running:
 
         t_color = RED if ("afraid" in target_text.lower() or game_state["run_count"] >= 3) else WHITE
         if typing_state in ["TYPING", "READY"]:
-            render_animated_wrapped_text(screen, target_text[:typing_index], font_medium, t_color,
-                             60 + sway_x, 120 + sway_y, current_w - 120, current_time)
+            # Run-1 UI corruption (v2.04): random glyph swaps + position jitter,
+            # scaled by the hidden corruption counter
+            _disp_txt = target_text[:typing_index]
+            _jx, _jy = 0, 0
+            if game_state["run_count"] == 1 and corruption > 0 and typing_index >= 2:
+                if random.random() < corruption / 160.0:
+                    _i = random.randint(0, len(_disp_txt) - 1)
+                    _disp_txt = _disp_txt[:_i] + random.choice(_CORRUPT_GLYPHS) + _disp_txt[_i + 1:]
+                if corruption > 30:
+                    _jx = random.randint(-1, 1)
+                if corruption > 60:
+                    _jy = random.randint(-1, 1)
+            render_animated_wrapped_text(screen, _disp_txt, font_medium, t_color,
+                             60 + sway_x + _jx, 120 + sway_y + _jy, current_w - 120, current_time)
             # V2.02 blinking typewriter caret at the insertion point
             if typing_state == "TYPING" and typing_index > 0 and int(current_time * 2.4) % 2 == 0:
                 _cx, _cy = wrap_cursor_pos(target_text[:typing_index], font_medium,
                                            60 + sway_x, 120 + sway_y, current_w - 120)
+                if game_state["run_count"] == 1 and corruption > 20:
+                    _cx += random.randint(-1, 1)
+                    _cy += random.randint(-1, 1)
                 screen.blit(font_medium.render("_", True, t_color), (_cx, _cy))
+
+        # Run-1 milestone header card (v2.04): "— QUESTION 25 OF 100 —" fades out
+        if game_state["run_count"] == 1 and reaction_fx["milestone_until"] > current_time:
+            _ms_left = reaction_fx["milestone_until"] - current_time
+            _ms_fade = min(1.0, _ms_left / 0.5)
+            _ms_surf = font_medium.render(f"— {reaction_fx['milestone_text']} OF 100 —", True, DIM_RED)
+            _ms_surf.set_alpha(int(255 * _ms_fade))
+            screen.blit(_ms_surf, (current_w // 2 - _ms_surf.get_width() // 2, 60))
 
         # Desktop-scan naming: show captured window title briefly during desktop_check
         if step_data.get("action") == "desktop_check" and captured_window_title and typing_state == "READY":
@@ -3501,7 +3656,7 @@ while running:
             if random.random() < 0.025:
                 play_glitch_sound()
 
-        # Run 1 answer-corruption layer — grows with each answer (v2.03)
+        # Run 1 answer-corruption layer — grows with each answer (v2.04)
         if game_state["run_count"] == 1 and corruption > 0:
             _now = time.time()
             if _now < reaction_fx["glitch_until"]:
@@ -3509,6 +3664,14 @@ while running:
                 _gw = random.randint(int(current_w * 0.5), current_w)
                 pygame.draw.rect(screen, (random.randint(0, 40), random.randint(40, 70), random.randint(0, 40)),
                                  (0, _gy, _gw, random.randint(1, 3)))
+            if _now < reaction_fx["colortear_until"]:
+                _cgy = reaction_fx["colortear_y"]
+                pygame.draw.rect(screen, reaction_fx["colortear_color"], (0, _cgy, current_w, random.randint(1, 4)))
+            if _now < reaction_fx["burst_until"]:
+                for _bi in range(3):
+                    _bgy = random.randint(0, current_h)
+                    pygame.draw.rect(screen, (random.randint(0, 80), random.randint(0, 80), random.randint(0, 80)),
+                                     (0, _bgy, current_w, random.randint(1, 3)))
             if _now < reaction_fx["flicker_until"]:
                 _fs = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
                 _fs.fill((0, 0, 0, 70))
