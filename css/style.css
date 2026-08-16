@@ -2437,3 +2437,28 @@ body.forum #musicButton{background:#fff8e7;border-color:#c0a878;color:#8a2b2b;bo
   .forum-compose{flex-wrap:wrap}
   .forum-compose input[type="text"]{flex:1 1 100%;order:0}
 }
+
+/* ---------- Performance ---------- */
+body.perf-low .crt{animation:none}
+body.perf-low .crt .beam,body.perf-low .crt .sweep{display:none}
+body.perf-low .crt .vignette{animation:none}
+body.perf-low .hero h1{animation:title-bloom-step 6s steps(2,end) infinite}
+@keyframes title-bloom-step{
+  0%{text-shadow:0 0 18px rgba(200,0,0,.25),0 0 4px rgba(200,0,0,.4)}
+  50%{text-shadow:0 0 42px rgba(200,0,0,.6),0 0 10px rgba(200,0,0,.85)}
+  100%{text-shadow:0 0 18px rgba(200,0,0,.25),0 0 4px rgba(200,0,0,.4)}
+}
+body.perf-low .section-line{animation:none}
+body.perf-low .ticker-track{animation-duration:110s}
+body.perf-low #ash{opacity:.45}
+@media (prefers-reduced-motion: reduce){
+  body.loaded .hero h1{animation:none;text-shadow:0 0 24px rgba(200,0,0,.4)}
+  .crt{animation:none}
+  .crt .vignette{animation:none}
+  .crt .beam,.crt .sweep{display:none}
+  .ticker-track{animation:none}
+  .section-line{animation:none}
+  .glitch::before,.glitch::after{animation:none}
+  #ash{opacity:.4}
+}
+.story-para p,.about-copy p{content-visibility:auto;contain-intrinsic-size:auto 64px}

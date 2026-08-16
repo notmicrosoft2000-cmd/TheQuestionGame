@@ -28,14 +28,54 @@
     const low = detectLowPower();
     return {
       low,
-      noiseRes: low ? 4 : 2,
+      noiseRes: low ? 4 : 3,
       noiseEveryN: low ? 2 : 1,
+      noiseMs: low ? 260 : 200,
       ashCount: low ? 24 : 40,
       swaySkip: low ? 1 : 0,
       staticRes: low ? 2 : 1,
       staticPx: low ? 8 : 6
     };
   })();
+
+  document.body.classList.add(PERF.low ? "perf-low" : "perf-high");
+
+  const RAF = { paused: false };
+  document.addEventListener("visibilitychange", () => { RAF.paused = document.hidden; });
+
+  function rafLoop(fn) {
+    let alive = true;
+    const step = (ts) => {
+      if (!alive) return;
+      if (RAF.paused) {
+        document.addEventListener("visibilitychange", () => {
+          if (!RAF.paused && alive) requestAnimationFrame(step);
+        }, { once: true });
+        return;
+      }
+      fn(ts);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return () => { alive = false; };
+  }
+
+  function timerLoop(fn, ms) {
+    let alive = true;
+    const tick = () => {
+      if (!alive) return;
+      if (RAF.paused) {
+        document.addEventListener("visibilitychange", () => {
+          if (!RAF.paused && alive) { fn(); setTimeout(tick, ms); }
+        }, { once: true });
+        return;
+      }
+      fn();
+      setTimeout(tick, ms);
+    };
+    setTimeout(tick, ms);
+    return () => { alive = false; };
+  }
 
   let GAME_OVERLAY = false;
   let safeZone = false;
@@ -1690,7 +1730,7 @@
     if (!noiseCnv) return;
     noiseCtx = noiseCnv.getContext("2d");
     sizeNoise();
-    frameNoise();
+    timerLoop(frameNoise, PERF.noiseMs);
   }
   function sizeNoise() {
     const r = PERF.noiseRes;
@@ -1718,7 +1758,6 @@
         }
       }
     }
-    setTimeout(frameNoise, document.hidden ? 400 : 100);
   }
   window.addEventListener("resize", sizeNoise);
 
@@ -1762,13 +1801,12 @@
         ashCtx.fillRect(p.x, p.y, p.size, p.size);
       }
     }
-    requestAnimationFrame(frameAsh);
   }
   function initAsh() {
     if (!ashCnv) return;
     ashCtx = ashCnv.getContext("2d");
     sizeAsh();
-    requestAnimationFrame(frameAsh);
+    rafLoop(frameAsh);
   }
   window.addEventListener("resize", sizeAsh);
 
@@ -1798,7 +1836,6 @@
   function frameSway(ts) {
     swayFrame++;
     if (PERF.swaySkip > 0 && swayFrame % (PERF.swaySkip + 1) !== 0) {
-      requestAnimationFrame(frameSway);
       return;
     }
     const t = ts / 1000;
@@ -1817,9 +1854,8 @@
       s.el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px)";
       s.el.style.opacity = (0.85 + 0.12 * pulse).toFixed(2);
     }
-    requestAnimationFrame(frameSway);
   }
-  if (!reduceMotion) requestAnimationFrame(frameSway);
+  if (!reduceMotion) rafLoop(frameSway);
 
   const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints || 0) > 0;
   if (isTouch) document.body.classList.add("touch-device");
@@ -1851,12 +1887,11 @@
         cursorEcho.classList.remove("on");
       }, 2400);
     }
-    (function echoLoop() {
+    rafLoop(function echoLoop() {
       eX += (mX - eX) * 0.16;
       eY += (mY - eY) * 0.16;
       if (echoOn) cursorEcho.style.transform = "translate(" + eX.toFixed(1) + "px," + eY.toFixed(1) + "px) translate(-50%,-50%)";
-      requestAnimationFrame(echoLoop);
-    })();
+    });
     setInterval(() => {
       if (document.hidden || !echoOn) return;
       if (Math.random() < 0.6) cursorEcho.style.boxShadow = "0 0 16px rgba(255,0,0,.7), 0 0 30px rgba(255,0,0,.35)";
