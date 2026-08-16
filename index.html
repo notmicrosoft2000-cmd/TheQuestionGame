@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=47">
+  <link rel="stylesheet" href="css/style.css?v=48">
   <script>
     (function () {
       var ua = navigator.userAgent, m, v = 0;
@@ -31,8 +31,7 @@
       &nbsp;Downloads:&nbsp;
       <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
       <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" style="color:#00ff88">ANDROID</a>
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> <span style="color:#886600">(ANDROID PAUSED — CRASHES ON LAUNCH)</span>
     </div>
   </noscript>
 
@@ -781,7 +780,7 @@
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux <span class="red">and now Android</span>, two editions. No installation required. They only need permission.</p>
+      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux <span class="red">— Android support is paused</span>, two editions. No installation required. They only need permission.</p>
 
       <div class="download-grid">
         <div class="releases-col">
@@ -832,9 +831,9 @@
                 <span class="platform-os">ANDROID</span>
                 <span class="tag tag-green hidden" id="androidDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">Android 8+ (ARM64). The classic edition as an <b>APK</b> — sideloaded, debug-signed, installed in seconds. The device remembers.</p>
-              <a class="platform-btn" id="dlAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
-              <p class="platform-status" id="dlAndroidStatus">READY — APK 26.5 MB</p>
+              <p class="platform-desc">Android 8+ (ARM64). The classic edition as an <b>APK</b> — sideloaded, debug-signed, installed in seconds. <b class="red">Support is currently paused.</b></p>
+              <a class="platform-btn platform-miss" id="dlAndroid" aria-disabled="true" data-os="ANDROID">ANDROID — PAUSED</a>
+              <p class="platform-status miss" id="dlAndroidStatus">ANDROID SUPPORT IS PAUSED DUE TO A FATAL BUG — THE APK CRASHES ON LAUNCH. A FIX IS IN THE WORKS.</p>
             </div>
           </div>
 
@@ -843,7 +842,7 @@
           </div>
 
           <div class="release-note">
-            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS), TAR.GZ (Linux) or APK (Android) — the release contains everything the game needs to run.
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS) or TAR.GZ (Linux) — the release contains everything the game needs to run.
           </div>
 
           <div class="release-note mac-note">
@@ -851,7 +850,7 @@
           </div>
 
           <div class="release-note mac-note android-note">
-            Android: the APK is debug-signed, so your phone will ask you to allow "install unknown apps" and may warn about Play Protect. Tap <b>Install anyway</b> — it is the same classic edition, arm64 only, no permissions requested.
+            <b>Android support is paused due to a fatal bug.</b> The APK crashes on launch, so it has been pulled from the download. No sideloading workaround — the fix is in the works and support will return.
           </div>
 
           <div class="release-note">
@@ -912,7 +911,7 @@
                 <span class="platform-os">ANDROID</span>
                 <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">Android 8+ (ARM64). The remastered edition on mobile is still being shrunk down. The classic APK above is the one that works.</p>
+              <p class="platform-desc">Android 8+ (ARM64). The remastered edition on mobile was still being shrunk down — and now the classic APK is paused too while the crash-on-launch bug is fixed.</p>
               <a class="platform-btn platform-miss" id="dlRemAndroid" aria-disabled="true" data-os="ANDROID">APK SOON</a>
               <p class="platform-status" id="dlRemAndroidStatus">ANDROID BUILD NOT PUBLISHED FOR THIS EDITION</p>
             </div>
@@ -947,14 +946,14 @@
             <li><span class="mark">▸</span> Atmospheric procedural audio</li>
             <li><span class="mark">▸</span> VHS / static visual treatment</li>
             <li><span class="mark">▸</span> It remembers what you tell it</li>
-            <li><span class="mark">▸</span> Now on Android — ARM64 APK, touch controls</li>
+            <li><span class="mark">▸</span> Android support paused — APK crashes on launch (fix in progress)</li>
             <li><span class="mark">▸</span> The game sends nothing from your machine</li>
           </ul>
           <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
           <ul class="feature-list">
-            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit), macOS 14+ (Apple Silicon), Linux (64-bit, SDL2 + ALSA) or Android 8+ (ARM64)</li>
+            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit), macOS 14+ (Apple Silicon), Linux (64-bit, SDL2 + ALSA)</li>
             <li><span class="mark">▸</span> Screen — 800×600, resizable</li>
-            <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER) — touch on Android</li>
+            <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER)</li>
             <li><span class="mark">▸</span> Network — Optional</li>
             <li><span class="mark">▸</span> Camera — Not required to play</li>
             <li><span class="mark">▸</span> Storage — ~70 MB</li>
@@ -1028,13 +1027,7 @@
           </ol>
         </div>
         <div class="guide-pane hidden" id="guideAndroid">
-          <ol class="guide-steps">
-            <li><b>Download the APK</b> from the card above — the classic edition, built for Android 8+ (ARM64).</li>
-            <li><b>Open the notification</b> after the download finishes (or find the APK in your Downloads folder).</li>
-            <li><b>"Install unknown apps":</b> Android will ask you to allow this source once. Tap <b>Allow</b> (Chrome or your file manager), then <b>Install</b>.</li>
-            <li><b>"Play protect" warning:</b> because the APK is debug-signed, Play Protect may ask. Tap <b>More details → Install anyway</b> (or <b>Install without scanning</b>).</li>
-            <li><b>Launch THE QUESTION GAME</b> from your app drawer. Sound on, lights off.</li>
-          </ol>
+          <p class="guide-steps"><b>Android support is paused due to a fatal bug.</b> The APK crashes on launch and has been pulled. A fix is in the works — check back later. (No sideloading workaround, the build is down.)</p>
         </div>
         <div class="guide-pane hidden" id="guideSecret">
           <p class="secret-text">THERE IS NO SECRET TAB. IT MADE ONE BECAUSE IT NOTICED YOU WERE READING CAREFULLY. THE DOWNLOAD WILL WORK. THE GAME WILL REMEMBER THIS.</p>
@@ -1132,6 +1125,6 @@
   </div>
 
   <script src="js/config.js?v=45"></script>
-  <script src="js/main.js?v=47"></script>
+  <script src="js/main.js?v=48"></script>
 </body>
 </html>

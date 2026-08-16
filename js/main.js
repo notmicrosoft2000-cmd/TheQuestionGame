@@ -2345,6 +2345,18 @@
     el.classList.toggle("miss", !!miss);
   }
 
+  function pauseAndroid() {
+    const btn = $("#dlAndroid");
+    const status = $("#dlAndroidStatus");
+    if (btn) {
+      btn.removeAttribute("href");
+      btn.setAttribute("aria-disabled", "true");
+      btn.classList.add("platform-miss");
+      btn.textContent = "ANDROID — PAUSED";
+    }
+    if (status) setStatus(status, "ANDROID SUPPORT IS PAUSED DUE TO A FATAL BUG — THE APK CRASHES ON LAUNCH. A FIX IS IN THE WORKS.", true);
+  }
+
   function platformKey() {
     const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
     if (/android/i.test(p) || /android/i.test(navigator.userAgent || "")) return "android";
@@ -2355,6 +2367,7 @@
   }
 
   function wirePlatform(btnId, statusId, asset) {
+    if (btnId === "dlAndroid") { pauseAndroid(); return; }
     const btn = $("#" + btnId);
     const status = $("#" + statusId);
     if (asset) {
@@ -2391,6 +2404,7 @@
   }
 
   function wireFallback(btnId, statusId, os, url) {
+    if (btnId === "dlAndroid") { pauseAndroid(); return; }
     const btn = $("#" + btnId);
     const status = $("#" + statusId);
     btn.href = url;
@@ -2501,6 +2515,7 @@
       }, FALLBACKS.classic);
     })();
   }
+  pauseAndroid();
   loadRelease();
 
   // ---------- Ambience player ----------
@@ -2625,6 +2640,7 @@
   platformBtns.forEach((b) => {
     b.addEventListener("click", (e) => {
       e.preventDefault();
+      if (b.id === "dlAndroid") { pauseAndroid(); return; }
       if (b.classList.contains("platform-miss") || !b.getAttribute("href")) return;
       const osAttr = (b.getAttribute("data-os") || "").toLowerCase();
       pendingUrl = b.getAttribute("href");
