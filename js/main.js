@@ -4655,15 +4655,44 @@
     return body;
   }
 
+  // Anonymous guests read the static mirror committed by the forum-cache
+  // workflow (unlimited, no API rate limit). Logged-in users read the live
+  // GitHub API (5,000 req/hr with their token).
+  async function forumRead() {
+    if (forumToken) {
+      return forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
+    }
+    const cacheUrl = FC.raw + "/" + FC.owner + "/" + FC.repo + "/" + (FC.cacheBranch || "forum-cache") + "/" + (FC.cachePath || "forum-cache.json");
+    const res = await fetch(cacheUrl);
+    if (!res.ok) throw new Error("cache unavailable " + res.status);
+    const data = await res.json();
+    if (forumStatus) {
+      const ts = new Date(data.updated_at).toLocaleTimeString();
+      forumStatus.textContent = "CACHE MIRROR · UPDATED " + ts;
+      forumStatus.classList.remove("show");
+    }
+    return (data.comments || []).map((c) => {
+      c.created_at = c.created_at || new Date().toISOString();
+      return c;
+    });
+  }
+
   async function forumLoad() {
     if (!forumMsgs || !FC.channelIssue) return;
     forumStatusMsg("LOADING...");
     try {
-      const comments = await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
+      const comments = await forumRead();
       forumRender(comments || []);
-      forumStatusMsg("");
+      if (forumToken) forumStatusMsg("");
     } catch (err) {
-      forumStatusMsg("COULDN'T REACH THE FORUM: " + err.message);
+      // Fall back to the live API even for guests if the mirror is missing.
+      try {
+        const comments = await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
+        forumRender(comments || []);
+        forumStatusMsg("");
+      } catch (err2) {
+        forumStatusMsg("COULDN'T REACH THE FORUM: " + err.message);
+      }
     }
   }
 

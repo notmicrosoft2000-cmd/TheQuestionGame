@@ -1,0 +1,76 @@
+name: Forum Cache
+
+# Mirror the forum channel (issue #1 comments) into a static JSON file on the
+# dedicated "forum-cache" branch. The website reads that file directly from
+# raw.githubusercontent.com — anonymous visitors get unlimited reads with NO
+# GitHub API rate limit, while posting still goes through the live API.
+#
+# Committing to a separate branch (not main) means GitHub Pages is not rebuilt
+# and the main branch history stays clean.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: forum-cache
+  cancel-in-progress: false
+
+jobs:
+  cache:
+    name: Cache forum comments
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Switch to cache branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --heads origin forum-cache | grep -q "refs/heads/forum-cache"; then
+            git checkout -B forum-cache origin/forum-cache
+          else
+            git checkout --orphan forum-cache
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+      - name: Fetch and trim comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE="${{ vars.FORUM_ISSUE || '1' }}"
+          curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE/comments?per_page=100" \
+          | jq 'if type == "array" then
+                  [.[] | {id, created_at, body,
+                          user: {login: .user.login, avatar_url: .user.avatar_url}}]
+                else [] end' \
+          > /tmp/forum-comments.json
+
+          jq -n \
+            --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --slurpfile comments /tmp/forum-comments.json \
+            '{source: "GitHub Actions forum-cache workflow", updated_at: $updated, comments: $comments[0]}' \
+            > forum-cache.json
+
+      - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add forum-cache.json
+          if git diff --cached --quiet; then
+            echo "No new messages — cache unchanged."
+          else
+            git commit -m "forum: refresh comment cache (scheduled)"
+            git push origin forum-cache
+            echo "Cache pushed."
+          fi

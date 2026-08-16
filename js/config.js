@@ -15,6 +15,8 @@ window.FORUM_CONFIG = {
   channelIssue: 1,
   uploadsPath: "forum-uploads",
   branch: "main",
+  cacheBranch: "forum-cache",
+  cachePath: "forum-cache.json",
   api: "https://api.github.com",
   raw: "https://raw.githubusercontent.com"
 };
