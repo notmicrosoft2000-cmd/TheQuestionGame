@@ -2438,6 +2438,28 @@ body.forum #musicButton{background:#fff8e7;border-color:#c0a878;color:#8a2b2b;bo
   .forum-compose input[type="text"]{flex:1 1 100%;order:0}
 }
 
+/* forum banner animation (v2.04): slow 5s shine sweep + 4.5s title breathe */
+.forum-banner{position:relative;overflow:hidden}
+.forum-banner::after{
+  content:"";position:absolute;top:-10%;left:-70%;width:45%;height:120%;
+  background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.38) 50%,transparent 100%);
+  transform:skewX(-20deg);pointer-events:none;
+  animation:forum-shine 5s ease-in-out infinite;
+}
+@keyframes forum-shine{
+  0%{left:-70%}
+  55%{left:135%}
+  100%{left:135%}
+}
+.forum-banner-title{
+  display:inline-block;
+  animation:forum-breathe 4.5s ease-in-out infinite;
+}
+@keyframes forum-breathe{
+  0%,100%{opacity:.9;text-shadow:0 0 0 rgba(243,233,210,0)}
+  50%{opacity:1;text-shadow:0 0 14px rgba(243,233,210,.55)}
+}
+
 /* ---------- Performance ---------- */
 body.perf-low .crt{animation:none}
 body.perf-low .crt .beam,body.perf-low .crt .sweep{display:none}
@@ -2460,5 +2482,6 @@ body.perf-low #ash{opacity:.45}
   .section-line{animation:none}
   .glitch::before,.glitch::after{animation:none}
   #ash{opacity:.4}
+  .forum-banner::after,.forum-banner-title{animation:none}
 }
 .story-para p,.about-copy p{content-visibility:auto;contain-intrinsic-size:auto 64px}
