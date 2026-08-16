@@ -5,7 +5,12 @@ import random
 import os
 import requests
 import glob
-import cv2
+try:
+    import cv2
+    _HAS_CV2 = True
+except ImportError:
+    cv2 = None
+    _HAS_CV2 = False
 import numpy as np
 import webbrowser
 import platform
@@ -21,6 +26,12 @@ import math
 import json
 import ctypes
 import ctypes.wintypes
+
+# Android build (python-for-android) detection. platform.system() reports
+# "Linux" on Android too, so use p4a's env marker.
+_ANDROID = platform.system() == "Linux" and (
+    os.environ.get("ANDROID_ARGUMENT") is not None or os.environ.get("PYGAME_ANDROID")
+)
 
 # --- Resolve assets relative to this file's own directory (works from any CWD) ---
 try:
@@ -248,11 +259,52 @@ pygame.init()
 pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
 
 WIDTH, HEIGHT = 800, 600
-screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+_display_flags = pygame.RESIZABLE | (pygame.SCALED if _ANDROID else 0)
+screen = pygame.display.set_mode((WIDTH, HEIGHT), _display_flags)
 icon = pygame.image.load("windowq.png").convert_alpha()
 pygame.display.set_icon(icon)
 pygame.display.set_caption("The Question Game")
 pygame.mouse.set_visible(False)
+
+if _ANDROID:
+    # The game is keyboard-driven (TAB = select, ENTER = confirm, ESC = back).
+    # Translate touches into those keys: tap = ENTER, swipe up/down = TAB,
+    # swipe left = ESC, swipe right = adjust value (K_RIGHT).
+    _real_event_get = pygame.event.get
+    _touch_down = None
+
+    def _android_key_event(key):
+        return pygame.event.Event(pygame.KEYDOWN, key=key, mod=0, scancode=0, unicode="")
+
+    def _android_event_get(*args, **kwargs):
+        global _touch_down
+        raw = _real_event_get(*args, **kwargs)
+        out = []
+        for ev in raw:
+            if ev.type == pygame.FINGERDOWN:
+                _touch_down = (ev.x, ev.y, time.time())
+                continue
+            if ev.type == pygame.FINGERMOTION:
+                continue
+            if ev.type == pygame.FINGERUP and _touch_down is not None:
+                x0, y0, t0 = _touch_down
+                _touch_down = None
+                dx = ev.x - x0
+                dy = ev.y - y0
+                dt = time.time() - t0
+                if max(abs(dx), abs(dy)) <= 0.02 and dt <= 0.5:
+                    out.append(_android_key_event(pygame.K_RETURN))
+                elif abs(dy) > abs(dx):
+                    out.append(_android_key_event(pygame.K_TAB))
+                elif dx < 0:
+                    out.append(_android_key_event(pygame.K_ESCAPE))
+                else:
+                    out.append(_android_key_event(pygame.K_RIGHT))
+                continue
+            out.append(ev)
+        return out
+
+    pygame.event.get = _android_event_get
 
 BLACK = (0, 0, 0)
 WHITE = (220, 220, 220)
@@ -262,6 +314,12 @@ DARK_RED = (100, 0, 0)
 DIM_RED = (60, 0, 0)
 
 FONT_NAME = pygame.font.match_font('courier')
+if _ANDROID:
+    _base_dir = globals().get('_APP_DIR') or '.'
+    for _fp in (os.path.join(_base_dir, 'courier.ttf'), 'courier.ttf'):
+        if os.path.exists(_fp):
+            FONT_NAME = _fp
+            break
 
 def get_scaled_fonts(w, h):
     base = min(w, h)
@@ -1422,6 +1480,8 @@ _webcam_worker_running = False
 
 def start_webcam_nonblocking():
     global camera, webcam_active, webcam_start_time, _webcam_worker_running
+    if cv2 is None:
+        return
     def _open():
         global camera, webcam_active, webcam_start_time, _webcam_worker_running
         try:
@@ -2615,7 +2675,7 @@ while running:
                 running = False
         elif event.type == pygame.VIDEORESIZE and state != "FULLSCREEN":
             WIDTH, HEIGHT = event.w, event.h
-            screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+            screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | (pygame.SCALED if _ANDROID else 0))
 
         if event.type == pygame.KEYDOWN:
             # Alt+F4 interception (same dramatic-delay-then-allow logic as the X button)

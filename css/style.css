@@ -2253,3 +2253,7 @@ body.style-old .whisper,body.style-old .ghostLine{display:none}
 /* keep the Yangon Times chip paper-colored even inside the OLD style */
 body.style-old .contents-link.paper-link,body.style-old .contents-link.paper-link:visited,
 body.style-old .side-link.paper-link,body.style-old .side-link.paper-link:visited{color:#2b2620}
+
+/* neptune productions imprint → hub link */
+.nep-link{color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto}
+.nep-link:hover{text-decoration:underline}
