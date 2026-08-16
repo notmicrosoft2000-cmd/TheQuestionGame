@@ -1994,3 +1994,62 @@ body.paper .mterm-prompt{color:var(--green);text-shadow:var(--glow-green)}
 body.paper .mterm-input{color:var(--green)}
 body.paper .scare.giant,
 body.paper .scare{display:none}
+
+/* --- Paper edition: swap fonts, drop the terminal chrome --- */
+body.paper{
+  --mono:Georgia,"Times New Roman",Times,serif;
+  --vt:Georgia,"Times New Roman",Times,serif;
+}
+body.paper .crt{display:none}
+body.paper .ticker{display:none}
+body.paper .hud{display:none}
+body.paper .glitch{animation:none}
+body.paper .glitch::before,
+body.paper .glitch::after{display:none}
+body.paper .hero h1{animation:none !important;text-shadow:none !important;letter-spacing:.01em}
+body.paper .melt,
+body.paper .melt-drip,
+body.paper .mterm-drip{animation:none !important}
+body.paper .led{box-shadow:none;animation:none}
+body.paper .whisper,
+body.paper .ghostLine{display:none}
+body.paper .section-title .red{display:none}
+body.paper .story-kicker,
+body.paper .story-game-title,
+body.paper .nav-brand{letter-spacing:.05em}
+body.paper .hero-sub,
+body.paper .about-quote{font-style:italic}
+
+/* nav as clean paper links, not terminal tabs */
+body.paper .contents-link,
+body.paper .side-link{
+  border:none;background:transparent;padding:.3rem .15rem;border-radius:0;
+  border-bottom:1px solid transparent;letter-spacing:.1em;
+}
+body.paper .contents-link:hover,
+body.paper .side-link:hover{color:var(--green);border-bottom-color:var(--green-dim)}
+body.paper .contents-link.active,
+body.paper .side-link.active{color:var(--green);background:transparent;border-bottom-color:var(--green);box-shadow:none;text-shadow:none;animation:none}
+body.paper .link-num{display:none}
+body.paper .nav-toggle{color:var(--green);border-color:var(--line-bright);background:var(--panel)}
+
+/* buttons, chips, tags: flat paper buttons */
+body.paper .btn,
+body.paper .asset-btn,
+body.paper .platform-btn{background:rgba(58,125,68,.07);box-shadow:none}
+body.paper .btn::before{display:none}
+body.paper .btn-primary{background:rgba(58,125,68,.1)}
+body.paper .btn-primary:hover,
+body.paper .asset-btn:hover,
+body.paper .platform-btn:hover{background:rgba(58,125,68,.15);box-shadow:none;text-shadow:none}
+body.paper .btn-ghost{background:transparent}
+body.paper .btn-ghost::before{display:none}
+body.paper .btn-ghost:hover{background:rgba(176,58,46,.05);box-shadow:none}
+body.paper .tag{border-color:var(--line-bright);color:var(--green);background:transparent}
+body.paper .hero-badge{border-color:var(--green-dim);background:rgba(58,125,68,.06);box-shadow:none}
+body.paper .platform-desc b{color:#26221c}
+body.paper .platform-btn[aria-disabled="true"]{color:#9a8f7a;border-color:var(--line);background:transparent}
+body.paper .dev-copy{background:rgba(58,125,68,.06);border-color:var(--line-bright)}
+body.paper .dev-copy:hover{box-shadow:none}
+body.paper #musicButton{background:var(--panel);border-color:var(--line-bright);box-shadow:none}
+body.paper .side-panel{background:rgba(246,241,228,.99);border-left-color:var(--line)}
