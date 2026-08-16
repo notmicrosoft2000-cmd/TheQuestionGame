@@ -13,6 +13,7 @@
   --cyan:#00d8ff;
   --mono:'IBM Plex Mono', ui-monospace, monospace;
   --vt:'VT323', ui-monospace, monospace;
+  --fancy:'Kaushan Script',cursive;
   --glow-green:0 0 12px rgba(0,220,0,.35);
   --glow-red:0 0 12px rgba(200,0,0,.4);
   --glow-soft:0 0 24px rgba(0,0,0,.9);
@@ -2437,6 +2438,43 @@ body.forum #musicButton{background:#fff8e7;border-color:#c0a878;color:#8a2b2b;bo
   .forum-compose{flex-wrap:wrap}
   .forum-compose input[type="text"]{flex:1 1 100%;order:0}
 }
+
+/* forum fancy (v2.05): cursive headings, gold ornaments, ruled-paper chat */
+body.forum{background:radial-gradient(circle at 50% 0%,#fbf3dc,#f3e9d2 72%)}
+body.forum .section-title{
+  font-family:var(--fancy);font-weight:400;letter-spacing:.01em;
+  color:#5e1f1f;white-space:normal;font-size:clamp(1.7rem,4vw,2.8rem);
+}
+body.forum .section-title .red{display:none}
+body.forum .section-title::after{content:"\2726";color:#c9a227;margin-left:.55rem;font-size:.75em;vertical-align:.25em}
+body.forum .forum-banner{border-bottom:3px double #c9a227}
+body.forum .forum-banner-title{
+  font-family:var(--fancy);font-weight:400;font-size:1.5rem;
+  letter-spacing:.01em;text-shadow:0 1px 1px rgba(0,0,0,.45);
+}
+body.forum .forum-banner-count::before{content:"— "}
+body.forum .forum-banner-count::after{content:" —"}
+body.forum .forum-auth{
+  border:1px solid #c0a878;border-radius:10px;
+  box-shadow:3px 3px 0 rgba(138,43,43,.08),inset 0 0 0 4px #fffdf5,inset 0 0 0 5px #e4d3ae;
+}
+body.forum .forum-auth::before{
+  content:"\2726 \2766 \2726";display:block;text-align:center;color:#c9a227;
+  font-size:1rem;letter-spacing:.55em;border-bottom:1px dashed #c0a878;
+  padding-bottom:.5rem;margin:-.25rem 0 .35rem;
+}
+body.forum .forum-auth-tab{font-family:var(--fancy);font-size:1.05rem;letter-spacing:.02em}
+body.forum .forum-avatar{border:2px solid #c9a227;box-shadow:0 0 0 2px #8a2b2b}
+body.forum .forum-msg{
+  border-radius:10px;box-shadow:2px 3px 0 rgba(138,43,43,.07);
+}
+body.forum .forum-who{font-family:var(--fancy);font-weight:400;font-size:1.04rem;letter-spacing:.01em;color:#7a2222}
+body.forum .forum-when{font-style:italic;color:#a0835a}
+body.forum .forum-msgs{
+  background-color:#fffdf5;
+  background-image:repeating-linear-gradient(to bottom,transparent 0 28px,rgba(138,43,43,.055) 28px 29px);
+}
+body.forum .forum-msg{background:rgba(255,248,231,.97);border:1px solid #e0cfae}
 
 /* forum banner animation (v2.04): slow 5s shine sweep + 4.5s title breathe */
 .forum-banner{position:relative;overflow:hidden}
