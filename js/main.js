@@ -1915,9 +1915,35 @@
     if (navToggle) navToggle.textContent = open ? "[ CLOSE ]" : "[ NAV ]";
   }
 
+  // The STORY page turns the whole site into the calm "paper" edition — a wipe
+  // sweeps down over the screen, the theme swaps, then the wipe clears.
+  let paperTimer = null;
+  function setPaperMode(on) {
+    if (document.body.classList.contains("paper") === on) return;
+    const wipe = document.createElement("div");
+    wipe.className = "paper-wipe";
+    wipe.style.background = on ? "#efe9db" : "#040404";
+    document.body.appendChild(wipe);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        wipe.classList.add("go");
+      });
+    });
+    clearTimeout(paperTimer);
+    paperTimer = setTimeout(() => {
+      document.body.classList.toggle("paper", on);
+      wipe.classList.remove("go");
+      wipe.classList.add("out");
+      setTimeout(() => {
+        if (wipe.parentNode) wipe.parentNode.removeChild(wipe);
+      }, 460);
+    }, 460);
+  }
+
   function showView(name) {
     safeZone = (name === "dev" || name === "story");
     document.body.classList.toggle("quiet-view", safeZone);
+    setPaperMode(name === "story");
     const target = $('[data-view="' + name + '"]');
     if (!target) return;
     $$(".view.active").forEach((v) => v.classList.remove("active"));

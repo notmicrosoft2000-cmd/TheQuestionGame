@@ -1906,3 +1906,91 @@ a,button,input,textarea,select,.term-opt,.session,.stat,.contents-link,.t-entry,
   .hud-bl,.hud-br{padding-bottom:max(0px,env(safe-area-inset-bottom))}
   header.nav{padding-top:max(.4rem,env(safe-area-inset-top))}
 }
+
+/* ---------- Paper edition (THE STORY transforms the whole site) ---------- */
+.paper-wipe{
+  position:fixed;inset:0;z-index:9999;pointer-events:none;
+  transform:translateY(-101%);transition:transform .46s cubic-bezier(.7,0,.3,1);
+}
+.paper-wipe.go{transform:translateY(0)}
+.paper-wipe.out{transform:translateY(101%);transition:transform .46s cubic-bezier(.7,0,.3,1)}
+
+body.paper{
+  --bg:#efe9db;
+  --bg-soft:#e7dfcf;
+  --panel:#f6f1e4;
+  --line:#cbc0a8;
+  --line-bright:#b0a489;
+  --text:#2b2620;
+  --dim:#7a705d;
+  --green:#3a7d44;
+  --green-dim:#b7c9a2;
+  --red:#b03a2e;
+  --dark-red:#7d241d;
+  --cyan:#23647e;
+  --glow-green:0 0 12px rgba(58,125,68,.28);
+  --glow-red:0 0 12px rgba(176,58,46,.3);
+  --glow-soft:0 0 24px rgba(0,0,0,.25);
+  --paper-flash:#efe9db;
+  background:var(--bg);color:var(--text);
+}
+body.paper .crt{display:none}
+body.paper .hero h1{color:#26221c}
+body.paper .glitch::before{color:var(--red)}
+body.paper .glitch::after{color:var(--cyan)}
+body.paper .nav{background:rgba(246,241,228,.96);border-bottom-color:var(--line)}
+body.paper .nav-brand{color:#26221c;text-shadow:none}
+body.paper .ticker-item{color:#6b6150}
+body.paper .section-title,
+body.paper .t-title,
+body.paper .session-name,
+body.paper .release-version,
+body.paper .platform-os,
+body.paper .player-title{color:#26221c;text-shadow:none}
+body.paper .intel-value{color:#26221c;text-shadow:none}
+body.paper .intel-value.glow{color:var(--green);text-shadow:var(--glow-green)}
+body.paper .intel-value.hot{color:var(--red);text-shadow:var(--glow-red)}
+body.paper .intel-value.loc{color:var(--cyan);text-shadow:var(--glow-green)}
+body.paper .platform-card,
+body.paper .story-game,
+body.paper .modal,
+body.paper .release,
+body.paper .session,
+body.paper .player,
+body.paper .stat,
+body.paper .dev-card,
+body.paper .story-card{background:var(--panel)}
+body.paper .platform-card.is-current{background:#eef4e4;border-color:#b7c9a2;box-shadow:inset 0 0 24px rgba(58,125,68,.07)}
+body.paper .platform-card.is-current .platform-os{color:var(--green)}
+body.paper .dev-list li,
+body.paper .feature-list li,
+body.paper .guide-steps,
+body.paper .story-para p{color:#3d382f}
+body.paper .guide-steps b{color:#26221c}
+body.paper .player-note,
+body.paper .dev-note,
+body.paper .signal-hint,
+body.paper .logs-lock-foot,
+body.paper .footer-dim,
+body.paper .side-foot{color:#7a705d}
+body.paper .logs-body,
+body.paper .shot-desc,
+body.paper .footer p{color:#5f5747}
+body.paper .release-note{color:#6b5325;border-color:#c9a94f;background:rgba(201,169,79,.1)}
+body.paper .contents-link,
+body.paper .side-link{color:#6b6150}
+body.paper .contents-link.active{color:var(--green);border-color:var(--green);background:rgba(58,125,68,.12)}
+body.paper .btn-ghost{border-color:var(--line-bright);color:var(--text)}
+body.paper .btn-primary{background:rgba(58,125,68,.1);color:var(--green)}
+body.paper .btn-primary:hover{background:rgba(58,125,68,.16)}
+body.paper .modal-overlay{background:rgba(43,38,32,.5)}
+body.paper .guide-tab:hover{color:#26221c}
+body.paper .link-num{color:#7a705d;border-color:#b0a489}
+body.paper .side-link .link-num{color:#7a705d}
+body.paper .mterm{background:rgba(246,241,228,.99);color:var(--green);border-color:var(--line-bright);box-shadow:0 0 0 1px rgba(58,125,68,.2),0 18px 60px rgba(43,38,32,.5)}
+body.paper .mterm-head{border-bottom-color:var(--line)}
+body.paper .mterm-out{color:#3d382f}
+body.paper .mterm-prompt{color:var(--green);text-shadow:var(--glow-green)}
+body.paper .mterm-input{color:var(--green)}
+body.paper .scare.giant,
+body.paper .scare{display:none}
