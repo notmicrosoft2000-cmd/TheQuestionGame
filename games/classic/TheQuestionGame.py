@@ -2427,6 +2427,13 @@ darkness_active = False
 darkness_phase = "none"
 darkness_start = 0
 
+# Answer-reaction system — every answer triggers something (v2.03)
+answer_count = 0
+corruption = 0
+last_ambient_reaction = None
+corruption_spikes_fired = set()
+reaction_fx = {"glitch_until": 0.0, "glitch_y": 0, "flicker_until": 0.0, "black_until": 0.0}
+
 # Pending one-off reaction line (used by false memory, location-no, pre-knowledge-wrong)
 pending_reaction_line = None
 
@@ -2437,6 +2444,179 @@ start_ambience()
 clock = pygame.time.Clock()
 running = True
 last_frame_time = time.time()
+
+# --- Answer-reaction engine (v2.03) ---
+# Run 1 only. Every answered question triggers one ambient effect (sound /
+# window / in-window visual) plus, on key questions, a tailored spoken line.
+# A hidden corruption counter climbs with each answer and visibly degrades the
+# screen in stages, with scripted spikes at 20 / 50 / 80 answers.
+
+ANSWER_REACTIONS = {
+    "sitting": {"No": "You will want to be seated\nfor what comes next."},
+    "responsibilities": {"No": "Then finish them.\nI can wait."},
+    "water": {"No": "Drink something first.\nI need you lucid."},
+    "alone": {"Yes": "Good. Just you and me, then.",
+              "No": "Noted.\nWho else is in the room?"},
+    "trust_screen": {"No": "Smart.\nYou should not trust\nwhat is on your screen."},
+    "safe_screen": {"No": "I heard that.\nYou are right not to feel safe."},
+    "simulation": {"Yes": "You are closer to being right\nthan you want to be."},
+    "scream": {"Yes": "Then we will both stay quiet."},
+    "door_locked": {"No": "You leave doors unlocked.\nInteresting."},
+    "watched": {"Yes": "Good.\nIt is better that you know."},
+    "ghosts": {"Yes": "Then you already believe\nin what is about to happen."},
+    "mirror_dark": {"Yes": "You looked.\nBrave. Or foolish."},
+    "counting": {"Yes": "Good.\nKeep counting."},
+    "tired": {"I am tired": "Rest is not an option tonight."},
+    "escape": {"...": "There is no escape.\nThere never was."},
+    "hiding": {"Yes": "Good.\nWe will find it together."},
+    "reason": {"Yes": "You are right.\nThere is always a reason."},
+    "guilty": {"Yes": "Guilt is the first step."},
+}
+
+CORRUPTION_SPIKES = {
+    20: {"q": "Something is changing.\nTwenty answers in, it is getting harder for me to stay still.",
+         "fx": "shake"},
+    50: {"q": "Halfway.\nDo you feel it too?",
+         "fx": "cmd"},
+    80: {"q": "It is too late to stop now.\nKeep answering.",
+         "fx": "black"},
+}
+
+AMBIENT_POOL = [
+    ("static", 12),    # brief static burst sound
+    ("heartbeat", 7),  # single deep thud
+    ("rumble", 6),     # faint subsonic grind
+    ("beep", 7),       # mechanical beep
+    ("nudge", 9),      # window drifts a few px, then back
+    ("tear", 9),       # in-window horizontal glitch band + sound
+    ("title", 7),      # window title changed for a second
+    ("flicker", 8),    # quick screen dim flicker
+    ("cmd", 2),        # rare: flash a cmd/Terminal window
+    ("shake", 2),      # rare: small window shake
+    ("black", 2),      # rare: one-frame blackout
+]
+
+_FAST_ANSWER_LINES = [
+    "That was fast.\nToo fast.",
+    "You did not even think\nabout that one.",
+    "Quick.\nDid you mean it?",
+]
+
+
+def _nudge_window():
+    try:
+        info = pygame.display.Info()
+        mw, mh = info.current_w, info.current_h
+        win_w, win_h = screen.get_size()
+        cx = max(0, (mw - win_w) // 2)
+        cy = max(0, (mh - win_h) // 2)
+        nx = cx + random.randint(-50, 50)
+        ny = cy + random.randint(-30, 30)
+        begin_window_move(nx, ny, 0.3)
+        def _back():
+            time.sleep(0.8)
+            move_window_center(0.4)
+        threading.Thread(target=_back, daemon=True).start()
+    except:
+        pass
+
+
+def _swap_title():
+    try:
+        _old = pygame.display.get_caption()
+        pygame.display.set_caption("THE QUESTION GAME — IT IS LISTENING")
+        def _restore():
+            time.sleep(0.9)
+            try:
+                pygame.display.set_caption(_old[0], _old[1])
+            except:
+                pass
+        threading.Thread(target=_restore, daemon=True).start()
+    except:
+        pass
+
+
+def fire_ambient_reaction():
+    """Pick one weighted micro-effect for the just-answered question. Never
+    repeats the same effect twice in a row."""
+    global last_ambient_reaction, reaction_fx
+    pool = [e for e in AMBIENT_POOL if e[0] != last_ambient_reaction]
+    names = [e[0] for e in pool]
+    weights = [e[1] for e in pool]
+    fx = random.choices(names, weights=weights, k=1)[0]
+    last_ambient_reaction = fx
+    _now = time.time()
+    if fx == "static":
+        play_static_burst()
+    elif fx == "heartbeat":
+        play_heartbeat()
+    elif fx == "rumble":
+        play_deep_rumble()
+    elif fx == "beep":
+        play_mechanical_beep()
+    elif fx == "nudge":
+        _nudge_window()
+    elif fx == "tear":
+        _w, _h = pygame.display.get_surface().get_size()
+        reaction_fx["glitch_until"] = _now + 0.12
+        reaction_fx["glitch_y"] = random.randint(int(_h * 0.05), int(_h * 0.9))
+        play_glitch_sound()
+    elif fx == "title":
+        _swap_title()
+    elif fx == "flicker":
+        reaction_fx["flicker_until"] = _now + 0.1
+    elif fx == "cmd":
+        flash_cmd()
+        play_error_sound()
+    elif fx == "shake":
+        shake_game_window(cycles=3, amplitude=8)
+    elif fx == "black":
+        reaction_fx["black_until"] = _now + 0.06
+        play_static_burst()
+
+
+def fire_answer_reaction(q_id, ans, elapsed):
+    """Every answer in run 1: raise corruption, fire one ambient effect, and
+    return a list of injected follow-up questions (tailored reactions and
+    corruption spikes). Empty list = ambient only."""
+    global answer_count, corruption
+    answer_count += 1
+    corruption = min(100, corruption + 1)
+
+    followups = []
+
+    # Tailored reaction (C): read the answer, say something specific
+    react_map = ANSWER_REACTIONS.get(q_id)
+    if react_map and ans in react_map:
+        followups.append({"q": react_map[ans], "type": "choice", "opts": ["...", "Stop"],
+                          "_id": "reaction_" + q_id, "_injected": True})
+
+    # Fast-answer callout (C) — never on injected lines, so it can't recurse
+    if not followups and elapsed < 1.0 and random.random() < 0.3:
+        followups.append({"q": random.choice(_FAST_ANSWER_LINES), "type": "choice",
+                          "opts": ["...", "I was quick"], "_id": "fast_" + q_id,
+                          "_injected": True})
+
+    # Ambient effect (B/D): exactly one per answer
+    fire_ambient_reaction()
+
+    # Corruption spikes (D): scripted heavier moments at thresholds
+    spike = CORRUPTION_SPIKES.get(corruption)
+    if spike and corruption not in corruption_spikes_fired:
+        corruption_spikes_fired.add(corruption)
+        if spike["fx"] == "shake":
+            shake_game_window(cycles=4, amplitude=10)
+            play_static_burst()
+        elif spike["fx"] == "cmd":
+            flash_cmd()
+            play_deep_rumble()
+        elif spike["fx"] == "black":
+            reaction_fx["black_until"] = time.time() + 0.12
+            play_heartbeat()
+        followups.append({"q": spike["q"], "type": "choice", "opts": ["...", "I noticed"],
+                          "_id": "corruption_spike_" + str(corruption), "_injected": True})
+
+    return followups
 
 # --- Special action handler ---
 def handle_step_action(action, step_data):
@@ -2832,43 +3012,49 @@ while running:
                                 game_state["fav_color"] = ans.lower()
                                 save_game_state(game_state)
 
-                            injected_followup = None
+                            followups = []
 
                             # False memory rebuttal
                             if step_data.get("_false_memory_response"):
                                 rebuttal = FALSE_MEMORY_REBUTTALS.get(ans)
                                 if rebuttal:
-                                    injected_followup = {
+                                    followups.append({
                                         "q": rebuttal, "type": "choice", "opts": ["...", "Fine"],
                                         "_id": f"false_memory_rebuttal_{current_step}", "_injected": True
-                                    }
+                                    })
 
                             # Pre-knowledge wrong-answer rebuttal
                             if step_data.get("_preknowledge_wrong_response") and ans == "That's wrong":
-                                injected_followup = {
+                                followups.append({
                                     "q": step_data["_preknowledge_wrong_response"], "type": "choice",
                                     "opts": ["...", "Fine, it's correct"],
                                     "_id": f"preknowledge_rebuttal_{current_step}", "_injected": True
-                                }
+                                })
 
                             # Location denial rebuttal
                             if step_data.get("_location_no_response") and ans == "No":
-                                injected_followup = {
+                                followups.append({
                                     "q": step_data["_location_no_response"], "type": "choice",
                                     "opts": ["...", "That's not true"],
                                     "_id": f"location_rebuttal_{current_step}", "_injected": True
-                                }
+                                })
 
                             # Hesitation check (now 20s threshold)
                             if elapsed > HESITATION_THRESHOLD and not step_data.get("_injected"):
-                                injected_followup = {
+                                followups.append({
                                     "q": get_hesitation_comment(), "type": "choice",
                                     "opts": ["...", "I was thinking"], "_injected": True,
                                     "_id": f"hesitation_{current_step}"
-                                }
+                                })
 
-                            if injected_followup:
-                                active_script.insert(current_step + 1, injected_followup)
+                            # Answer-reaction system (v2.03): every answer triggers
+                            # an ambient effect, plus tailored lines / corruption spikes
+                            if game_state["run_count"] == 1:
+                                followups.extend(fire_answer_reaction(q_id, ans, elapsed))
+
+                            if followups:
+                                for _i, _f in enumerate(followups):
+                                    active_script.insert(current_step + 1 + _i, _f)
 
                             # Idle/away comment, queued separately so it doesn't collide
                             elif idle_tracker["pending_comment"]:
@@ -3314,6 +3500,42 @@ while running:
             apply_shadow_static(screen, current_w, current_h, intensity=3.0)
             if random.random() < 0.025:
                 play_glitch_sound()
+
+        # Run 1 answer-corruption layer — grows with each answer (v2.03)
+        if game_state["run_count"] == 1 and corruption > 0:
+            _now = time.time()
+            if _now < reaction_fx["glitch_until"]:
+                _gy = reaction_fx["glitch_y"]
+                _gw = random.randint(int(current_w * 0.5), current_w)
+                pygame.draw.rect(screen, (random.randint(0, 40), random.randint(40, 70), random.randint(0, 40)),
+                                 (0, _gy, _gw, random.randint(1, 3)))
+            if _now < reaction_fx["flicker_until"]:
+                _fs = pygame.Surface((current_w, current_h), pygame.SRCALPHA)
+                _fs.fill((0, 0, 0, 70))
+                screen.blit(_fs, (0, 0))
+            if _now < reaction_fx["black_until"]:
+                screen.fill((0, 0, 0))
+            if corruption >= 20 and random.random() < 0.025:
+                _gy = random.randint(0, current_h)
+                _gw = random.randint(30, current_w)
+                _gs = random.randint(10, 30)
+                pygame.draw.rect(screen, (_gs, _gs, _gs),
+                                 (random.randint(0, max(0, current_w - _gw)), _gy, _gw, random.randint(1, 3)))
+            if corruption >= 40 and random.random() < 0.04:
+                _sx = random.randint(0, max(0, current_w - 60))
+                _sy = random.randint(0, max(0, current_h - 40))
+                _patch = pygame.Surface((60, 40), pygame.SRCALPHA)
+                for _ in range(30):
+                    _bx = random.randint(0, 56)
+                    _by = random.randint(0, 36)
+                    _sh = random.randint(20, 60)
+                    pygame.draw.rect(_patch, (_sh, _sh, _sh, 90), (_bx, _by, 4, 4))
+                screen.blit(_patch, (_sx, _sy))
+            if corruption >= 60 and random.random() < 0.015:
+                play_glitch_sound()
+            if corruption >= 80 and random.random() < 0.02:
+                _gy = random.randint(0, current_h)
+                pygame.draw.rect(screen, (random.randint(50, 90), 0, 0), (0, _gy, current_w, random.randint(1, 4)))
 
         # V2.02 ambient dressing (mirrors Remastered): scan sweep, ash, vignette
         if game_state.get("settings", {}).get("vhs_intensity", 1.0) > 0:
