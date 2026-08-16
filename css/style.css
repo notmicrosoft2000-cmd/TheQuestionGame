@@ -1910,28 +1910,26 @@ a,button,input,textarea,select,.term-opt,.session,.stat,.contents-link,.t-entry,
 /* ---------- Paper edition (THE STORY transforms the whole site) ---------- */
 .paper-wipe{
   position:fixed;inset:0;z-index:9999;pointer-events:none;
-  transform:translateY(-101%) rotate(-.3deg);
-  transform-origin:50% 0;
-  transition:transform .54s cubic-bezier(.65,0,.3,1);
+  transform:scaleY(1);transform-origin:center;
+  transition:transform .48s cubic-bezier(.7,0,.2,1);
   will-change:transform,filter;
 }
-.paper-wipe::before{
-  content:"";position:absolute;inset:0;
-  background:radial-gradient(ellipse at 50% -30%,rgba(255,255,255,.6),rgba(255,255,255,0) 60%);
+.paper-wipe.go{
+  transform:scaleY(.012);
+  box-shadow:0 0 70px 6px rgba(255,255,255,.9);
 }
-.paper-wipe.go{transform:translateY(0) rotate(0deg)}
+.paper-wipe.go.flash{animation:line-flash .48s ease-out}
 .paper-wipe.out{
-  transform:translateY(101%) rotate(.3deg);
-  transition:transform .56s cubic-bezier(.7,0,.25,1);
+  transform:scaleY(1);box-shadow:none;
+  transition:transform .5s cubic-bezier(.3,0,.2,.85);
 }
-.paper-wipe.flash{animation:paper-flash .54s ease-out}
-@keyframes paper-flash{
-  0%{filter:brightness(3.6) saturate(0)}
+@keyframes line-flash{
+  0%{filter:brightness(3.4) saturate(0)}
   100%{filter:brightness(1) saturate(1)}
 }
 @media (prefers-reduced-motion:reduce){
   .paper-wipe,.paper-wipe.go,.paper-wipe.out{transition:none}
-  .paper-wipe.flash{animation:none}
+  .paper-wipe.go.flash{animation:none}
 }
 
 body.paper{
@@ -2131,3 +2129,127 @@ body.paper .side-link.paper-link.active{border-color:#3a7d44}
   .hero h1{font-size:clamp(2.5rem,11.5vw,3.4rem)}
   .contents-link.paper-link,.side-link.paper-link{font-size:.6rem}
 }
+
+/* ---------- Style presets (mterm: STYLE <dark|retro|crt|old>) ---------- */
+body.style-retro{
+  --bg:#060400;--bg-soft:#0e0902;--panel:#0e0902;
+  --line:#201406;--line-bright:#32200a;
+  --text:#ffb020;--dim:#7a4c0e;
+  --green:#ffb020;--green-dim:#7a4c0e;
+  --red:#ff3c3c;--dark-red:#8a2010;--cyan:#ffcf7d;
+  --glow-green:0 0 16px rgba(255,176,32,.5);
+  --glow-red:0 0 16px rgba(255,60,60,.45);
+  --glow-soft:0 0 30px rgba(255,176,32,.3);
+}
+body.style-retro .crt .vignette{background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6) 100%),linear-gradient(rgba(255,176,32,.04),rgba(255,176,32,.04))}
+body.style-retro .crt .beam{background:linear-gradient(to bottom,transparent,rgba(255,176,32,.06) 42%,rgba(255,176,32,.16) 50%,rgba(255,176,32,.06) 58%,transparent)}
+body.style-retro .crt .sweep{background:linear-gradient(to bottom,transparent 0%,rgba(255,176,32,.02) 46%,rgba(255,176,32,.06) 50%,rgba(255,176,32,.02) 54%,transparent 100%)}
+body.style-retro .mterm-prompt{color:#ffb020;text-shadow:0 0 8px rgba(255,176,32,.7)}
+
+/* ADVANCED CRT — heavy tube: RGB mask, tight scanlines, fast flicker, banding, curved dark edges */
+body.style-crt .crt{animation:crt-flicker 1.4s steps(3) infinite}
+body.style-crt .crt::before{
+  content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,rgba(255,0,0,.045) 0 1px,rgba(0,255,0,.045) 1px 2px,rgba(0,0,255,.045) 2px 3px);
+}
+body.style-crt .crt::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(to bottom,transparent 62%,rgba(0,0,0,.55) 100%),linear-gradient(to top,transparent 62%,rgba(0,0,0,.35) 100%);
+}
+body.style-crt .crt .scanlines{background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 1px,rgba(0,0,0,.42) 1px 3px)}
+body.style-crt .crt .vignette{
+  background:radial-gradient(ellipse at center,transparent 44%,rgba(0,0,0,.78) 100%),linear-gradient(rgba(0,220,0,.05),rgba(0,220,0,.05));
+  animation:vignette-breathe 2.4s ease-in-out infinite;
+}
+body.style-crt .crt .beam{
+  height:9vh;top:-10vh;
+  background:linear-gradient(to bottom,transparent,rgba(0,220,0,.14) 44%,rgba(0,220,0,.34) 50%,rgba(0,220,0,.14) 56%,transparent);
+  animation:beam 3.2s linear infinite;
+}
+body.style-crt .crt .sweep{
+  height:14vh;top:-16vh;
+  background:linear-gradient(to bottom,transparent 0%,rgba(255,255,255,.07) 46%,rgba(255,255,255,.16) 50%,rgba(255,255,255,.07) 54%,transparent 100%);
+  animation:sweep 3.8s linear infinite;
+}
+
+/* OLD — a 2010-style site: white pages, Times New Roman, blue links, grey XP buttons */
+body.style-old{
+  --bg:#ffffff;--bg-soft:#f4f4f4;--panel:#ffffff;
+  --line:#cccccc;--line-bright:#999999;
+  --text:#000000;--dim:#555555;
+  --green:#0000EE;--green-dim:#0000EE;
+  --red:#AA0000;--dark-red:#7a0000;--cyan:#0000EE;
+  --glow-green:0 0 0 transparent;
+  --glow-red:0 0 0 transparent;
+  --glow-soft:0 0 0 transparent;
+  --mono:"Times New Roman",Times,serif;
+  --vt:"Times New Roman",Times,serif;
+}
+body.style-old .crt{display:none}
+body.style-old .hud{display:none}
+body.style-old .glitch::before,body.style-old .glitch::after{display:none}
+body.style-old .glitch,body.style-old .hero h1,body.style-old .melt,body.style-old .melt-drip,body.style-old .mterm-drip{animation:none !important}
+body.style-old .hero h1{color:#000;text-shadow:none}
+body.style-old .led{animation:none;box-shadow:none}
+body.style-old .nav{background:#ffffff;border-bottom:1px solid #cccccc}
+body.style-old .nav-brand{color:#000;text-shadow:none;letter-spacing:.02em}
+body.style-old .ticker{background:#ffffff;border-color:#cccccc}
+body.style-old .ticker-item{color:#000}
+body.style-old .section-title,body.style-old .t-title,body.style-old .session-name,
+body.style-old .release-version,body.style-old .platform-os,body.style-old .player-title,
+body.style-old .intel-value{color:#000;text-shadow:none;letter-spacing:.02em}
+body.style-old .section-line{background:#cccccc;animation:none}
+body.style-old .section-sub{color:#444}
+body.style-old a{color:#0000EE}
+body.style-old a:visited{color:#551A8B}
+body.style-old .contents-link:not(.paper-link),
+body.style-old .side-link:not(.paper-link){
+  background:none;border:0;padding:.2rem .3rem;font-size:.72rem;
+  letter-spacing:.03em;color:#0000EE;
+}
+body.style-old .contents-link:not(.paper-link):hover,
+body.style-old .side-link:not(.paper-link):hover{color:#0000EE;text-decoration:underline}
+body.style-old .contents-link:not(.paper-link).active,
+body.style-old .side-link:not(.paper-link).active{
+  color:#0000EE;background:none;border:0;border-bottom:2px solid #0000EE;
+  box-shadow:none;text-shadow:none;animation:none;
+}
+body.style-old .contents-link.dl-glow,body.style-old .side-link.dl-glow{
+  color:#0000EE;background:none;border:0;box-shadow:none;text-shadow:none;animation:none;
+}
+body.style-old .link-num{display:none}
+body.style-old .btn,body.style-old .asset-btn,body.style-old .platform-btn,body.style-old .dev-copy{
+  background:#ece9d8;color:#000;border:1px outset #a5a5a5;border-radius:0;
+  box-shadow:none;text-shadow:none;
+}
+body.style-old .btn::before,body.style-old .btn-ghost::before{display:none}
+body.style-old .btn:hover,body.style-old .asset-btn:hover,body.style-old .platform-btn:hover{background:#e3e0cd;box-shadow:none;text-shadow:none}
+body.style-old .btn-ghost:hover{background:#e3e0cd;color:#000}
+body.style-old .tag{border:1px solid #999;color:#000;background:none}
+body.style-old .hero-badge{border:1px solid #0000EE;color:#0000EE;background:none;box-shadow:none}
+body.style-old .release,body.style-old .platform-card,body.style-old .session,
+body.style-old .player,body.style-old .stat,body.style-old .dev-card,
+body.style-old .modal{background:#ffffff;border:1px solid #000}
+body.style-old .platform-card.is-current{background:#eef3ff;border-color:#0000EE}
+body.style-old .release::before,body.style-old .story-game::before{background:repeating-linear-gradient(90deg,#999999 0 14px,#ffffff 14px 20px)}
+body.style-old .stat-num,body.style-old .about-quote,body.style-old .hero-sub{color:#0000EE;text-shadow:none}
+body.style-old .dev-list li,body.style-old .feature-list li,body.style-old .guide-steps,
+body.style-old .story-para p,body.style-old .platform-desc{color:#000}
+body.style-old .release-note{color:#333;border-color:#999;background:#fff}
+body.style-old .modal-overlay{background:rgba(0,0,0,.4)}
+body.style-old .modal-body{color:#000}
+body.style-old .mterm{background:#f0f0f0;color:#000;border:1px outset #a5a5a5;box-shadow:none}
+body.style-old .mterm-head{border-bottom-color:#ccc}
+body.style-old .mterm-prompt{color:#0000EE;text-shadow:none}
+body.style-old .mterm-out{color:#000}
+body.style-old .guide-tab{color:#000}
+body.style-old .guide-tab:hover{color:#0000EE}
+body.style-old .guide-tab[aria-selected="true"]{color:#0000EE;border-bottom-color:#0000EE}
+body.style-old .side-panel{background:#ffffff;border-left-color:#ccc}
+body.style-old .side-head{color:#000}
+body.style-old .side-foot,body.style-old .footer-dim{color:#555}
+body.style-old footer p{color:#000}
+body.style-old .whisper,body.style-old .ghostLine{display:none}
+/* keep the Yangon Times chip paper-colored even inside the OLD style */
+body.style-old .contents-link.paper-link,body.style-old .contents-link.paper-link:visited,
+body.style-old .side-link.paper-link,body.style-old .side-link.paper-link:visited{color:#2b2620}

@@ -1915,11 +1915,20 @@
     if (navToggle) navToggle.textContent = open ? "[ CLOSE ]" : "[ NAV ]";
   }
 
-  // The STORY page turns the whole site into the calm "paper" edition — a wipe
-  // sweeps down over the screen, the theme swaps, then the wipe clears.
+  // The STORY page turns the whole site into the calm "paper" edition — the
+  // screen collapses to a glowing seam (like a TV off), the theme swaps, then
+  // the paper unfurls from the seam. Style presets (RETRO/CRT/OLD) pause while
+  // the paper edition is up and come back when you leave.
   let paperTimer = null;
+  let paperSavedStyle = "dark";
   function setPaperMode(on) {
     if (document.body.classList.contains("paper") === on) return;
+    if (on) {
+      paperSavedStyle = tqgStyle;
+      document.body.classList.remove("style-retro", "style-crt", "style-old");
+    } else {
+      setStyle(paperSavedStyle || "dark", false);
+    }
     const wipe = document.createElement("div");
     wipe.className = "paper-wipe";
     wipe.style.background = on ? "#efe9db" : "#040404";
@@ -1937,9 +1946,32 @@
       wipe.classList.add("out");
       setTimeout(() => {
         if (wipe.parentNode) wipe.parentNode.removeChild(wipe);
-      }, 560);
-    }, 540);
+      }, 520);
+    }, 480);
   }
+
+  const TQG_STYLES = ["dark", "retro", "crt", "old"];
+  let tqgStyle = "dark";
+  function setStyle(name, persist) {
+    if (TQG_STYLES.indexOf(name) === -1) return false;
+    tqgStyle = name;
+    if (persist) {
+      try { localStorage.setItem("tqg-style", name); } catch (e) {}
+    }
+    if (document.body.classList.contains("paper")) {
+      paperSavedStyle = name;
+      return true;
+    }
+    document.body.classList.toggle("style-retro", name === "retro");
+    document.body.classList.toggle("style-crt", name === "crt");
+    document.body.classList.toggle("style-old", name === "old");
+    return true;
+  }
+  (function initStyle() {
+    let saved = "dark";
+    try { saved = localStorage.getItem("tqg-style") || "dark"; } catch (e) {}
+    setStyle(TQG_STYLES.indexOf(saved) === -1 ? "dark" : saved, false);
+  })();
 
   function showView(name) {
     safeZone = (name === "dev" || name === "story");
@@ -4287,6 +4319,7 @@
         "                  TRANSMISSION PREVIEW DOWNLOAD DEV SIMPLER\n" +
         "  LOGS             UNLOCK + OPEN THE LOG ARCHIVE\n" +
         "  COLOR <N>        GREEN AMBER RED BLUE MONO\n" +
+        "  STYLE <N>        DARK RETRO CRT OLD\n" +
         "  AMBIENCE [ON|OFF]\n" +
         "  WHISPER <T>      WHISPER ANYTHING\n" +
         "  TOAST <T>        SAY IT OUT LOUD\n" +
@@ -4344,6 +4377,13 @@
       const n = (arg || "green").toLowerCase();
       if (tSetColor(n)) tType("PALETTE: " + n.toUpperCase() + ". THE WHOLE SITE IS " + n.toUpperCase() + " NOW.", "t-ok");
       else tType("UNKNOWN PALETTE: " + arg + "\nTRY GREEN, AMBER, RED, BLUE OR MONO.", "t-err");
+      return;
+    }
+    if (cmd === "style" || cmd === "theme") {
+      tPrint(echo, "t-in");
+      const n = (arg || "dark").toLowerCase();
+      if (setStyle(n, true)) tType("STYLE: " + n.toUpperCase() + ".\nTHE SITE REBUILT ITSELF. IT REMEMBERS IT NOW.", "t-ok");
+      else tType("UNKNOWN STYLE: " + arg + "\nTRY DARK, RETRO, CRT OR OLD.", "t-err");
       return;
     }
     if (cmd === "ambience") {
