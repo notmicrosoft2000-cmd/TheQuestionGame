@@ -11,9 +11,30 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=45">
+  <link rel="stylesheet" href="css/style.css?v=46">
+  <script>
+    (function () {
+      var ua = navigator.userAgent, m, v = 0;
+      if (/Trident/.test(ua)) { v = 11; }
+      else { m = /MSIE[ \/]([0-9.]+)/.exec(ua); if (m) { v = parseFloat(m[1]); } }
+      if ((v > 0 && v <= 11) || !document.getElementById || !window.XMLHttpRequest) {
+        window.location.replace('legacy.html');
+      }
+    })();
+  </script>
 </head>
 <body>
+  <noscript>
+    <div style="position:fixed;top:0;left:0;right:0;z-index:999999;background:#000;color:#00dd00;font-family:monospace;font-size:13px;padding:14px 16px;line-height:1.6;border-bottom:2px solid #00dd00">
+      <b>THE QUESTION GAME</b> needs JavaScript. On an old browser (IE 11 or earlier), use the
+      <a href="legacy.html" style="color:#00ff88">LEGACY 2000 EDITION</a>.
+      &nbsp;Downloads:&nbsp;
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" style="color:#00ff88">ANDROID</a>
+    </div>
+  </noscript>
 
   <noscript>
     <style>
@@ -954,6 +975,7 @@
     <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
     <button class="discord-copy footer-discord" type="button" title="Copy Discord handle">[ DISCORD: neptunetheii — CLICK TO COPY ]</button>
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>
+    <p class="footer-dim"><a class="nep-link" href="legacy.html" title="for Windows 2000 and old browsers">LEGACY 2000 EDITION</a> — for old browsers &amp; Windows 2000</p>
   </footer>
 
   <div class="modal-overlay hidden" id="warnModal" role="dialog" aria-modal="true" aria-labelledby="warnTitle">
@@ -1110,6 +1132,6 @@
   </div>
 
   <script src="js/config.js?v=45"></script>
-  <script src="js/main.js?v=45"></script>
+  <script src="js/main.js?v=46"></script>
 </body>
 </html>
