@@ -38,6 +38,7 @@
   })();
 
   let GAME_OVERLAY = false;
+  let safeZone = false;
 
   function typeNode(el, text, speed, onChar) {
     return new Promise((res) => {
@@ -295,7 +296,7 @@
 
   let glitchLock = false;
   function pageGlitch() {
-    if (glitchLock) return;
+    if (safeZone || glitchLock) return;
     glitchLock = true;
     document.body.classList.add("page-glitch");
     setTimeout(() => {
@@ -467,7 +468,7 @@
     "IT REMEMBERS WHEN YOU LEFT LAST TIME."
   ];
   function fakeToast() {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     showToast(EERIE_TOASTS[Math.floor(Math.random() * EERIE_TOASTS.length)], Math.random() < 0.4);
   }
 
@@ -784,7 +785,7 @@
     if (document.hidden || !mockPop || mockTimer) return;
     mockTimer = setTimeout(() => {
       mockTimer = null;
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.4) showMockQuestion();
       else showMock(MOCK_LINES[Math.floor(Math.random() * MOCK_LINES.length)]);
     }, 700);
@@ -1031,109 +1032,109 @@
 
   function startJumpscares() {
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.02) darkChaos();
     }, 3000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.01) flashEyes();
     }, 1000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.001) gifScare();
     }, 10000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.03) pageGlitch();
     }, 8000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.12) whisper();
     }, 6000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.3) corruptSignal();
     }, 7000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.08) bgWash();
     }, 6000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.04) bgBars();
     }, 9000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.03) bgRoll();
     }, 12000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.1) bgGhost();
     }, 8000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.5) deviceComment();
     }, 45000);
     setTimeout(() => {
       if (!document.hidden) deviceComment();
     }, 4500);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.09) monitorBlip();
     }, 15000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.14) recGlitch();
     }, 12000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.2) ghostLine();
     }, 9000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.2) fakeToast();
     }, 11000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.12) titleScramble();
     }, 18000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.08) sfx.drone();
     }, 20000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.3) elementDetach();
     }, 7000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.08) headingTakeover();
     }, 14000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.07) reverseRead();
     }, 16000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.06) titleShadow();
     }, 15000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.12) typingGhost();
     }, 13000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.1) mockMachine();
     }, 10000);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.08) screenDip();
     }, 9000);
   }
 
   let clickWhisperTimer = null;
   function showWhisperText(text) {
-    if (clickWhisperTimer) return;
+    if (safeZone || clickWhisperTimer) return;
     whisperEl.textContent = text;
     whisperEl.classList.add("go");
     clickWhisperTimer = setTimeout(() => {
@@ -1184,13 +1185,13 @@
     "IT COUNTED THAT. AND THE ONES BEFORE."
   ];
   document.addEventListener("click", (e) => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (e.target.closest("a, button, input, textarea, select, .modal-overlay, .mock-pop")) return;
     if (Math.random() < 0.12) showWhisperText(CLICK_WHISPERS[Math.floor(Math.random() * CLICK_WHISPERS.length)]);
   });
 
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.35) counterDrift();
   }, 18000);
 
@@ -1375,27 +1376,27 @@
   }
 
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.02) blink();
   }, 10000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.08) charFlicker();
   }, 2500);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.06) scrollShudder();
   }, 6000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.07) statLabelJitter();
   }, 5000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.07) cardShift();
   }, 8000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.08) sigCrack();
   }, 4000);
 
@@ -1430,19 +1431,19 @@
   }
 
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.08) fontSwap();
   }, 5000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.08) tabTitleShift();
   }, 9000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.1) barFlip();
   }, 7000);
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.1) bgHue();
   }, 6000);
 
@@ -1495,13 +1496,13 @@
     }, 1600);
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.35) navGhost();
   }, 30000);
 
   let tqgNudgeLock = false;
   function tqgNudge() {
-    if (tqgNudgeLock || document.hidden || GAME_OVERLAY) return;
+    if (tqgNudgeLock || document.hidden || GAME_OVERLAY || safeZone) return;
     const brand = $(".nav-brand");
     if (!brand) return;
     tqgNudgeLock = true;
@@ -1512,7 +1513,7 @@
     }, 2400);
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.25) tqgNudge();
   }, 12000);
 
@@ -1545,7 +1546,7 @@
     }
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.03) strobeBurst();
   }, 25000);
 
@@ -1565,7 +1566,7 @@
     }, 620);
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.14) cardEvaporate();
   }, 12000);
 
@@ -1633,7 +1634,7 @@
     }, 1300);
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.15) staticTakeover();
   }, 30000);
 
@@ -1677,7 +1678,7 @@
     }, 2000);
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.12) cursorTheft();
   }, 45000);
 
@@ -1862,7 +1863,7 @@
       setTimeout(() => { cursorEcho.style.boxShadow = ""; }, 180);
     }, 700);
     setInterval(() => {
-      if (document.hidden || GAME_OVERLAY) return;
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
       if (Math.random() < 0.2) cursorTrail();
     }, 5000);
   }
@@ -1915,6 +1916,8 @@
   }
 
   function showView(name) {
+    safeZone = (name === "dev" || name === "story");
+    document.body.classList.toggle("quiet-view", safeZone);
     const target = $('[data-view="' + name + '"]');
     if (!target) return;
     $$(".view.active").forEach((v) => v.classList.remove("active"));
@@ -2445,6 +2448,7 @@
   const toast = $("#toast");
   let toastTimer = null;
   function showToast(text, isRed) {
+    if (safeZone) return;
     toast.textContent = text;
     toast.classList.toggle("red", !!isRed);
     toast.classList.add("show");
@@ -2578,7 +2582,7 @@
     });
   }
   setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
+    if (document.hidden || GAME_OVERLAY || safeZone) return;
     if (Math.random() < 0.45) secretTab();
   }, 14000);
 
@@ -3233,17 +3237,19 @@
     keyBuf = (keyBuf + key.toLowerCase()).slice(-24);
     clearTimeout(keyTimer);
     keyTimer = setTimeout(() => { keyBuf = ""; }, 2500);
-    if (keyBuf.endsWith("hello")) {
-      keyBuf = "";
-      if (typeIn) typeIn.value = "";
-      jumpscare();
-      return;
-    }
-    if (keyBuf.endsWith("smile")) {
-      keyBuf = "";
-      if (typeIn) typeIn.value = "";
-      gifScare();
-      return;
+    if (!safeZone) {
+      if (keyBuf.endsWith("hello")) {
+        keyBuf = "";
+        if (typeIn) typeIn.value = "";
+        jumpscare();
+        return;
+      }
+      if (keyBuf.endsWith("smile")) {
+        keyBuf = "";
+        if (typeIn) typeIn.value = "";
+        gifScare();
+        return;
+      }
     }
     if (keyBuf.endsWith("2013")) {
       keyBuf = "";
