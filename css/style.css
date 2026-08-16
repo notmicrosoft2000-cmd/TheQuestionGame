@@ -101,6 +101,16 @@ button{font-family:inherit}
 @keyframes sweep{0%{transform:translateY(0)}100%{transform:translateY(160vh)}}
 #ash{position:absolute;inset:0;width:100%;height:100%;opacity:.6}
 #noise{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+/* FX master switch — player can drop the static/CRT overlays after the LOGS
+   unlock. The frame loops are also stopped in JS; this just hides the layers. */
+body.no-fx .crt .scanlines,
+body.no-fx .crt .vignette,
+body.no-fx .crt .beam,
+body.no-fx .crt .sweep,
+body.no-fx #ash,
+body.no-fx #noise,
+body.no-fx .crt-glare,
+body.no-fx .sig-crt{display:none}
 .flash{
   position:absolute;inset:0;background:rgba(200,0,0,.24);
   opacity:0;pointer-events:none;
@@ -401,6 +411,22 @@ body.page-glitch .crt{animation:page-glitch .1s steps(2) infinite;filter:invert(
   font-size:.68rem;letter-spacing:.16em;color:var(--dim);
   display:flex;align-items:center;gap:.5rem;white-space:nowrap;
 }
+/* Site theme switch — TERM / TIMES / FORUM. Swaps the whole site's look. */
+.theme-switch{
+  display:flex;align-items:center;gap:.25rem;
+  border:1px solid var(--line);border-radius:3px;overflow:hidden;
+  background:rgba(4,4,4,.45);
+}
+.theme-btn{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;
+  background:transparent;color:var(--dim);border:0;padding:.32rem .55rem;
+  cursor:pointer;transition:color .2s,background .2s;
+}
+.theme-btn:hover{color:var(--green);text-shadow:var(--glow-green)}
+.theme-btn.active{
+  color:var(--green);background:rgba(0,220,0,.1);
+  text-shadow:var(--glow-green);
+}
 .led{
   width:8px;height:8px;border-radius:50%;background:var(--green);
   box-shadow:var(--glow-green);animation:pulse 2s ease-in-out infinite;
@@ -697,10 +723,19 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
    border:1px solid var(--line);background:var(--panel);
    padding:clamp(1.2rem,3vw,2rem);
  }
- .story-kicker{
-   font-family:var(--vt);font-size:.85rem;letter-spacing:.22em;
-   color:var(--green);text-shadow:var(--glow-green);margin-bottom:1.1rem;
- }
+  .story-kicker{
+    font-family:var(--vt);font-size:.85rem;letter-spacing:.22em;
+    color:var(--green);text-shadow:var(--glow-green);margin-bottom:1.1rem;
+  }
+  .story-headline{
+    font-family:var(--vt);font-size:clamp(1rem,2.2vw,1.3rem);
+    color:var(--text);letter-spacing:.06em;line-height:1.3;
+    margin:-.4rem 0 1rem;
+  }
+  .story-rule{
+    height:1px;background:linear-gradient(90deg,var(--green-dim),transparent);
+    border:0;margin:1.4rem 0;
+  }
  .story-para{margin:0 0 1.4rem}
  .story-para p{margin:0 0 .9rem;color:#bcbcbc;line-height:1.8}
  .story-para p:last-child{margin-bottom:0}
@@ -2050,7 +2085,10 @@ body.paper .contents-link.active,
 body.paper .side-link.active{color:var(--green);background:transparent;border-bottom-color:var(--green);box-shadow:none;text-shadow:none;animation:none}
 body.paper .link-num{display:none}
 body.paper .nav-toggle{color:var(--green);border-color:var(--line-bright);background:var(--panel)}
-
+body.paper .theme-switch{background:var(--panel);border-color:var(--line-bright)}
+body.paper .theme-btn{color:#6b6150}
+body.paper .theme-btn:hover{color:var(--green)}
+body.paper .theme-btn.active{color:var(--green);background:rgba(58,125,68,.12);text-shadow:none}
 /* buttons, chips, tags: flat paper buttons */
 body.paper .btn,
 body.paper .asset-btn,
@@ -2299,6 +2337,10 @@ body.forum .hero h1{color:#5e1f1f;text-shadow:none}
 body.forum .led{animation:none;box-shadow:none}
 body.forum .nav{background:rgba(243,233,210,.97);border-bottom:2px solid #8a2b2b}
 body.forum .nav-brand{color:#5e1f1f;text-shadow:none;letter-spacing:.03em}
+body.forum .theme-switch{background:#fff8e7;border-color:#c0a878}
+body.forum .theme-btn{color:#8a744f}
+body.forum .theme-btn:hover{color:#8a2b2b}
+body.forum .theme-btn.active{color:#8a2b2b;background:#f3e9d2;text-shadow:none}
 body.forum .ticker{background:#8a2b2b;border:0}
 body.forum .ticker-item{color:#f3e9d2}
 body.forum .section-title,body.forum .t-title,body.forum .session-name,

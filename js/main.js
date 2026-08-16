@@ -40,6 +40,17 @@
 
   document.body.classList.add(PERF.low ? "perf-low" : "perf-high");
 
+  /* FX master switch — lets a player drop the static/CRT overlays (and their
+     cost) once the logs are unlocked. Persisted; the class is applied now so
+     the page loads calm if the player chose it. */
+  let fxEnabled = true;
+  (function initFxState() {
+    let saved = "on";
+    try { saved = localStorage.getItem("tqg-fx") || "on"; } catch (e) {}
+    fxEnabled = saved !== "off";
+    document.body.classList.toggle("no-fx", !fxEnabled);
+  })();
+
   const RAF = { paused: false };
   document.addEventListener("visibilitychange", () => { RAF.paused = document.hidden; });
 
@@ -1726,11 +1737,12 @@
   let noiseCtx = null;
   let noiseImg = null;
   let noiseTick = 0;
+  let noiseStop = null;
   function initNoise() {
     if (!noiseCnv) return;
     noiseCtx = noiseCnv.getContext("2d");
     sizeNoise();
-    timerLoop(frameNoise, PERF.noiseMs);
+    if (fxEnabled) noiseStop = timerLoop(frameNoise, PERF.noiseMs);
   }
   function sizeNoise() {
     const r = PERF.noiseRes;
@@ -1764,6 +1776,7 @@
   const ashCnv = $("#ash");
   let ashCtx = null;
   let ashParticles = [];
+  let ashStop = null;
   function sizeAsh() {
     if (!ashCnv) return;
     ashCnv.width = Math.max(1, Math.floor(window.innerWidth / 2));
@@ -1806,9 +1819,30 @@
     if (!ashCnv) return;
     ashCtx = ashCnv.getContext("2d");
     sizeAsh();
-    rafLoop(frameAsh);
+    if (fxEnabled) ashStop = rafLoop(frameAsh);
   }
   window.addEventListener("resize", sizeAsh);
+
+  /* Toggle the noise/ash/CRT overlays on or off. With FX off the frame loops
+     stop entirely (that is the lag savings), the canvases are cleared, and the
+     CRT overlay stack is hidden by the body.no-fx CSS rule. */
+  function setFxEnabled(on, persist) {
+    on = !!on;
+    fxEnabled = on;
+    if (persist) {
+      try { localStorage.setItem("tqg-fx", on ? "on" : "off"); } catch (e) {}
+    }
+    document.body.classList.toggle("no-fx", !on);
+    if (!on) {
+      if (noiseStop) { noiseStop(); noiseStop = null; }
+      if (ashStop) { ashStop(); ashStop = null; }
+      if (noiseCtx) noiseCtx.clearRect(0, 0, noiseCnv.width, noiseCnv.height);
+      if (ashCtx) ashCtx.clearRect(0, 0, ashCnv.width, ashCnv.height);
+    } else {
+      if (!noiseStop && noiseCtx) noiseStop = timerLoop(frameNoise, PERF.noiseMs);
+      if (!ashStop && ashCtx) ashStop = rafLoop(frameAsh);
+    }
+  }
 
   const SWAY_SELECTORS = [
     ".hero h1", ".hero-sub", ".hero-badge", ".hero-meta span",
@@ -2012,12 +2046,52 @@
     setStyle(TQG_STYLES.indexOf(saved) === -1 ? "dark" : saved, false);
   })();
 
+  /* Site-wide theme switch — TERM (auto) / TIMES (paper) / FORUM. When a calm
+     theme is pinned here it overrides the per-view calm theme everywhere, so
+     the whole site can read as the paper edition or the webring forum. */
+  let siteTheme = "";
+  const SITE_THEMES = ["", "paper", "forum"];
+  function applySiteTheme(name) {
+    siteTheme = SITE_THEMES.indexOf(name) === -1 ? "" : name;
+    try { localStorage.setItem("tqg-site-theme", siteTheme); } catch (e) {}
+    const active = $(".view.active");
+    const view = active ? active.dataset.view : "home";
+    setThemeMode(siteTheme || CALM_VIEWS[view] || "");
+    $$(".theme-btn").forEach((b) => {
+      const on = b.getAttribute("data-theme") === siteTheme;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+  }
+  (function initSiteTheme() {
+    let saved = "";
+    try { saved = localStorage.getItem("tqg-site-theme") || ""; } catch (e) {}
+    if (SITE_THEMES.indexOf(saved) === -1) saved = "";
+    siteTheme = saved;
+    if (saved === "paper" || saved === "forum") {
+      themeSavedStyle = tqgStyle;
+      document.body.classList.toggle("paper", saved === "paper");
+      document.body.classList.toggle("forum", saved === "forum");
+      document.body.classList.remove("style-retro", "style-crt", "style-old");
+    }
+    $$(".theme-btn").forEach((b) => {
+      const on = b.getAttribute("data-theme") === siteTheme;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+  })();
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("#themeSwitch .theme-btn");
+    if (!btn) return;
+    applySiteTheme(btn.getAttribute("data-theme") || "");
+  });
+
   const CALM_VIEWS = { story: "paper", forum: "forum" };
 
   function showView(name) {
     safeZone = name === "dev" || CALM_VIEWS[name] !== undefined;
     document.body.classList.toggle("quiet-view", safeZone);
-    setThemeMode(CALM_VIEWS[name] || "");
+    setThemeMode(siteTheme || CALM_VIEWS[name] || "");
     const target = $('[data-view="' + name + '"]');
     if (!target) return;
     $$(".view.active").forEach((v) => v.classList.remove("active"));
@@ -4379,6 +4453,7 @@
         "  COLOR <N>        GREEN AMBER RED BLUE MONO\n" +
         "  STYLE <N>        DARK RETRO CRT OLD\n" +
         "  AMBIENCE [ON|OFF]\n" +
+        (logsUnlocked ? "  FX <ON|OFF>      DROP OR RESTORE THE STATIC + CRT\n" : "") +
         "  WHISPER <T>      WHISPER ANYTHING\n" +
         "  TOAST <T>        SAY IT OUT LOUD\n" +
         "  TYPE <T>         TYPE IT FOR YOU IN THE BOX\n" +
@@ -4442,6 +4517,23 @@
       const n = (arg || "dark").toLowerCase();
       if (setStyle(n, true)) tType("STYLE: " + n.toUpperCase() + ".\nTHE SITE REBUILT ITSELF. IT REMEMBERS IT NOW.", "t-ok");
       else tType("UNKNOWN STYLE: " + arg + "\nTRY DARK, RETRO, CRT OR OLD.", "t-err");
+      return;
+    }
+    if (cmd === "fx" || cmd === "static" || cmd === "effects") {
+      tPrint(echo, "t-in");
+      if (!logsUnlocked) {
+        tType("THAT SWITCH IS IN THE ARCHIVE.\nUNLOCK THE LOGS FIRST — FOUR CHARACTERS, TYPED QUICKLY.", "t-err");
+        return;
+      }
+      if (/off|remove|drop|clear|clean/.test(rest)) {
+        setFxEnabled(false, true);
+        tType("STATIC AND CRT: OFF.\nTHE ROOM GOT QUIETER. IT WATCHES THE SAME.", "t-ok");
+      } else if (/on|restore|back|add/.test(rest)) {
+        setFxEnabled(true, true);
+        tType("STATIC AND CRT: ON.\nTHE FEED RETURNS. EVERYTHING IS AS IT WAS.", "t-in");
+      } else {
+        tType("FX IS " + (fxEnabled ? "ON" : "OFF") + ".\nTRY FX OFF OR FX ON.", "t-sys");
+      }
       return;
     }
     if (cmd === "ambience") {

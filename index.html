@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&family=Kaushan+Script&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=50">
+  <link rel="stylesheet" href="css/style.css?v=52">
   <script>
     (function () {
       var ua = navigator.userAgent, m, v = 0;
@@ -82,6 +82,11 @@
   <header class="nav" id="nav">
     <div class="nav-row">
       <a class="nav-brand" href="#home">TQG<span class="blink">_</span></a>
+      <div class="theme-switch" id="themeSwitch" role="group" aria-label="Site theme">
+        <button class="theme-btn active" data-theme="" type="button" aria-pressed="true">TERM</button>
+        <button class="theme-btn" data-theme="paper" type="button" aria-pressed="false">TIMES</button>
+        <button class="theme-btn" data-theme="forum" type="button" aria-pressed="false">FORUM</button>
+      </div>
       <div class="nav-right">
         <span class="amb-icon" id="ambIcon" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
@@ -595,10 +600,10 @@
 
     <section class="section view story-view" id="story" data-view="story">
       <div class="section-head reveal">
-        <h2 class="section-title"><span class="red">&gt;</span> THE YANGON TIMES — HOW A PRANK BECAME A GAME</h2>
+        <h2 class="section-title"><span class="red">&gt;</span> THE YANGON TIMES — A HISTORY OF THE GAME</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">The paper edition. No static, no sudden noises, no glitches — just how it all started.</p>
+      <p class="section-sub reveal">The paper edition. No static, no sudden noises, no glitches — just the record of how it all happened, edition by edition.</p>
 
       <div class="story-wrap">
         <div class="story-credits reveal" aria-hidden="true">
@@ -646,18 +651,57 @@
         <div class="story-body">
           <div class="story-masthead reveal">
             <p class="story-masthead-name">THE YANGON TIMES</p>
-            <p class="story-dateline">VOL. I, NO. 1 — THE CALM EDITION — EST. THE NIGHT OF THE PRANK</p>
+            <p class="story-dateline">VOL. I — THE HISTORY EDITION — EST. THE NIGHT OF THE PRANK</p>
           </div>
+
           <div class="story-card reveal">
-            <p class="story-kicker">THE DEV'S OWN WORDS</p>
+            <p class="story-kicker">MAY 2026</p>
+            <h3 class="story-headline">IT BEGAN AS A PRANK. THE FIRST BUILD WAS ROUGH.</h3>
             <div class="story-para">
-              <p>I originally made this game to prank my friend, Hazel.</p>
-              <p>The game uses a whole bag of tricks to make it look like it is hacking your computer — fake errors, fake terminals, things that seem to read themselves. It is all theatre, built for one purpose: to convince one person that their machine had turned on them.</p>
-              <p>I wanted to prank my friend with it.</p>
+              <p>Development started in May. The first build was rough — a handful of questions, fake errors, and a trick or two to make a machine seem like it had turned on its owner.</p>
+              <p>It was made to prank one friend, Hazel. It was never meant to ship. It shipped anyway.</p>
             </div>
+          </div>
+
+          <hr class="story-rule">
+
+          <div class="story-card reveal">
+            <p class="story-kicker">JULY 31, 2026</p>
+            <h3 class="story-headline">THE SITE GOES LIVE WITH THE GAME ITSELF</h3>
             <div class="story-para">
-              <p>Now, I am still working on this game.</p>
-              <p>What started as a prank gave me the confidence to make more games — and there are more to come.</p>
+              <p>The game and its website landed together — source code, downloads, an ambience toggle, a history section. The record of the archive began on the last day of July.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
+            <p class="story-kicker">AUGUST 1, 2026</p>
+            <h3 class="story-headline">THE REMASTERED EDITION ARRIVES</h3>
+            <div class="story-para">
+              <p>A remastered edition joined the classic: sessions written live, a macOS build, and the first Apple Silicon disk images. Two editions now shared one name.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
+            <p class="story-kicker">AUGUST 2, 2026</p>
+            <h3 class="story-headline">v2.02 — THE GAME LEARNED TO BREATHE</h3>
+            <div class="story-para">
+              <p>Ambient life arrived: drifting ash, a breathing vignette, a scan sweep, a typewriter caret. The site matched the game — and the 2013 LOGS archive was found.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
+            <p class="story-kicker">AUGUST 12, 2026</p>
+            <h3 class="story-headline">MORE SCARES. CLASSIC LINUX.</h3>
+            <div class="story-para">
+              <p>The classic edition gained a Linux build, and the horror grew teeth — GIF scares, more jumpscares, a trap download dressed as a friend. Support spread across platforms even as the fiction closed in.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
+            <p class="story-kicker">TODAY</p>
+            <h3 class="story-headline">THE PRANK KEEPS PAYING OFF</h3>
+            <div class="story-para">
+              <p>What started as a prank gave me the confidence to make more games. The Question Game, The Simpler Times, Bakugo's Location — and more to come.</p>
             </div>
             <p class="story-signoff">— neptune</p>
           </div>
@@ -1125,6 +1169,6 @@
   </div>
 
   <script src="js/config.js?v=51"></script>
-  <script src="js/main.js?v=51"></script>
+  <script src="js/main.js?v=52"></script>
 </body>
 </html>
