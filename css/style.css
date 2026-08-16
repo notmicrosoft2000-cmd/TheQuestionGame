@@ -1910,10 +1910,29 @@ a,button,input,textarea,select,.term-opt,.session,.stat,.contents-link,.t-entry,
 /* ---------- Paper edition (THE STORY transforms the whole site) ---------- */
 .paper-wipe{
   position:fixed;inset:0;z-index:9999;pointer-events:none;
-  transform:translateY(-101%);transition:transform .46s cubic-bezier(.7,0,.3,1);
+  transform:translateY(-101%) rotate(-.3deg);
+  transform-origin:50% 0;
+  transition:transform .54s cubic-bezier(.65,0,.3,1);
+  will-change:transform,filter;
 }
-.paper-wipe.go{transform:translateY(0)}
-.paper-wipe.out{transform:translateY(101%);transition:transform .46s cubic-bezier(.7,0,.3,1)}
+.paper-wipe::before{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% -30%,rgba(255,255,255,.6),rgba(255,255,255,0) 60%);
+}
+.paper-wipe.go{transform:translateY(0) rotate(0deg)}
+.paper-wipe.out{
+  transform:translateY(101%) rotate(.3deg);
+  transition:transform .56s cubic-bezier(.7,0,.25,1);
+}
+.paper-wipe.flash{animation:paper-flash .54s ease-out}
+@keyframes paper-flash{
+  0%{filter:brightness(3.6) saturate(0)}
+  100%{filter:brightness(1) saturate(1)}
+}
+@media (prefers-reduced-motion:reduce){
+  .paper-wipe,.paper-wipe.go,.paper-wipe.out{transition:none}
+  .paper-wipe.flash{animation:none}
+}
 
 body.paper{
   --bg:#efe9db;
@@ -2053,3 +2072,62 @@ body.paper .dev-copy{background:rgba(58,125,68,.06);border-color:var(--line-brig
 body.paper .dev-copy:hover{box-shadow:none}
 body.paper #musicButton{background:var(--panel);border-color:var(--line-bright);box-shadow:none}
 body.paper .side-panel{background:rgba(246,241,228,.99);border-left-color:var(--line)}
+
+/* ---------- Yangon Times — the paper edition ---------- */
+/* nav chip: paper look even inside the dark site */
+.contents-link.paper-link,
+.side-link.paper-link{
+  background:#efe9db;color:#2b2620;border:1px solid #b0a489;
+  font-family:Georgia,"Times New Roman",serif;font-weight:700;
+  letter-spacing:.09em;
+}
+.contents-link.paper-link:hover,
+.side-link.paper-link:hover{color:#3a7d44;border-color:#3a7d44;background:#f7f2e6}
+.contents-link.paper-link.active,
+.side-link.paper-link.active{color:#2b2620;border-color:#3a7d44;background:#efe9db;box-shadow:none;text-shadow:none;animation:none}
+body.paper .contents-link.paper-link,
+body.paper .side-link.paper-link{
+  background:#efe9db;color:#2b2620;border:1px solid #b0a489;padding:.3rem .7rem;letter-spacing:.09em;
+}
+body.paper .contents-link.paper-link.active,
+body.paper .side-link.paper-link.active{border-color:#3a7d44}
+
+/* newspaper masthead inside the story page */
+.story-masthead{
+  border-top:3px double #26221c;border-bottom:3px double #26221c;
+  padding:1.1rem 0;text-align:center;margin-bottom:1.5rem;
+  background:rgba(255,255,255,.4);
+}
+.story-masthead-name{
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:clamp(1.8rem,5vw,3.1rem);font-weight:900;
+  color:#26221c;letter-spacing:.12em;line-height:1;margin:0 0 .55rem;
+}
+.story-dateline{
+  font-family:Georgia,"Times New Roman",serif;font-size:.66rem;
+  letter-spacing:.2em;color:#7a705d;margin:0;
+}
+.story-card .story-para + .story-para{border-top:1px solid var(--line);padding-top:1.5rem;margin-top:1.5rem}
+.story-card .story-para:first-of-type p:first-child::first-letter{
+  font-family:Georgia,"Times New Roman",serif;font-weight:900;
+  font-size:3.2em;line-height:.8;float:left;padding:.02em .12em 0 0;color:#26221c;
+}
+
+/* ---------- Mobile + portrait: easier nav, nothing cut off ---------- */
+@media(max-width:920px){
+  .side-panel{
+    overscroll-behavior:contain;
+    padding-top:4.6rem;
+    padding-bottom:calc(1.4rem + env(safe-area-inset-bottom));
+  }
+  .side-link{
+    font-size:1.15rem;letter-spacing:.09em;padding:.65rem .8rem;
+    white-space:normal;overflow-wrap:break-word;word-break:break-word;
+  }
+}
+@media(max-width:600px){
+  .section-head{flex-direction:column;align-items:flex-start;gap:.4rem}
+  .section-line{width:100%;flex:none}
+  .hero h1{font-size:clamp(2.5rem,11.5vw,3.4rem)}
+  .contents-link.paper-link,.side-link.paper-link{font-size:.6rem}
+}

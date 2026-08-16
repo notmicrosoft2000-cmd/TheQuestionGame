@@ -1927,6 +1927,7 @@
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         wipe.classList.add("go");
+        wipe.classList.add("flash");
       });
     });
     clearTimeout(paperTimer);
@@ -1936,8 +1937,8 @@
       wipe.classList.add("out");
       setTimeout(() => {
         if (wipe.parentNode) wipe.parentNode.removeChild(wipe);
-      }, 460);
-    }, 460);
+      }, 560);
+    }, 540);
   }
 
   function showView(name) {
@@ -1973,6 +1974,12 @@
       e.preventDefault();
       showView(el.dataset.view);
     }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!document.body.classList.contains("panel-open")) return;
+    if (e.target.closest("#sidePanel, #navToggle")) return;
+    setPanel(false);
   });
 
   // ---------- Game-style keyboard navigation (TAB cycles, ENTER confirms) ----------
