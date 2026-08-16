@@ -115,18 +115,7 @@ button{font-family:inherit}
 @keyframes eyeblink{0%{opacity:0}30%{opacity:.95}70%{opacity:.95}100%{opacity:0}}
 
 main.blinkworld{filter:hue-rotate(175deg) saturate(1.3)}
-body.huepass{filter:hue-rotate(65deg) saturate(1.5)}
-body.flipwave{animation:flipwave-hue 1.6s steps(3) forwards}
-@keyframes flipwave-hue{
-  0%{filter:hue-rotate(0) saturate(1)}
-  30%{filter:hue-rotate(170deg) saturate(2.1)}
-  60%{filter:hue-rotate(300deg) saturate(1.7)}
-  100%{filter:hue-rotate(0) saturate(1)}
-}
-.flipped{
-  transform:scaleX(-1)!important;
-  transition:transform var(--flipd,900ms) steps(2);
-}
+body.huepass{filter:hue-rotate(45deg)}
 
 .scare{
   position:fixed;inset:0;z-index:9996;
@@ -423,8 +412,8 @@ body.page-glitch .crt{animation:page-glitch .1s steps(2) infinite;filter:invert(
 .amb-icon i:nth-child(2){animation-delay:.16s}
 .amb-icon i:nth-child(3){animation-delay:.32s}
 .amb-icon.playing{opacity:1;filter:drop-shadow(0 0 4px rgba(0,220,0,.6))}
- .amb-icon:not(.playing) i{animation-play-state:paused}
- @keyframes amb-bounce{0%,100%{height:25%}50%{height:100%}}
+.amb-icon:not(.playing) i{animation-play-state:paused}
+@keyframes amb-bounce{0%,100%{height:25%}50%{height:100%}}
 
  /* ---------- Floating music button ---------- */
  #musicButton{
@@ -638,7 +627,7 @@ body.loaded .hero h1:nth-of-type(2){transition-delay:.12s;animation-delay:2.5s}
   display:block;font-family:var(--vt);font-size:clamp(2.4rem,5vw,3.4rem);
   color:var(--green);line-height:1;text-shadow:var(--glow-green);
 }
- .stat-label{display:block;margin-top:.5rem;font-size:.62rem;letter-spacing:.18em;color:var(--dim)}
+.stat-label{display:block;margin-top:.5rem;font-size:.62rem;letter-spacing:.18em;color:var(--dim)}
 
  /* ---------- Intel ---------- */
  .intel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:1.2rem}
@@ -1189,20 +1178,23 @@ body.modal-open{overflow:hidden}
   box-shadow:0 0 40px rgba(255,0,0,.4);
 }
 
-.dvd-logo{
-  position:fixed;top:0;left:0;z-index:9972;pointer-events:none;
-  font-family:var(--vt);font-size:2.6rem;letter-spacing:.1em;
-  padding:.35rem .9rem;border:2px solid currentColor;
-  background:rgba(0,0,0,.75);will-change:transform,color;
-  text-shadow:0 0 14px currentColor;
-  animation:dvd-spin 2.4s linear infinite;
+.nav-brand.nudged{
+  position:relative;z-index:9972;
+  animation:tqg-nudge 2.4s ease-in-out;
 }
-.dvd-logo.gone{opacity:0;transition:opacity .5s}
-@keyframes dvd-spin{
-  0%{transform:rotate(-2deg)}
-  50%{transform:rotate(2deg)}
-  100%{transform:rotate(-2deg)}
+@keyframes tqg-nudge{
+  0%{transform:translate(0,0)}
+  18%{transform:translate(16vw,9vh) rotate(-3deg)}
+  42%{transform:translate(38vw,24vh) rotate(2deg)}
+  66%{transform:translate(12vw,15vh) rotate(-1deg)}
+  100%{transform:translate(0,0)}
 }
+
+.inline-link{
+  color:var(--green);text-decoration:underline;text-underline-offset:3px;
+  text-shadow:var(--glow-green);transition:color .2s;
+}
+.inline-link:hover{color:var(--red);text-shadow:var(--glow-red)}
 
 .ghost-nav{
   color:var(--red)!important;text-shadow:0 0 8px rgba(255,0,0,.6);

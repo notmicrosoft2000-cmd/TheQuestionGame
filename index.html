@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=37">
+  <link rel="stylesheet" href="css/style.css?v=38">
 </head>
 <body>
 
@@ -65,15 +65,12 @@
       <div class="nav-right">
         <span class="amb-icon" id="ambIcon" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
-        <button class="mterm-toggle" id="termToggle" type="button" aria-label="Toggle maintenance terminal">[ TERM ]</button>
         <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation">[ NAV ]</button>
       </div>
     </div>
     <div class="contents" id="contents">
       <a class="contents-link" href="#home"><span class="link-num">1</span> HOME</a>
       <a class="contents-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
-      <a class="contents-link" href="#simpler" data-merge>THE SIMPLER TIMES</a>
-      <a class="contents-link term-link" href="#terminal" data-term>TERMINAL</a>
       <a class="contents-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
       <a class="contents-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
       <a class="contents-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
@@ -93,8 +90,6 @@
     <div class="side-links">
       <a class="side-link" href="#home"><span class="link-num">1</span> HOME</a>
       <a class="side-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
-      <a class="side-link" href="#simpler" data-merge>THE SIMPLER TIMES</a>
-      <a class="side-link term-link" href="#terminal" data-term>TERMINAL</a>
       <a class="side-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
       <a class="side-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
       <a class="side-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
@@ -147,6 +142,7 @@
           <p>You sit down. It starts typing. One question at a time, until it is finished with you.</p>
           <p class="dim">A text-based horror experience. The game itself sends nothing from your machine.</p>
           <p class="about-quote">"Are you sitting comfortably?"</p>
+          <p class="dim">Before it was this, it was something calmer. <a class="inline-link" href="#simpler" data-merge>THE SIMPLER TIMES — 1993 →</a></p>
         </div>
         <div class="stats reveal">
           <div class="stat"><span class="stat-num" id="qCounter">100+</span><span class="stat-label">QUESTIONS TO ANSWER</span></div>
@@ -659,8 +655,8 @@
                 <span class="tag tag-green hidden" id="androidDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Android 8+ (ARM64). The classic edition as an <b>APK</b> — sideloaded, debug-signed, installed in seconds. The device remembers.</p>
-              <a class="platform-btn" id="dlAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
-              <p class="platform-status" id="dlAndroidStatus">READY — DIRECT LINK</p>
+              <a class="platform-btn" id="dlAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlAndroidStatus">READY — APK 26.5 MB</p>
             </div>
           </div>
 
@@ -678,6 +674,10 @@
 
           <div class="release-note mac-note android-note">
             Android: the APK is debug-signed, so your phone will ask you to allow "install unknown apps" and may warn about Play Protect. Tap <b>Install anyway</b> — it is the same classic edition, arm64 only, no permissions requested.
+          </div>
+
+          <div class="release-note">
+            NOT IN THE MOOD FOR ALL THIS? <a class="inline-link" href="#simpler" data-merge>ENTER THE SIMPLER TIMES — 1993</a>, the calmer build, instead.
           </div>
 
           <div class="release-warn">
@@ -735,8 +735,8 @@
                 <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Android 8+ (ARM64). The remastered edition on mobile is still being shrunk down. The classic APK above is the one that works.</p>
-              <a class="platform-btn" id="dlRemAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
-              <p class="platform-status" id="dlRemAndroidStatus">READY — DIRECT LINK</p>
+              <a class="platform-btn platform-miss" id="dlRemAndroid" aria-disabled="true" data-os="ANDROID">APK SOON</a>
+              <p class="platform-status" id="dlRemAndroidStatus">ANDROID BUILD NOT PUBLISHED FOR THIS EDITION</p>
             </div>
           </div>
 
@@ -952,7 +952,7 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=37"></script>
-  <script src="js/main.js?v=37"></script>
+  <script src="js/config.js?v=38"></script>
+  <script src="js/main.js?v=38"></script>
 </body>
 </html>

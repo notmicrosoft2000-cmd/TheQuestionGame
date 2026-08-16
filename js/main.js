@@ -108,7 +108,6 @@
       startRecTimer();
       startFlashLoop();
       startJumpscares();
-      startDvd();
       warmAmbience();
     };
 
@@ -1427,31 +1426,7 @@
 
   function bgHue() {
     document.body.classList.add("huepass");
-    setTimeout(() => document.body.classList.remove("huepass"), 1000);
-  }
-
-  let flipWaveLock = false;
-  function flipWave() {
-    if (flipWaveLock || document.hidden || GAME_OVERLAY) return;
-    flipWaveLock = true;
-    document.body.classList.add("huepass", "flipwave");
-    const pool = $$("main, section, .stat, .platform-card, .session, .release, .player, .timeline, .about-quote, .release-warn, .download-grid, .contents-link");
-    const picked = [];
-    for (let i = 0; i < 6 && pool.length; i++) {
-      const el = pool[Math.floor(Math.random() * pool.length)];
-      if (picked.indexOf(el) !== -1) continue;
-      picked.push(el);
-      el.classList.add("flipped");
-      el.style.setProperty("--flipd", (700 + Math.random() * 900).toFixed(0) + "ms");
-    }
-    setTimeout(() => {
-      picked.forEach((el) => {
-        el.classList.remove("flipped");
-        el.style.removeProperty("--flipd");
-      });
-      document.body.classList.remove("huepass", "flipwave");
-      flipWaveLock = false;
-    }, 1600);
+    setTimeout(() => document.body.classList.remove("huepass"), 280);
   }
 
   setInterval(() => {
@@ -1468,12 +1443,8 @@
   }, 7000);
   setInterval(() => {
     if (document.hidden || GAME_OVERLAY) return;
-    if (Math.random() < 0.16) bgHue();
-  }, 4500);
-  setInterval(() => {
-    if (document.hidden || GAME_OVERLAY) return;
-    if (Math.random() < 0.28) flipWave();
-  }, 6500);
+    if (Math.random() < 0.1) bgHue();
+  }, 6000);
 
   let sessionFourSpawned = false;
   function spawnSessionFour() {
@@ -1528,43 +1499,22 @@
     if (Math.random() < 0.35) navGhost();
   }, 30000);
 
-  function startDvd() {
-    const dvd = document.createElement("div");
-    dvd.className = "dvd-logo";
-    dvd.textContent = "TQG_";
-    dvd.setAttribute("aria-hidden", "true");
-    document.body.appendChild(dvd);
-    const colors = ["#f2ff00", "#00f5ff", "#ff00c8", "#ff3300", "#39ff14", "#ffffff"];
-    const rw = dvd.offsetWidth;
-    const rh = dvd.offsetHeight;
-    let x = rand(0, Math.max(1, innerWidth - rw));
-    let y = rand(0, Math.max(1, innerHeight - rh));
-    let vx = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
-    let vy = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 2.6);
-    let color = colors[Math.floor(Math.random() * colors.length)];
-    dvd.style.color = color;
-    function frame() {
-      if (!dvd.isConnected) return;
-      if (!document.hidden && !GAME_OVERLAY) {
-        x += vx; y += vy;
-        let hit = false;
-        if (x <= 0) { x = 0; vx = Math.abs(vx); hit = true; }
-        if (x + rw >= innerWidth) { x = innerWidth - rw; vx = -Math.abs(vx); hit = true; }
-        if (y <= 0) { y = 0; vy = Math.abs(vy); hit = true; }
-        if (y + rh >= innerHeight) { y = innerHeight - rh; vy = -Math.abs(vy); hit = true; }
-        if (hit) {
-          color = colors[Math.floor(Math.random() * colors.length)];
-          dvd.style.color = color;
-          sfx.type();
-        }
-        dvd.style.left = x.toFixed(1) + "px";
-        dvd.style.top = y.toFixed(1) + "px";
-      }
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
+  let tqgNudgeLock = false;
+  function tqgNudge() {
+    if (tqgNudgeLock || document.hidden || GAME_OVERLAY) return;
+    const brand = $(".nav-brand");
+    if (!brand) return;
+    tqgNudgeLock = true;
+    brand.classList.add("nudged");
+    setTimeout(() => {
+      brand.classList.remove("nudged");
+      tqgNudgeLock = false;
+    }, 2400);
   }
-
+  setInterval(() => {
+    if (document.hidden || GAME_OVERLAY) return;
+    if (Math.random() < 0.25) tqgNudge();
+  }, 12000);
 
   let strobeLock = false;
   const strobeWhite = document.createElement("div");
@@ -2316,7 +2266,7 @@
   }
 
   const FALLBACKS = {
-    classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz" },
+    classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz", apk: "TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" },
     remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
@@ -2355,12 +2305,16 @@
       if (dom.androidBtn) {
         if (apk) {
           wirePlatform(dom.androidBtn, dom.androidStatus, apk);
+        } else if (fb.apk) {
+          wireFallback(dom.androidBtn, dom.androidStatus, "ANDROID", downloadUrl(fb.tag, fb.apk));
         } else {
           const abtn = $(dom.androidBtn);
           const ast = $(dom.androidStatus);
           if (abtn) {
-            abtn.href = "https://github.com/" + REPO + "/releases";
-            abtn.textContent = "NO APK YET";
+            abtn.removeAttribute("href");
+            abtn.setAttribute("aria-disabled", "true");
+            abtn.classList.add("platform-miss");
+            abtn.textContent = "APK SOON";
             if (ast) setStatus(ast, "ANDROID BUILD NOT PUBLISHED FOR THIS EDITION", true);
           }
         }
@@ -2560,6 +2514,7 @@
   platformBtns.forEach((b) => {
     b.addEventListener("click", (e) => {
       e.preventDefault();
+      if (b.classList.contains("platform-miss") || !b.getAttribute("href")) return;
       const osAttr = (b.getAttribute("data-os") || "").toLowerCase();
       pendingUrl = b.getAttribute("href");
       pendingOs = osAttr.indexOf("mac") !== -1 ? "mac" : osAttr.indexOf("linux") !== -1 ? "linux" : osAttr.indexOf("android") !== -1 ? "android" : "win";
@@ -4197,7 +4152,6 @@
   const mterm = $("#mterm");
   const termOut = $("#termOut");
   const termInput = $("#termInput");
-  const termToggleBtn = $("#termToggle");
   let termOpen = false;
 
   function tEsc(s) {
@@ -4425,9 +4379,6 @@
       }
     });
   }
-  if (termToggleBtn) termToggleBtn.addEventListener("click", () => { termOpen ? termClose() : termOpenIt(); });
-  $$(".term-link").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); termOpen ? termClose() : termOpenIt(); }));
-
   const mtermHead = $("#mtermHead");
   const termCloseBtn = $("#termCloseBtn");
   const finePointer = window.matchMedia && window.matchMedia("(pointer: fine)").matches;
