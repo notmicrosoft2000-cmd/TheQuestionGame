@@ -4655,89 +4655,42 @@
     document.body.classList.add("loaded");
   });
 
-  /* ---------- Forum — GitHub Issues chat + uploads ---------- */
+  /* ---------- Forum — tokenless chat with like/dislike and threaded replies --- */
   const FC = window.FORUM_CONFIG || {};
-  let forumUser = null;
-  let forumToken = "";
-  try { forumUser = JSON.parse(localStorage.getItem("tqg-forum-user") || "null"); } catch (e) {}
-  try { forumToken = localStorage.getItem("tqg-forum-token") || ""; } catch (e) {}
+  let forumUsername = "";
+  try { forumUsername = localStorage.getItem("tqg-forum-username") || ""; } catch (e) {}
+  let forumReactions = {};
 
   const forumAuth = $("#forumAuth");
   const forumMsgs = $("#forumMsgs");
   const forumMsg = $("#forumMsg");
   const forumStatus = $("#forumStatus");
-  const forumTokenInput = $("#forumToken");
-  const forumTokenBox = $("#forumTokenBox");
   const forumAuthHint = $("#forumAuthHint");
-  const forumSignupForm = $("#forumSignupForm");
-  const forumLoginForm = $("#forumLoginForm");
-  const forumSignupName = $("#forumSignupName");
-  const forumSignupPass = $("#forumSignupPass");
-  const forumSignupPass2 = $("#forumSignupPass2");
-  const forumLoginName = $("#forumLoginName");
-  const forumLoginPass = $("#forumLoginPass");
+  const forumNameForm = $("#forumNameForm");
+  const forumNameInput = $("#forumNameInput");
+  const forumIdentity = $("#forumIdentity");
+  const forumIdentityName = $("#forumIdentityName");
+  const forumNameChange = $("#forumNameChange");
 
-  async function forumHash(pw, salt) {
-    const data = new TextEncoder().encode(salt + ":" + pw);
-    const buf = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-  function forumAcctKey(name) { return "tqg-forum-acct-" + name.toLowerCase(); }
-  function forumGetUser(name) {
-    try { return JSON.parse(localStorage.getItem(forumAcctKey(name)) || "null"); } catch (e) { return null; }
-  }
-  function forumSetSession(u) {
-    forumUser = u;
-    try { localStorage.setItem("tqg-forum-user", JSON.stringify(u)); } catch (e) {}
-    if (forumTokenBox) forumTokenBox.classList.remove("hidden");
-    if (forumAuthHint) forumAuthHint.textContent = u
-      ? "Logged in as " + u.name + ". Add or update your GitHub token to post and upload."
-      : "Posting identity comes from a GitHub token — your messages show your GitHub avatar and name.";
+  function forumEsc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function forumStatusMsg(t) {
     if (forumStatus) { forumStatus.textContent = t; forumStatus.classList.add("show"); }
   }
-
-  async function forumSignup(e) {
-    e.preventDefault();
-    const name = (forumSignupName.value || "").trim();
-    const pw = forumSignupPass.value || "";
-    const pw2 = forumSignupPass2.value || "";
-    if (pw !== pw2) { forumStatusMsg("PASSWORDS DO NOT MATCH."); return; }
-    if (!/^[A-Za-z0-9_\- ]{3,24}$/.test(name)) { forumStatusMsg("USERNAME MUST BE 3-24 CHARS: LETTERS, NUMBERS, _ - SPACE."); return; }
-    if (pw.length < 4) { forumStatusMsg("PASSWORD MUST BE AT LEAST 4 CHARACTERS."); return; }
-    if (forumGetUser(name)) { forumStatusMsg("THAT USERNAME IS TAKEN ON THIS DEVICE."); return; }
-    const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const hash = await forumHash(pw, salt);
-    const u = { name, salt, hash };
-    try { localStorage.setItem(forumAcctKey(name), JSON.stringify(u)); } catch (err) { forumStatusMsg("COULD NOT SAVE ACCOUNT."); return; }
-    forumSetSession(u);
-    forumSignupForm.reset();
-    forumStatusMsg("ACCOUNT CREATED. WELCOME, " + name.toUpperCase() + ".");
-    if (forumTokenInput) forumTokenInput.focus();
-  }
-
-  async function forumLogin(e) {
-    e.preventDefault();
-    const name = (forumLoginName.value || "").trim();
-    const pw = forumLoginPass.value || "";
-    const u = forumGetUser(name);
-    if (!u) { forumStatusMsg("NO ACCOUNT WITH THAT USERNAME ON THIS DEVICE."); return; }
-    const h = await forumHash(pw, u.salt);
-    if (h !== u.hash) { forumStatusMsg("WRONG PASSWORD."); return; }
-    forumSetSession(u);
-    forumLoginForm.reset();
-    forumStatusMsg("WELCOME BACK, " + u.name.toUpperCase() + ".");
-  }
-
-  function forumTokenSave() {
-    if (!forumTokenInput) return;
-    const t = forumTokenInput.value.trim();
-    if (!t) { forumStatusMsg("TYPE A TOKEN FIRST."); return; }
-    forumToken = t;
-    try { localStorage.setItem("tqg-forum-token", t); } catch (e) {}
-    forumTokenInput.value = "";
-    forumStatusMsg("TOKEN SAVED — YOU CAN NOW POST AND UPLOAD.");
+  function forumUpdateAuthUI() {
+    if (forumUsername) {
+      if (forumAuth) forumAuth.classList.add("logged-in");
+      if (forumIdentity) forumIdentity.classList.remove("hidden");
+      if (forumIdentityName) forumIdentityName.textContent = forumUsername;
+      if (forumNameForm) forumNameForm.classList.add("hidden");
+      if (forumAuthHint) forumAuthHint.textContent = "Logged in as " + forumUsername + ".";
+    } else {
+      if (forumAuth) forumAuth.classList.remove("logged-in");
+      if (forumIdentity) forumIdentity.classList.add("hidden");
+      if (forumNameForm) forumNameForm.classList.remove("hidden");
+      if (forumAuthHint) forumAuthHint.textContent = "No password. No token. Just pick a name and chat.";
+    }
   }
 
   async function forumApi(path, opts) {
@@ -4747,13 +4700,7 @@
     return body;
   }
 
-  // Anonymous guests read the static mirror committed by the forum-cache
-  // workflow (unlimited, no API rate limit). Logged-in users read the live
-  // GitHub API (5,000 req/hr with their token).
   async function forumRead() {
-    if (forumToken) {
-      return forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
-    }
     const cacheUrl = FC.raw + "/" + FC.owner + "/" + FC.repo + "/" + (FC.cacheBranch || "forum-cache") + "/" + (FC.cachePath || "forum-cache.json");
     const res = await fetch(cacheUrl);
     if (!res.ok) throw new Error("cache unavailable " + res.status);
@@ -4769,48 +4716,99 @@
     });
   }
 
+  async function forumReadReactions() {
+    try {
+      const url = FC.raw + "/" + FC.owner + "/" + FC.repo + "/main/" + (FC.reactionsPath || "forum-reactions.json");
+      const res = await fetch(url + "?t=" + Date.now());
+      if (!res.ok) return {};
+      return await res.json();
+    } catch (e) { return {}; }
+  }
+
+  async function forumWriteReactions(reactions) {
+    const token = FC.botToken;
+    if (!token) return;
+    const path = FC.reactionsPath || "forum-reactions.json";
+    let sha = null;
+    try {
+      const getRes = await fetch(FC.api + "/repos/" + FC.owner + "/" + FC.repo + "/contents/" + path, {
+        headers: { "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json" }
+      });
+      if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+    } catch (e) {}
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(reactions, null, 2))));
+    const payload = { message: "Update forum reactions", content: content, branch: FC.branch };
+    if (sha) payload.sha = sha;
+    await fetch(FC.api + "/repos/" + FC.owner + "/" + FC.repo + "/contents/" + path, {
+      method: "PUT",
+      headers: { "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+
   async function forumLoad() {
-    if (!forumMsgs || !FC.channelIssue) return;
+    if (!forumMsgs) return;
     forumStatusMsg("LOADING...");
     try {
       const comments = await forumRead();
+      forumReactions = await forumReadReactions();
       forumRender(comments || []);
-      if (forumToken) forumStatusMsg("");
     } catch (err) {
-      // Fall back to the live API even for guests if the mirror is missing.
-      try {
-        const comments = await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments?per_page=100");
-        forumRender(comments || []);
-        forumStatusMsg("");
-      } catch (err2) {
-        forumStatusMsg("COULDN'T REACH THE FORUM: " + err.message);
-      }
+      forumStatusMsg("COULDN'T REACH THE FORUM: " + err.message);
     }
+  }
+
+  function forumParseComment(c) {
+    const body = c.body || "";
+    const who = (c.user && c.user.login) ? c.user.login : "GHOST";
+    const when = new Date(c.created_at).toLocaleString();
+    let parentId = null;
+    let text = body;
+    const parentMatch = body.match(/^>(\d+)\n/);
+    if (parentMatch) { parentId = parentMatch[1]; text = body.slice(parentMatch[0].length); }
+    text = text.replace(/^\*\*[^*]+:\*\*\s*/, "");
+    return { id: String(c.id), who, when, text, parentId };
   }
 
   function forumRender(comments) {
     forumMsgs.innerHTML = "";
-    const list = comments.slice().reverse();
-    if (!list.length) {
-      forumMsgs.innerHTML = '<p class="forum-empty">NO MESSAGES YET — BE THE FIRST.</p>';
-    }
-    list.forEach((c) => {
-      const div = document.createElement("div");
-      div.className = "forum-msg";
-      const who = (c.user && c.user.login) ? c.user.login : "GHOST";
-      const avatar = c.user && c.user.avatar_url;
-      const when = new Date(c.created_at).toLocaleString();
-      div.innerHTML =
-        '<div class="forum-msg-head">' +
-        (avatar ? '<img class="forum-avatar" src="' + avatar + '" alt="" loading="lazy">' : "") +
-        '<span class="forum-who">' + who + "</span>" +
-        '<span class="forum-when">' + when + "</span></div>" +
-        '<div class="forum-msg-body">' + forumRenderBody(c.body || "") + "</div>";
-      forumMsgs.appendChild(div);
+    const parsed = comments.map(forumParseComment);
+    const byId = {};
+    parsed.forEach(function (msg) { byId[msg.id] = { id: msg.id, who: msg.who, when: msg.when, text: msg.text, replies: [] }; });
+    const roots = [];
+    parsed.forEach(function (msg) {
+      if (msg.parentId && byId[msg.parentId]) byId[msg.parentId].replies.push(byId[msg.id]);
+      else roots.push(byId[msg.id]);
     });
-    const count = $("#forumMsgCount");
-    if (count) count.textContent = list.length + " POST" + (list.length === 1 ? "" : "S");
+    roots.sort(function (a, b) { return new Date(b.when) - new Date(a.when); });
+    if (!roots.length) forumMsgs.innerHTML = '<p class="forum-empty">NO MESSAGES YET — BE THE FIRST.</p>';
+    roots.forEach(function (msg) { forumMsgs.appendChild(forumRenderMsg(msg, 0)); });
+    var count = $("#forumMsgCount");
+    if (count) count.textContent = parsed.length + " POST" + (parsed.length === 1 ? "" : "S");
     forumMsgs.scrollTop = forumMsgs.scrollHeight;
+  }
+
+  function forumRenderMsg(msg, depth) {
+    var div = document.createElement("div");
+    div.className = "forum-msg" + (depth > 0 ? " forum-msg-reply" : "");
+    div.style.marginLeft = Math.min(depth * 1.2, 3.6) + "rem";
+    var r = forumReactions[msg.id] || { likes: 0, dislikes: 0 };
+    div.innerHTML =
+      '<div class="forum-msg-head">' +
+      '<span class="forum-who">' + forumEsc(msg.who) + "</span>" +
+      '<span class="forum-when">' + msg.when + "</span></div>" +
+      '<div class="forum-msg-body">' + forumRenderBody(msg.text) + "</div>" +
+      '<div class="forum-msg-actions">' +
+      '<button class="forum-action forum-like-btn" data-id="' + msg.id + '">&#x1F44D; ' + (r.likes || 0) + "</button>" +
+      '<button class="forum-action forum-dislike-btn" data-id="' + msg.id + '">&#x1F44E; ' + (r.dislikes || 0) + "</button>" +
+      '<button class="forum-action forum-reply-btn" data-id="' + msg.id + '">REPLY</button>' +
+      "</div>" +
+      '<div class="forum-replies" data-parent="' + msg.id + '"></div>';
+    var repliesContainer = div.querySelector(".forum-replies");
+    msg.replies.sort(function (a, b) { return new Date(a.when) - new Date(b.when); });
+    msg.replies.forEach(function (reply) { repliesContainer.appendChild(forumRenderMsg(reply, depth + 1)); });
+    if (!msg.replies.length) repliesContainer.classList.add("hidden");
+    return div;
   }
 
   function forumRenderBody(text) {
@@ -4818,96 +4816,106 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
       .replace(/`([^`]+)`/g, "<code>$1</code>")
-      .split("\n").map((line) =>
-        line.replace(/https?:\/\/[^\s]+/g, (u) => {
-          if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(u)) {
+      .split("\n").map(function (line) {
+        return line.replace(/https?:\/\/[^\s]+/g, function (u) {
+          if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(u))
             return '<a href="' + u + '" target="_blank" rel="noopener"><img class="forum-img" src="' + u + '" alt="attachment" loading="lazy"></a>';
-          }
           return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>";
-        })
-      ).join("<br>");
+        });
+      }).join("<br>");
   }
 
-  async function forumSend(text) {
-    const body = String(text !== undefined ? text : (forumMsg ? forumMsg.value : "")).trim();
+  async function forumSend(text, parentId) {
+    var body = String(text !== undefined ? text : (forumMsg ? forumMsg.value : "")).trim();
     if (!body) return;
-    if (!forumUser) { forumStatusMsg("SIGN UP OR LOG IN FIRST."); return; }
-    if (!forumToken) { forumStatusMsg("ADD YOUR GITHUB TOKEN TO POST."); return; }
+    if (!forumUsername) { forumStatusMsg("PICK A NAME FIRST."); return; }
+    var token = FC.botToken;
+    if (!token) { forumStatusMsg("NO BOT TOKEN CONFIGURED."); return; }
+    var msgBody = "**" + forumUsername + ":** " + body;
+    if (parentId) msgBody = ">" + parentId + "\n" + msgBody;
     try {
       await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/issues/" + FC.channelIssue + "/comments", {
         method: "POST",
-        headers: {
-          "Authorization": "Bearer " + forumToken,
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ body: "**" + forumUser.name + ":** " + body })
+        headers: { "Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({ body: msgBody })
       });
       if (forumMsg) forumMsg.value = "";
+      forumStatusMsg("SENT.");
       forumLoad();
     } catch (err) {
-      forumStatusMsg("POST FAILED: " + err.message + ". CHECK THE TOKEN SCOPES.");
+      forumStatusMsg("POST FAILED: " + err.message);
     }
   }
 
-  async function forumUpload(file) {
-    if (!file) return;
-    if (!forumUser) { forumStatusMsg("SIGN UP OR LOG IN FIRST."); return; }
-    if (!forumToken) { forumStatusMsg("ADD YOUR GITHUB TOKEN TO UPLOAD."); return; }
-    if (file.size > 10 * 1024 * 1024) { forumStatusMsg("MAX 10 MB PER FILE."); return; }
-    forumStatusMsg("UPLOADING " + file.name.toUpperCase() + "...");
-    const base64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result).split(",")[1]);
-      r.onerror = rej;
-      r.readAsDataURL(file);
+  async function forumReact(commentId, field) {
+    if (!FC.botToken) { forumStatusMsg("NO BOT TOKEN."); return; }
+    if (!forumUsername) { forumStatusMsg("PICK A NAME FIRST."); return; }
+    forumReactions[commentId] = forumReactions[commentId] || { likes: 0, dislikes: 0 };
+    forumReactions[commentId][field] = (forumReactions[commentId][field] || 0) + 1;
+    await forumWriteReactions(forumReactions);
+    forumMsgs.querySelectorAll(".forum-like-btn,.forum-dislike-btn").forEach(function (btn) {
+      if (btn.dataset.id === commentId) {
+        var r = forumReactions[commentId] || {};
+        btn.innerHTML = (field === "likes" ? "&#x1F44D; " : "&#x1F44E; ") + (r[field] || 0);
+      }
     });
-    const path = FC.uploadsPath + "/" + Date.now() + "-" + String(file.name).replace(/[^\w.\- ]/g, "_");
-    try {
-      await forumApi("/repos/" + FC.owner + "/" + FC.repo + "/contents/" + path, {
-        method: "PUT",
-        headers: {
-          "Authorization": "Bearer " + forumToken,
-          "Accept": "application/vnd.github+json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ message: "Forum upload: " + file.name, content: base64, branch: FC.branch })
-      });
-      const url = FC.raw + "/" + FC.owner + "/" + FC.repo + "/" + FC.branch + "/" + path;
-      forumStatusMsg("UPLOADED. POSTING LINK...");
-      forumSend("shared " + file.name + "\n" + url);
-    } catch (err) {
-      forumStatusMsg("UPLOAD FAILED: " + err.message + ". TOKEN NEEDS CONTENTS:WRITE.");
-    }
   }
 
-  if (forumAuth && forumSignupForm && forumLoginForm) {
-    const tabSignup = $("#forumTabSignup");
-    const tabLogin = $("#forumTabLogin");
-    if (tabSignup) tabSignup.addEventListener("click", () => {
-      tabSignup.classList.add("active"); tabLogin.classList.remove("active");
-      forumLoginForm.classList.add("hidden"); forumSignupForm.classList.remove("hidden");
+  function forumOpenReply(parentId) {
+    forumMsgs.querySelectorAll(".forum-reply-form").forEach(function (f) { f.remove(); });
+    var repliesDiv = forumMsgs.querySelector('.forum-replies[data-parent="' + parentId + '"]');
+    if (!repliesDiv) return;
+    repliesDiv.classList.remove("hidden");
+    var form = document.createElement("div");
+    form.className = "forum-reply-form";
+    form.innerHTML =
+      '<input type="text" class="forum-reply-input" maxlength="1000" placeholder="type a reply...">' +
+      '<button type="button" class="forum-reply-send">POST</button>' +
+      '<button type="button" class="forum-reply-cancel">X</button>';
+    repliesDiv.appendChild(form);
+    var input = form.querySelector(".forum-reply-input");
+    input.focus();
+    form.querySelector(".forum-reply-send").addEventListener("click", function () { forumSend(input.value, parentId); });
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); forumSend(input.value, parentId); } });
+    form.querySelector(".forum-reply-cancel").addEventListener("click", function () { form.remove(); });
+  }
+
+  /* --- wire up --- */
+  if (forumNameForm) {
+    forumNameForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = (forumNameInput ? forumNameInput.value : "").trim();
+      if (!/^[A-Za-z0-9_\- ]{2,24}$/.test(name)) { forumStatusMsg("USERNAME: 2-24 CHARS, LETTERS, NUMBERS, _ - SPACE."); return; }
+      forumUsername = name;
+      try { localStorage.setItem("tqg-forum-username", name); } catch (e) {}
+      forumUpdateAuthUI();
+      forumStatusMsg("NAME SET: " + name.toUpperCase() + ".");
     });
-    if (tabLogin) tabLogin.addEventListener("click", () => {
-      tabLogin.classList.add("active"); tabSignup.classList.remove("active");
-      forumSignupForm.classList.add("hidden"); forumLoginForm.classList.remove("hidden");
+  }
+  if (forumNameChange) {
+    forumNameChange.addEventListener("click", function () {
+      forumUsername = "";
+      try { localStorage.removeItem("tqg-forum-username"); } catch (e) {}
+      forumUpdateAuthUI();
+      if (forumNameInput) forumNameInput.value = "";
     });
-    forumSignupForm.addEventListener("submit", forumSignup);
-    forumLoginForm.addEventListener("submit", forumLogin);
-    const tokenSave = $("#forumTokenSave");
-    if (tokenSave) tokenSave.addEventListener("click", forumTokenSave);
-    if (forumUser) forumSetSession(forumUser);
+  }
+  if (forumMsgs) {
+    forumMsgs.addEventListener("click", function (e) {
+      var likeBtn = e.target.closest(".forum-like-btn");
+      if (likeBtn) { forumReact(likeBtn.dataset.id, "likes"); return; }
+      var dislikeBtn = e.target.closest(".forum-dislike-btn");
+      if (dislikeBtn) { forumReact(dislikeBtn.dataset.id, "dislikes"); return; }
+      var replyBtn = e.target.closest(".forum-reply-btn");
+      if (replyBtn) { forumOpenReply(replyBtn.dataset.id); return; }
+    });
   }
   if (forumMsg) {
-    const sendBtn = $("#forumSend");
-    if (sendBtn) sendBtn.addEventListener("click", () => forumSend());
-    forumMsg.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); forumSend(); }
-    });
+    var sendBtn = $("#forumSend");
+    if (sendBtn) sendBtn.addEventListener("click", function () { forumSend(); });
+    forumMsg.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); forumSend(); } });
   }
-  const fileInput = $("#forumFile");
-  if (fileInput) fileInput.addEventListener("change", (e) => forumUpload(e.target.files && e.target.files[0]));
-  const refreshBtn = $("#forumRefresh");
+  var refreshBtn = $("#forumRefresh");
   if (refreshBtn) refreshBtn.addEventListener("click", forumLoad);
-  if (forumTokenInput && forumToken) forumTokenInput.placeholder = "TOKEN SAVED — CLEAR TO CHANGE";
+  forumUpdateAuthUI();
 })();

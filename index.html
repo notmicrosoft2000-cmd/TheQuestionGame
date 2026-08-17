@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&family=Kaushan+Script&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=52">
+  <link rel="stylesheet" href="css/style.css?v=53">
   <script>
     (function () {
       var ua = navigator.userAgent, m, v = 0;
@@ -763,42 +763,22 @@
         <h2 class="section-title"><span class="red">&gt;</span> The Forum</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">A friendly webring corner. No static, no sudden noises, no glitches — just people, chat, and files. Powered by GitHub Issues.</p>
+      <p class="section-sub reveal">A friendly webring corner. No static, no sudden noises, no glitches — just people, chat, and files.</p>
 
       <div class="forum-wrap reveal">
         <div class="forum-auth" id="forumAuth">
-          <div class="forum-auth-tabs">
-            <button class="forum-auth-tab active" id="forumTabSignup" type="button">SIGN UP</button>
-            <button class="forum-auth-tab" id="forumTabLogin" type="button">LOG IN</button>
-          </div>
-          <form class="forum-auth-form" id="forumSignupForm">
+          <div class="forum-auth-head">CLAIM A NAME</div>
+          <form class="forum-auth-form" id="forumNameForm">
             <label>USERNAME
-              <input type="text" id="forumSignupName" autocomplete="username" maxlength="24" spellcheck="false" required>
+              <input type="text" id="forumNameInput" autocomplete="off" maxlength="24" spellcheck="false" placeholder="pick a name..." required>
             </label>
-            <label>PASSWORD
-              <input type="password" id="forumSignupPass" autocomplete="new-password" maxlength="128" required>
-            </label>
-            <label>REPEAT PASSWORD
-              <input type="password" id="forumSignupPass2" autocomplete="new-password" maxlength="128" required>
-            </label>
-            <button type="submit">CREATE ACCOUNT</button>
+            <button type="submit" id="forumNameBtn">SET NAME</button>
           </form>
-          <form class="forum-auth-form hidden" id="forumLoginForm">
-            <label>USERNAME
-              <input type="text" id="forumLoginName" autocomplete="username" maxlength="24" spellcheck="false" required>
-            </label>
-            <label>PASSWORD
-              <input type="password" id="forumLoginPass" autocomplete="current-password" maxlength="128" required>
-            </label>
-            <button type="submit">LOG IN</button>
-          </form>
-          <p class="forum-hint" id="forumAuthHint">Guests browse from an auto-refreshed mirror — no token needed to read. Posting uses a GitHub token: your messages show your GitHub avatar and name.</p>
-          <div class="forum-token hidden" id="forumTokenBox">
-            <label>GITHUB TOKEN <span class="forum-token-scope">(fine-grained: Issues read/write + Contents read/write on this repo)</span>
-              <input type="password" id="forumToken" autocomplete="off" placeholder="github_pat_..." spellcheck="false">
-            </label>
-            <button type="button" id="forumTokenSave">SAVE TOKEN</button>
-            <span class="forum-token-note">Stored in your browser only — never sent anywhere except GitHub's API.</span>
+          <p class="forum-hint" id="forumAuthHint">No password. No token. Just pick a name and chat.</p>
+          <div class="forum-identity hidden" id="forumIdentity">
+            <span class="forum-identity-label">LOGGED IN AS</span>
+            <span class="forum-identity-name" id="forumIdentityName"></span>
+            <button type="button" class="forum-identity-change" id="forumNameChange">CHANGE</button>
           </div>
         </div>
 
@@ -811,7 +791,6 @@
           <div class="forum-compose">
             <input type="text" id="forumMsg" maxlength="1000" placeholder="type a message..." aria-label="Message">
             <button type="button" id="forumSend">POST</button>
-            <label class="forum-upload" id="forumUploadLabel">ATTACH<input type="file" id="forumFile" hidden></label>
             <button type="button" id="forumRefresh">REFRESH</button>
           </div>
           <div class="forum-status" id="forumStatus">LOADING...</div>
@@ -1168,7 +1147,7 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=51"></script>
-  <script src="js/main.js?v=52"></script>
+  <script src="js/config.js?v=53"></script>
+  <script src="js/main.js?v=53"></script>
 </body>
 </html>

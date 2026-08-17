@@ -17,6 +17,8 @@ window.FORUM_CONFIG = {
   branch: "main",
   cacheBranch: "forum-cache",
   cachePath: "forum-cache.json",
+  reactionsPath: "forum-reactions.json",
   api: "https://api.github.com",
-  raw: "https://raw.githubusercontent.com"
+  raw: "https://raw.githubusercontent.com",
+  botToken: ""
 };
