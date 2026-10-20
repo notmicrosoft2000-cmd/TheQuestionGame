@@ -3,7 +3,7 @@ import platform
 import sys
 
 APP_NAME = "The Question Game Remastered"
-VERSION = "3.0.2"
+VERSION = "4.0.0"
 
 # --- AI providers ------------------------------------------------------------
 # Everything here is FREE — no paid key is ever required:
@@ -151,10 +151,10 @@ AI_SCARE_NAMES = [
 WINDOW_W, WINDOW_H = 800, 600
 WINDOW_LOCKED = False       # False = normal resizable frame (drag the edges)
 WINDOW_MIN_W, WINDOW_MIN_H = 640, 480
-WINDOW_MAX_W, WINDOW_MAX_H = 1600, 1200   # deliberately below 1080p: no fullscreen
-# The window can be stretched, but never fullscreen: there is no F11 / Alt+Enter
-# handler, the frame is a plain RESIZABLE window, and the ceiling above stops it
-# from swallowing the whole desktop. SDL's FULLSCREEN flags are never used.
+WINDOW_MAX_W, WINDOW_MAX_H = 3840, 2160   # allow dynamic scaling to any reasonable size; no fullscreen
+# The window can be stretched to any size, recommended to play in window mode.
+# There is no F11 / Alt+Enter handler, the frame is a plain RESIZABLE window.
+# SDL's FULLSCREEN flags are never used.
 BLOCK_CLOSE_ATTEMPTS = True
 CLOSE_RESIST_MAX = 30   # attempts before the constant-drift "you live here now" phase
 WEBCAM_DURATION = 20

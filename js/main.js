@@ -2,7 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REMASTER_TAG = "v3.0.2-remastered";
+  const REMASTER_TAG = "v4.0.0-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
