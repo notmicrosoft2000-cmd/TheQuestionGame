@@ -29,3 +29,8 @@ buildozer.spec
 *.apk
 p4a-recipes/
 cmdtools.*
+
+# The Question Game relay — NEVER commit real keys
+server/relay.env
+server/*.env
+!server/relay.env.example
