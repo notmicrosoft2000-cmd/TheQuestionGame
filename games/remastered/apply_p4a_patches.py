@@ -22,26 +22,38 @@ Current patches:
    --python-version, --platform=<android tags>. Verified equivalent to
    upstream behaviour: pip only unpacks the wheel into --target.
 
+2. `make_tar` directory modes in private.tar
+   `make_tar` writes directory entries with `tarfile.TarInfo(dir)` and never
+   sets a mode, so they inherit TarInfo's default 0o644 — `drw-r--r--`. A
+   directory without the execute bit cannot be traversed, so `tar xf
+   private.tar` on a build host extracts an unreadable tree and any attempt to
+   run or inspect the packaged app from it fails with confusing
+   `ModuleNotFoundError` / `Permission denied` errors (the Java extractor on
+   device ignores tar modes, which is why the APK still runs — this patch only
+   makes the archive honest and debuggable). p4a's own troubleshooting docs
+   tell you to extract private.tar, so the modes should be sane.
+
 Run:  ~/.myenv/bin/python apply_p4a_patches.py
 """
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-P4A_BUILD_PY = os.path.join(
+P4A_ROOT = os.path.join(
     HERE, ".buildozer", "android", "platform",
-    "python-for-android", "pythonforandroid", "build.py",
+    "python-for-android", "pythonforandroid",
 )
 
-MARKER = "Cross-platform aware install."
-
-OLD = r'''            shprint(sh.bash, '-c', (
+PIP_PATCH = dict(
+    path=os.path.join(P4A_ROOT, "build.py"),
+    marker="Cross-platform aware install.",
+    name="cross-platform pip install for resolved wheels",
+    old=r'''            shprint(sh.bash, '-c', (
                 "venv/bin/pip " +
                 "install -v --target '{0}' --no-deps -r requirements.txt"
             ).format(ctx.get_site_packages_dir(arch).replace("'", "'\"'\"'")),
-                    _env=copy.copy(env))'''
-
-NEW = r'''            # Cross-platform aware install. requirements.txt can pin wheels that
+                    _env=copy.copy(env))''',
+    new=r'''            # Cross-platform aware install. requirements.txt can pin wheels that
             # the resolver picked for the *target* platform (e.g. an
             # android_24_arm64_v8a charset-normalizer wheel), and host pip
             # rejects those with "... is not a supported wheel on this platform"
@@ -61,29 +73,61 @@ NEW = r'''            # Cross-platform aware install. requirements.txt can pin w
                 "install -v --target '{0}' {1} -r requirements.txt"
             ).format(ctx.get_site_packages_dir(arch).replace("'", "'\"'\"'"),
                      " ".join(pip_flags)),
-                    _env=copy.copy(env))'''
+                    _env=copy.copy(env))''',
+)
+
+TAR_PATCH = dict(
+    path=os.path.join(P4A_ROOT, "bootstraps", "common", "build", "build.py"),
+    marker="Directories need the execute bit",
+    name="private.tar directory modes",
+    old='''                tinfo = tarfile.TarInfo(d)
+                tinfo.type = tarfile.DIRTYPE
+                clean(tinfo)''',
+    new='''                tinfo = tarfile.TarInfo(d)
+                tinfo.type = tarfile.DIRTYPE
+                # Directories need the execute bit to be traversable. TarInfo
+                # defaults to 0o644, which produced drw-r--r-- entries: harmless
+                # on device (the Java extractor ignores tar modes) but it made
+                # `tar xf private.tar` extract an unreadable tree, breaking the
+                # debugging workflow p4a's docs recommend.
+                tinfo.mode = 0o700
+                clean(tinfo)''',
+)
+
+PATCHES = [PIP_PATCH, TAR_PATCH]
+
+
+def apply_patch(patch):
+    path = patch["path"]
+    if not os.path.exists(path):
+        print("p4a not cloned yet (%s)" % path)
+        print("Buildozer clones it on first run; re-run this script after that, "
+              "before the build stage.")
+        return None
+    with open(path, "r", encoding="utf-8") as fh:
+        src = fh.read()
+    if patch["marker"] in src:
+        return "already applied"
+    if patch["old"] not in src:
+        print("WARNING: %s does not match the expected text — the clone may be "
+              "a different p4a version. Nothing patched for %r."
+              % (path, patch["name"]), file=sys.stderr)
+        return "MISMATCH"
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(src.replace(patch["old"], patch["new"], 1))
+    print("patched p4a: %s" % patch["name"])
+    return "patched"
 
 
 def main():
-    if not os.path.exists(P4A_BUILD_PY):
-        print("p4a not cloned yet (%s)" % P4A_BUILD_PY)
-        print("Buildozer clones it on first run; re-run this script after that, "
-              "before the pip-install stage.")
-        return 0
-    with open(P4A_BUILD_PY, "r", encoding="utf-8") as fh:
-        src = fh.read()
-    if MARKER in src:
-        print("p4a patches already applied")
-        return 0
-    if OLD not in src:
-        print("WARNING: p4a build.py does not match the expected text — the "
-              "clone may be a different p4a version. Nothing patched.",
-              file=sys.stderr)
-        return 1
-    with open(P4A_BUILD_PY, "w", encoding="utf-8") as fh:
-        fh.write(src.replace(OLD, NEW, 1))
-    print("patched p4a: cross-platform pip install for resolved wheels")
-    return 0
+    failed = False
+    for patch in PATCHES:
+        result = apply_patch(patch)
+        if result is None:
+            return 0
+        if result == "MISMATCH":
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
