@@ -19,6 +19,10 @@ from . import scares
 from . import script
 from . import ui
 
+# Touch/fullscreen platform switch (see config.IS_ANDROID). Kept as a module
+# global so tests can flip it and drive the touch paths headlessly.
+IS_ANDROID = config.IS_ANDROID
+
 ABOUT_VARIATIONS = [
     "ABOUT THE SIMULATION\n\nThis software interacts with your local environment metrics to generate specialized psychological response loops.\n\nIt reads hardware profiles and stores transient user configuration states in a persistent local file.\n\nYour answers are remembered.",
     "ABOUT THIS EXPERIENCE\n\nA behavioral analysis program masquerading as a game.\n\nYour responses are logged, timed, and cross-referenced.\n\nThe longer you play, the more it knows.\n\nThis file is persistent. It does not forget.",
@@ -84,9 +88,21 @@ class Game:
         # but never becomes fullscreen — there is no F11/Alt+Enter handler and
         # pygame.FULLSCREEN is never used anywhere in this build.
         flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
-        self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
-        if not config.WINDOW_LOCKED:
-            self._apply_resize_limits()
+        try:
+            if IS_ANDROID:
+                info = pygame.display.Info()
+                self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+            else:
+                self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+                if not config.WINDOW_LOCKED:
+                    self._apply_resize_limits()
+        except Exception:
+            self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+            if not config.WINDOW_LOCKED:
+                try:
+                    self._apply_resize_limits()
+                except Exception:
+                    pass
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -110,6 +126,8 @@ class Game:
         self.last_type_time = 0
         self.question_start_time = 0
         self.selected_answer = 0
+        # Tap targets recorded while drawing; hit-tested by _handle_touch.
+        self._touch_zones = []
         self.wait_start_time = 0
         self.pending_exit = False
         self.exit_message_at = 0
@@ -168,6 +186,10 @@ class Game:
 
         self.about_text = random.choice(ABOUT_VARIATIONS)
         self.help_text = random.choice(HELP_VARIATIONS)
+        if IS_ANDROID:
+            self.help_text += ("\n\nON THIS DEVICE\n\nTap an option — it selects and confirms in one "
+                               "gesture, no TAB/ENTER needed.\nSwipe back (or use the system Back "
+                               "button) to leave a screen.\n\nANSWER ALL QUESTIONS TRUTHFULLY.")
 
         self.starfield = ui.build_starfield(config.WINDOW_W, config.WINDOW_H)
         self.clock = pygame.time.Clock()
@@ -662,6 +684,10 @@ class Game:
 
     # --- input ---------------------------------------------------------------
     def _handle_key(self, key):
+        # Android's system Back key/gesture arrives as K_AC_BACK — map it to
+        # ESC so every "leave this screen" path works on a phone.
+        if key == getattr(pygame, "K_AC_BACK", None):
+            key = pygame.K_ESCAPE
         if self.state == "TITLE":
             self._title_key(key)
         elif self.state == "SETTINGS":
@@ -786,6 +812,57 @@ class Game:
         elif key == pygame.K_RETURN:
             audio.play_ui_select_sound()
             self._confirm_answer()
+
+    # --- touch input (Android) ------------------------------------------------
+    def _touch_zone(self, x, y, w, h, kind, idx=0):
+        """Record a tappable rectangle for this frame's layout.
+
+        Zones are rebuilt every draw pass, so the hit boxes always match what
+        is actually on screen — including the squeeze logic that lifts a long
+        answer block up from the bottom edge.
+        """
+        if w <= 0 or h <= 0:
+            return
+        self._touch_zones.append((pygame.Rect(int(x), int(y), int(w), int(h)), kind, idx))
+
+    def _handle_touch(self, px, py):
+        """A finger went down: hit-test this frame's zones and run the action
+        the equivalent key would have run.
+
+        Options are tapped *directly* rather than TAB-cycled — on a phone,
+        "tap the line you want" is the only comfortable way to play a menu
+        game. Taps are ignored mid-transition (fade) and during LOADING so a
+        stray double-tap can't fire twice.
+        """
+        if self.fade["active"] or self.state == "LOADING":
+            return
+        for rect, kind, idx in self._touch_zones:
+            if rect.collidepoint(int(px), int(py)):
+                try:
+                    self._touch_action(kind, idx)
+                except Exception:
+                    pass  # a stray tap must never take the game down
+                return
+
+    def _touch_action(self, kind, idx):
+        if kind == "title":
+            self.selected_option = idx
+            self._handle_key(pygame.K_RETURN)
+        elif kind == "settings":
+            self.settings_selected = idx
+            self._handle_key(pygame.K_RETURN)
+        elif kind == "about":
+            self.about_selected = idx
+            self._handle_key(pygame.K_RETURN)
+        elif kind == "answer":
+            # Always preselect the tapped line; the key handler only confirms
+            # once the question has finished typing (and ignores wait steps).
+            if self.current_step >= len(self.active_script):
+                return
+            self.selected_answer = idx
+            self._handle_key(pygame.K_RETURN)
+        elif kind == "back":
+            self._handle_key(pygame.K_ESCAPE)
 
     # --- update ---------------------------------------------------------------
     def _update(self):
@@ -986,6 +1063,7 @@ class Game:
     def _draw(self):
         self.screen.fill(config.COLOR_BLACK)
         w, h = self.screen.get_size()
+        self._touch_zones = []   # rebuilt below; hit-tested by _handle_touch
 
         if self.state in ("PLAYING", "EXITFADE"):
             # A violent shake fired alongside an aggressive line outranks the
@@ -1123,6 +1201,8 @@ class Game:
                 except Exception:
                     pass
                 self.screen.blit(surf, (int(w * 0.08), menu_y_start + i * 45))
+            self._touch_zone(int(w * 0.08) - 8, menu_y_start + i * 45,
+                             int(w * 0.6) + 16, 44, "title", i)
 
         cred = font_small.render("NEPTUNE PRODUCTIONS (C)", True, (60, 60, 60))
         self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
@@ -1152,7 +1232,11 @@ class Game:
                 label = prefix + option
             surf = font_med.render(label, True, color)
             self.screen.blit(surf, (int(w * 0.08), start_y + i * (font_med.get_linesize() + 12)))
-        hint = font_small.render("[ENTER] CHANGE    [ESC] BACK", True, (80, 80, 80))
+            pitch = font_med.get_linesize() + 12
+            self._touch_zone(int(w * 0.08) - 8, start_y + i * pitch,
+                             int(w * 0.8) + 16, pitch - 2, "settings", i)
+        hint = font_small.render("TAP: CHANGE    BACK: RETURN" if IS_ANDROID
+                                 else "[ENTER] CHANGE    [ESC] BACK", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
 
     def _draw_about(self, w, h):
@@ -1163,7 +1247,10 @@ class Game:
             color = config.COLOR_WHITE if i == self.about_selected else (110, 110, 110)
             prefix = "> " if i == self.about_selected else "  "
             surf = font_small.render(prefix + option, True, color)
-            self.screen.blit(surf, (int(w * 0.08), int(h * 0.16) + i * (font_small.get_linesize() + 6)))
+            y = int(h * 0.16) + i * (font_small.get_linesize() + 6)
+            self.screen.blit(surf, (int(w * 0.08), y))
+            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.6) + 16,
+                             font_small.get_linesize() + 4, "about", i)
 
         if self.about_selected == 0:
             ui.render_text_block(self.screen, self.about_text, font_small, config.COLOR_WHITE,
@@ -1177,8 +1264,10 @@ class Game:
         self._draw_heading("HELP", w, h, font_large)
         ui.render_text_block(self.screen, self.help_text, font_small, config.COLOR_WHITE,
                              int(w * 0.08), int(h * 0.22), int(w * 0.8))
-        hint = font_small.render("[ESC] BACK", True, (80, 80, 80))
+        hint = font_small.render("TAP ANYWHERE TO GO BACK" if IS_ANDROID else "[ESC] BACK",
+                                 True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        self._touch_zone(0, 0, w, h, "back")   # read-only screen: any tap leaves
 
     def _draw_logs(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -1193,8 +1282,10 @@ class Game:
                                      int(w * 0.08), y, int(w * 0.8))
                 y += ui.wrapped_line_count(line, font_small, color, int(w * 0.8)) * (font_small.get_linesize() + 4)
             y += 8
-        hint = font_small.render("[ESC] BACK", True, (80, 80, 80))
+        hint = font_small.render("TAP ANYWHERE TO GO BACK" if IS_ANDROID else "[ESC] BACK",
+                                 True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        self._touch_zone(0, 0, w, h, "back")   # read-only screen: any tap leaves
 
     def _draw_playing(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -1291,6 +1382,8 @@ class Game:
                     prefix = "> " if i == self.selected_answer else "  "
                     ui.draw_text(self.screen, prefix + option, font_med, color,
                                  opts_x, opts_y + i * opts_gap)
+                    self._touch_zone(opts_x - 10, opts_y + i * opts_gap,
+                                     max_width + 20, opts_gap - 2, "answer", i)
 
         # whisper reaction line
         if self.fx["whisper_text"] and self.fx["whisper_until"] > self.now:
@@ -1422,9 +1515,13 @@ class Game:
                     self._on_resize(event.w, event.h)
                 elif event.type == pygame.MOUSEMOTION:
                     # Subtle hover parallax — the window leans toward the cursor
-                    # (Windows/macOS only; no-op on Wayland).
                     sw, sh = self.screen.get_size()
                     os_layer.set_hover_offset(event.pos[0], event.pos[1], sw, sh)
+                elif event.type == pygame.FINGERDOWN and IS_ANDROID:
+                    # Touch: FINGER* coordinates are normalized 0..1 over the
+                    # window, so scale them to the current framebuffer.
+                    w_px, h_px = self.screen.get_size()
+                    self._handle_touch(event.x * w_px, event.y * h_px)
 
             os_layer.update_window_anim()
             os_layer.update_mouse_anim()

@@ -5,6 +5,12 @@ import sys
 APP_NAME = "The Question Game Remastered"
 VERSION = "4.0.0"
 
+# --- Platform ---------------------------------------------------------------
+# python-for-android reports sys.platform == "android"; platform.system() is
+# kept as a belt-and-braces check because some SDL builds only report Linux.
+# Touch input, fullscreen display and the Android back key all key off this.
+IS_ANDROID = sys.platform == "android" or platform.system() == "Android"
+
 # --- AI providers ------------------------------------------------------------
 # Everything here is FREE — no paid key is ever required:
 #   * Ollama   — fully local, no key at all (install Ollama, pull llama3.2)

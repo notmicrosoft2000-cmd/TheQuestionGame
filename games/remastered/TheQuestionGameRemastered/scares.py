@@ -184,6 +184,54 @@ SCARE_REGISTRY = {
 _COOLDOWN = 6.0
 _last_applied = {}
 
+# Scares that work by hijacking the *desktop* (window moves, cursor theft,
+# wallpaper, minimized apps). On Android the os_layer versions are correct
+# no-ops — there is no desktop to hijack — so each gets an in-app stand-in
+# below and the hit still lands.
+_DESKTOP_SCARES = frozenset({
+    "window_shake", "windows_shake", "windows_minimize",
+    "window_teleport", "window_drift", "wallpaper", "mouse_move",
+})
+
+
+def _android_stand_in(game, name):
+    """Desktop-hijack scare running on a phone? Recreate the *feeling* in-app.
+
+    The port must never let a scare quietly do nothing: a player who reads the
+    AI picking "wallpaper" and sees static instead still gets bitten, but a
+    scare that evaporates teaches them the game is fake.
+    """
+    if not config.IS_ANDROID or name not in _DESKTOP_SCARES:
+        return
+    if name in ("window_shake", "windows_shake", "windows_teleport"):
+        game.fx["screen_shake_until"] = max(float(game.fx.get("screen_shake_until", 0.0)),
+                                            game.now + 0.9)
+        game.fx["shake_amp"] = 24
+        if name == "window_teleport":
+            # The jump of a teleport reads best as a hard visual lurch.
+            game.fx["rgb_split_until"] = max(float(game.fx.get("rgb_split_until", 0.0)),
+                                             game.now + 1.0)
+    elif name == "window_drift":
+        game.fx["screen_shake_until"] = max(float(game.fx.get("screen_shake_until", 0.0)),
+                                            game.now + 1.6)
+        game.fx["shake_amp"] = 8
+    elif name == "mouse_move":
+        # No cursor to steal on a touch screen, so it reaches for the answer
+        # the player was about to pick instead — same violation, new surface.
+        try:
+            step = game.active_script[game.current_step]
+            opts = step.get("opts") or []
+            if opts and game.typing_state == "WAITING":
+                game.selected_answer = random.randrange(len(opts))
+                audio.play_ui_nav_sound()
+                return
+        except Exception:
+            pass
+        game.fx["flicker_until"] = max(float(game.fx.get("flicker_until", 0.0)), game.now + 1.2)
+    else:  # wallpaper / windows_minimize: the desktop changed, we show it changed
+        game.fx["corrupt_until"] = max(float(game.fx.get("corrupt_until", 0.0)), game.now + 1.2)
+        game.fx["flicker_until"] = max(float(game.fx.get("flicker_until", 0.0)), game.now + 1.0)
+
 
 def apply_scare(game, name):
     fn = SCARE_REGISTRY.get(name)
@@ -195,6 +243,7 @@ def apply_scare(game, name):
     _last_applied[name] = now
     try:
         fn(game)
+        _android_stand_in(game, name)
         return True
     except Exception:
         return False

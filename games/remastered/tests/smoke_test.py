@@ -282,6 +282,114 @@ check("relay is the default provider", config.AI_PROVIDER == "relay", config.AI_
 check("relay URL is set", "ts.net" in config.AI_PROVIDERS["relay"]["url"],
       config.AI_PROVIDERS["relay"]["url"])
 
+# --- Touch controls (the Android port) --------------------------------------
+# The phone control scheme end to end: tap zones recorded during draw, tap =
+# select+confirm, and the system Back key (K_AC_BACK) behaving as ESC.
+gmain.IS_ANDROID = True
+game.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25, "alpha": 0, "target": None}
+game.state = "TITLE"
+game.selected_option = 0
+game._on_state_enter()
+game._draw()
+check("title rows are tappable",
+      [z[2] for z in game._touch_zones if z[1] == "title"] == list(range(len(game.menu_options))),
+      str([z[1] for z in game._touch_zones]))
+
+
+def _tap(kind, idx=0):
+    for rect, k, i in game._touch_zones:
+        if k == kind and i == idx:
+            game._handle_touch(*rect.center)
+            return True
+    return False
+
+
+check("tapping a title row activates it",
+      _tap("title", 1) and game.fade.get("target") == "SETTINGS", str(game.fade))
+time.sleep(0.3)
+game._update()
+time.sleep(0.3)
+game._update()
+check("fade lands on SETTINGS", game.state == "SETTINGS", game.state)
+game._draw()
+check("settings rows are tappable", any(z[1] == "settings" for z in game._touch_zones))
+game._handle_key(getattr(pygame, "K_AC_BACK", pygame.K_ESCAPE))
+check("Android Back key exits SETTINGS", game.fade.get("target") == "TITLE", str(game.fade))
+time.sleep(0.3)
+game._update()
+time.sleep(0.3)
+game._update()
+
+game.state = "HELP"
+game._draw()
+_w, _h = game.screen.get_size()
+check("help screen is one big back zone",
+      any(z[1] == "back" and z[0].collidepoint(_w // 2, _h // 2) for z in game._touch_zones))
+
+# Answers: tap the line you want. Options (and therefore their tap zones)
+# only exist once the question has finished typing — a tap mid-typing is a
+# no-op, and the tap that lands selects *and* confirms in one gesture.
+game.state = "PLAYING"
+game._on_state_enter()
+step_i = next((i for i, s in enumerate(game.active_script)
+               if s.get("opts") and s.get("type") != "wait"), None)
+check("playable answer step exists", step_i is not None)
+game.current_step = step_i
+game.pending_exit = False
+game.selected_answer = 0
+game.question_start_time = time.time()
+game.typing_state = "THINKING"
+game._draw()
+check("no answer zones while the question is still typing",
+      not any(z[1] == "answer" for z in game._touch_zones),
+      str([z[1] for z in game._touch_zones]))
+check("tap mid-typing changes nothing",
+      not _tap("answer", 1) and game.current_step == step_i, game.current_step)
+game.typing_state = "WAITING"
+game._draw()
+check("answer rows are tappable", any(z[1] == "answer" for z in game._touch_zones))
+_tap("answer", 1)
+check("answer tap confirms the answer",
+      game.current_step > step_i or game.typing_state != "WAITING",
+      "step=%d typing=%s" % (game.current_step, game.typing_state))
+gmain.IS_ANDROID = False
+
+# --- Android scare stand-ins -------------------------------------------------
+# No desktop to hijack on a phone, so those scares must re-route in-app —
+# a scare that silently evaporates would break the fiction.
+config.IS_ANDROID = True
+try:
+    sc._last_applied.clear()
+    game.fx["screen_shake_until"] = 0.0
+    game.fx["shake_amp"] = 0
+    check("window_shake reroutes to screen shake",
+          sc.apply_scare(game, "window_shake") and game.fx["screen_shake_until"] > game.now,
+          str(game.fx.get("screen_shake_until")))
+    sc._last_applied.clear()
+    game.fx["corrupt_until"] = 0.0
+    game.fx["flicker_until"] = 0.0
+    check("wallpaper reroutes to a visual hit",
+          sc.apply_scare(game, "wallpaper") and game.fx["corrupt_until"] > game.now)
+
+    _script, _step_no = game.active_script, game.current_step
+    game.active_script = [{"_id": "touch_probe", "q": "?", "opts": ["A", "B", "C"], "type": "q"}]
+    game.current_step = 0
+    game.typing_state = "WAITING"
+    game.selected_answer = 0
+    _calls, _orig_randrange = [], sc.random.randrange
+    sc.random.randrange = lambda n: _calls.append(n) or 1
+    try:
+        sc._last_applied.clear()
+        _ok = sc.apply_scare(game, "mouse_move")
+    finally:
+        sc.random.randrange = _orig_randrange
+    check("mouse_move steals the selection instead of the cursor",
+          _ok and _calls == [3] and game.selected_answer == 1,
+          "ok=%s calls=%s sel=%s" % (_ok, _calls, game.selected_answer))
+    game.active_script, game.current_step = _script, _step_no
+finally:
+    config.IS_ANDROID = False
+
 game.running = False
 pygame.quit()
 

@@ -12,6 +12,7 @@ jumpscare.mp3  windowq.png  logsmusic.ogg      shared build assets (site + game 
 games/
 ├── classic/      the original game            → python games/classic/TheQuestionGame.py
 ├── remastered/   the remastered game          → python games/remastered/run_remastered.py
+│                 (Android APK: buildozer android debug — see ANDROID.md)
 └── firstcopy/    The Simpler Times (1993)     → python games/firstcopy/run_firstcopy.py
                     (a prequel; requires only pygame + numpy)
 

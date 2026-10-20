@@ -558,6 +558,8 @@ mouse_anim = {"active": False, "start_x": 0, "start_y": 0, "target_x": 0, "targe
 
 def begin_mouse_move(target_x, target_y, duration=0.35):
     import pygame
+    if config.IS_ANDROID:
+        return   # no cursor to steal on a touch device (SDL warp is a no-op)
     cur_x, cur_y = pygame.mouse.get_pos()
     mouse_anim.update(active=True, start_x=cur_x, start_y=cur_y,
                       target_x=target_x, target_y=target_y,
@@ -580,6 +582,8 @@ def update_mouse_anim():
 
 def nudge_mouse_from_close():
     import pygame
+    if config.IS_ANDROID:
+        return   # no cursor, no title bar to bait the finger toward
     if mouse_anim["active"]:
         return
     try:
@@ -772,6 +776,26 @@ def show_os_notification(title, body):
             except Exception:
                 pass
         threading.Thread(target=_do, daemon=True).start()
+    elif config.IS_ANDROID:
+        # A real Android toast — no permission needed, and the "your wallpaper
+        # is ours" line lands far better as a system-level message than as
+        # in-app text the player knows we drew.
+        try:
+            from android.runnable import run_on_ui_thread
+            from jnius import autoclass
+
+            @run_on_ui_thread
+            def _toast(title_, body_):
+                try:
+                    activity = autoclass("org.kivy.android.PythonActivity").mActivity
+                    toast = autoclass("android.widget.Toast")
+                    toast.makeText(activity, title_ + " — " + body_, toast.LENGTH_LONG).show()
+                except Exception:
+                    pass
+
+            _toast(title, body)
+        except Exception:
+            pass
 
 
 def attempt_close_with_warning():
