@@ -5,7 +5,7 @@
 // While the placeholder is left in place, the transmission falls back to
 // scripted replies and the site still works.
 window.AI_CONFIG = {
-  groqKey: "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",
+  groqKey: "PASTE_YOUR_GROQ_API_KEY_HERE",
   model: "llama-3.3-70b-versatile"
 };
 

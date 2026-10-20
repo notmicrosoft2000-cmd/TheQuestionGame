@@ -2,7 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REMASTER_TAG = "v2.04-remastered";
+  const REMASTER_TAG = "v3.0.2-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -2490,6 +2490,10 @@
 
   async function loadReleaseFromTag(tag, dom, fb) {
     let wired = false;
+    // The dom map holds bare element ids ("remRelVersion"), so they must be
+    // turned into "#id" selectors — querySelector("remRelVersion") would be a
+    // tag lookup and always miss.
+    const sel = (id) => (id.charAt(0) === "#" ? id : "#" + id);
     const applyAssets = (assets) => {
       const apk = assets.find((a) => /\.apk$/i.test(a.name));
       const zip = assets.find((a) => /\.zip$/i.test(a.name));
@@ -2506,8 +2510,8 @@
         } else if (fb.apk) {
           wireFallback(dom.androidBtn, dom.androidStatus, "ANDROID", downloadUrl(fb.tag, fb.apk));
         } else {
-          const abtn = $(dom.androidBtn);
-          const ast = $(dom.androidStatus);
+          const abtn = $(sel(dom.androidBtn));
+          const ast = $(sel(dom.androidStatus));
           if (abtn) {
             abtn.removeAttribute("href");
             abtn.setAttribute("aria-disabled", "true");
@@ -2528,22 +2532,22 @@
         const rel = await res.json();
         if (wired) return;
         wired = true;
-        if (dom.relVersion) $(dom.relVersion).textContent = rel.tag_name || tag || "v1.0.0";
-        if (dom.relDate) $(dom.relDate).textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
+        if (dom.relVersion) $(sel(dom.relVersion)).textContent = rel.tag_name || tag || "v1.0.0";
+        if (dom.relDate) $(sel(dom.relDate)).textContent = "RELEASED " + new Date(rel.published_at).toLocaleDateString("en-GB", { year: "numeric", month: "short", day: "numeric" });
         applyAssets(rel.assets || []);
       } catch (e) {
         if (wired) return;
         wired = true;
-        if (dom.relVersion) $(dom.relVersion).textContent = fb.tag;
-        if (dom.relDate) $(dom.relDate).textContent = "RELEASE SERVER UNREACHABLE — USING DIRECT LINK";
+        if (dom.relVersion) $(sel(dom.relVersion)).textContent = fb.tag;
+        if (dom.relDate) $(sel(dom.relDate)).textContent = "RELEASE SERVER UNREACHABLE — USING DIRECT LINK";
         applyAssets([]);
       }
     };
     const fallbackNow = () => {
       if (wired) return;
       wired = true;
-      if (dom.relVersion) $(dom.relVersion).textContent = fb.tag;
-      if (dom.relDate) $(dom.relDate).textContent = "DIRECT LINK — NO API REQUIRED";
+      if (dom.relVersion) $(sel(dom.relVersion)).textContent = fb.tag;
+      if (dom.relDate) $(sel(dom.relDate)).textContent = "DIRECT LINK — NO API REQUIRED";
       applyAssets([]);
     };
     tryFetch();
@@ -4583,7 +4587,7 @@
     }
     if (cmd === "ver" || cmd === "version") {
       tPrint(echo, "t-in");
-      tType("THE QUESTION GAME WEBSITE v2.04\nBUILD: STILL. STILL RUNNING.", "t-sys");
+      tType("THE QUESTION GAME WEBSITE v3.0.2\nBUILD: STILL. STILL RUNNING.", "t-sys");
       return;
     }
     if (cmd === "exit" || cmd === "quit") {

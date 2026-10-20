@@ -29,9 +29,9 @@
       <b>THE QUESTION GAME</b> needs JavaScript. On an old browser (IE 11 or earlier), use the
       <a href="legacy.html" style="color:#00ff88">LEGACY 2000 EDITION</a>.
       &nbsp;Downloads:&nbsp;
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> <span style="color:#886600">(ANDROID PAUSED — CRASHES ON LAUNCH)</span>
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> <span style="color:#886600">(ANDROID PAUSED — CRASHES ON LAUNCH)</span>
     </div>
   </noscript>
 
@@ -61,7 +61,7 @@
   <div class="hud hud-tr" aria-hidden="true">
     SIGNAL: <span class="sig" id="sigStatus">STABLE</span>
   </div>
-  <div class="hud hud-bl" aria-hidden="true">v2.04</div>
+  <div class="hud hud-bl" aria-hidden="true">v3.0.2</div>
   <div class="hud hud-br" aria-hidden="true"><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a></div>
 
   <div id="boot" aria-hidden="true">
@@ -141,7 +141,7 @@
         <span>TEXT-BASED HORROR EXPERIENCE</span>
       </div>
 
-      <div class="hero-badge"><span class="led"></span> BUILD v2.04 — WINDOWS / MACOS / LINUX / ANDROID</div>
+      <div class="hero-badge"><span class="led"></span> BUILD v3.0.2 — WINDOWS / MACOS / LINUX</div>
 
       <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
       <h1 class="glitch" data-text="GAME">GAME</h1>
@@ -472,7 +472,7 @@
         </details>
         <details class="concern">
           <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
-          <div class="concern-body">The classic edition makes no network requests at all — everything you type stays in a local save file on your machine. The Remastered edition can call an AI service to write your questions when a network is available (it works offline with built-in questions otherwise), but the answers you choose are sent only in a short line of generated-fiction context, are never stored by the developer, and remain yours. Either way, playable fully disconnected.</div>
+          <div class="concern-body">The classic edition makes no network requests at all — everything you type stays in a local save file on your machine. The Remastered edition can call an AI service to write your questions when a network is available (it works offline with built-in questions otherwise). The request goes to a relay server that holds the API key and forwards it — no key ships inside the game — and the answers you choose are sent only as a short line of generated-fiction context, are never stored by the developer, and remain yours. Either way, playable fully disconnected.</div>
         </details>
         <details class="concern">
           <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
@@ -698,6 +698,15 @@
           </div>
 
           <div class="story-card reveal">
+            <p class="story-kicker">OCTOBER 20, 2026</p>
+            <h3 class="story-headline">v3.0.2 — THE MACHINE LEARNS TO IMPROVISE</h3>
+            <div class="story-para">
+              <p>The remastered edition finally sounds like itself. Its AI now runs from the first minutes instead of waiting for the written script to end — interleaved into the opening, quoting what you told it last session, escalating across three runs. It also remembered how to end: EXIT now exits.</p>
+              <p>And it stopped carrying a key. The game asks a relay server instead, so a fresh download needs no setup and nothing secret ships inside it.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
             <p class="story-kicker">TODAY</p>
             <h3 class="story-headline">THE PRANK KEEPS PAYING OFF</h3>
             <div class="story-para">
@@ -890,8 +899,8 @@
         <div class="release reveal rem">
           <div class="release-top">
             <div>
-              <span class="tag tag-green">LATEST — v2.04 REMASTERED</span>
-              <h3 class="release-version" id="remRelVersion">v2.04-remastered</h3>
+              <span class="tag tag-green">LATEST — v3.0.2 REMASTERED</span>
+              <h3 class="release-version" id="remRelVersion">v3.0.2-remastered</h3>
               <p class="release-date" id="remRelDate">CONTACTING RELEASE SERVER...</p>
             </div>
             <div class="release-icon" aria-hidden="true">
@@ -907,8 +916,8 @@
                 <span class="platform-os">WINDOWS</span>
                 <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live.</p>
-              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live. No setup, no key.</p>
+              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
               <p class="platform-status" id="dlRemWindowsStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remMacCard">
@@ -917,7 +926,7 @@
                 <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
               </div>
               <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
-              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
               <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remLinuxCard">
@@ -926,7 +935,7 @@
                 <span class="tag tag-green hidden" id="remLinuxDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
-              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v3.0.2-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
               <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remAndroidCard">
@@ -943,6 +952,19 @@
           <div class="release-alpha">
             ⚠ ALPHA BUILD ⚠<br>
             <span>THIS EDITION IS EXPECTED TO CRASH. A LOT. GLITCHES, BREAKAGES AND MISSING CONTENT ARE PART OF THE EXPERIENCE. THE CLASSIC EDITION ABOVE IS THE STABLE ONE. PLAY AT YOUR OWN RISK.</span>
+          </div>
+
+          <div class="rem-features">
+            <h4 class="side-title mt">WHAT CHANGED IN v3.0.2</h4>
+            <ul class="feature-list">
+              <li><span class="mark">▸</span> THE MACHINE IMPROVISES FROM THE FIRST MINUTES — AI questions are woven through the written opening instead of arriving after it.</li>
+              <li><span class="mark">▸</span> IT REMEMBERS — later sessions quote the answers you gave in earlier ones, and grow longer and meaner each run.</li>
+              <li><span class="mark">▸</span> IT KEEPS SCORE — a rising floor of effects guarantees the session escalates even when the model plays nice.</li>
+              <li><span class="mark">▸</span> REAL SOUND — every effect is a real audio file, generated on first run and yours to replace. Ambience, heartbeat, static.</li>
+              <li><span class="mark">▸</span> EXIT MEANS EXIT — the main-menu EXIT now actually quits. ESC still resists.</li>
+              <li><span class="mark">▸</span> NO SETUP, NO KEY — a fresh download plays immediately. The AI runs through a relay; nothing secret ships in the build.</li>
+              <li><span class="mark">▸</span> YOUR CHOICE — Settings ▸ AI Source switches between the relay, a local model, or fully offline.</li>
+            </ul>
           </div>
 
           <div class="release-fallback hidden" id="remReleaseFallback">
@@ -993,7 +1015,7 @@
 
   <footer>
     <div class="footer-line"></div>
-    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v2.04</p>
+    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v3.0.2</p>
     <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
     <button class="discord-copy footer-discord" type="button" title="Copy Discord handle">[ DISCORD: neptunetheii — CLICK TO COPY ]</button>
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>

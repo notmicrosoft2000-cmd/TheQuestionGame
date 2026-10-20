@@ -5,10 +5,18 @@ on:
     paths:
       - "games/remastered/**"
       - "build/requirements-linux.txt"
+      - "server/**"
+      - "js/**"
+      - "index.html"
+      - "legacy.html"
       - ".github/workflows/test-remastered.yml"
   pull_request:
     paths:
       - "games/remastered/**"
+      - "server/**"
+      - "js/**"
+      - "index.html"
+      - "legacy.html"
   workflow_dispatch:
 
 jobs:
@@ -67,3 +75,6 @@ jobs:
 
       - name: Test the AI relay
         run: python server/test_relay.py
+
+      - name: Check the website (versions, download links, release wiring)
+        run: python server/test_site.py
