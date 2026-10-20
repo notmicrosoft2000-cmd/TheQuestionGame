@@ -45,4 +45,9 @@ if sys.platform == "android":
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
 os.chdir(here)
-runpy.run_path(os.path.join(here, "run_remastered.py"), run_name="__main__")
+target = os.path.join(here, "run_remastered.py")
+if not os.path.isfile(target):
+    # The Android build compiles the app to bytecode-only; the .py source
+    # never ships. Desktop keeps its .py, so check rather than branch on platform.
+    target += "c"
+runpy.run_path(target, run_name="__main__")

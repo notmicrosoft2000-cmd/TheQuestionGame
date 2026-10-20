@@ -214,10 +214,18 @@ class Game:
         `_on_resize` because SDL2 has no max-size hint.
         """
         try:
-            info = pygame.display.Info()
-            desktop_w, desktop_h = info.current_w, info.current_h
+            # Desktop resolution, NOT the current window. pygame's Info() reports
+            # the *window* size once a window exists, so querying it here (after
+            # set_mode) made the ceiling "window minus margin" — 720x480 for an
+            # 800x600 start — and every upward resize snapped back down.
+            # get_desktop_sizes() keeps reporting the real desktop regardless.
+            desktop_w, desktop_h = pygame.display.get_desktop_sizes()[0]
         except Exception:
-            desktop_w, desktop_h = config.WINDOW_MAX_W, config.WINDOW_MAX_H
+            try:
+                info = pygame.display.Info()
+                desktop_w, desktop_h = info.current_w, info.current_h
+            except Exception:
+                desktop_w, desktop_h = config.WINDOW_MAX_W, config.WINDOW_MAX_H
         max_w = min(config.WINDOW_MAX_W, max(config.WINDOW_MIN_W, desktop_w - 80))
         max_h = min(config.WINDOW_MAX_H, max(config.WINDOW_MIN_H, desktop_h - 120))
         self._max_window = (max_w, max_h)

@@ -57,6 +57,24 @@ game._update()
 game._draw()
 check("reached TITLE", game.state == "TITLE", game.state)
 
+# --- Window resize -----------------------------------------------------------
+# Regression: the ceiling used to be computed from pygame.display.Info() *after*
+# set_mode, which reports the window size — capping the window below its own
+# start size and making every upward resize snap back down.
+max_w, max_h = game._max_window
+check("resize ceiling above starting window",
+      max_w >= config.WINDOW_W and max_h >= config.WINDOW_H,
+      str((max_w, max_h)))
+game._on_resize(config.WINDOW_W + 400, config.WINDOW_H + 300)
+grown = game.screen.get_size()
+check("upward resize actually grows the window",
+      grown[0] > config.WINDOW_W and grown[1] > config.WINDOW_H, str(grown))
+game._on_resize(10, 10)
+check("downward resize clamps to the floor",
+      game.screen.get_size() == (config.WINDOW_MIN_W, config.WINDOW_MIN_H),
+      str(game.screen.get_size()))
+game._on_resize(900, 700)  # leave a sane size for the rest of the run
+
 # --- PLAYING frame budget (the CI FPS assert) -------------------------------
 game.state = "PLAYING"
 game._on_state_enter()
