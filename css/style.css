@@ -1256,36 +1256,10 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.red{color:var(--red);border-color:var(--red);box-shadow:var(--glow-red)}
 
-/* ---------- 3D card tilt (v3.0.2 remaster) ---------------------------------
-   Cards sit in a shared perspective and lean toward the pointer, with the
-   inner content pushed forward on translateZ so it reads as real depth rather
-   than a flat skew. Opt-in per frame via JS adding .tilt-on; the :hover rule is
-   a no-JS fallback. Never applied on touch or reduced-motion. */
-.tilt-scene{perspective:900px;perspective-origin:50% 40%}
-.tilt-card{
-  transform-style:preserve-3d;
-  transition:transform .28s cubic-bezier(.22,.61,.36,1),box-shadow .28s ease;
-  will-change:transform;
-}
-.tilt-card.tilting{transition:transform .06s linear}
-.tilt-card > *{transform:translateZ(22px)}
-.tilt-card .platform-os,
-.tilt-card .platform-name,
-.tilt-card .platform-desc{transform:translateZ(30px)}
-/* Sheen follows the tilt angle so the lean has a light source */
-.tilt-card::after{
-  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
-  background:radial-gradient(60% 60% at var(--sheen-x,50%) var(--sheen-y,50%),
-    rgba(255,255,255,.09),transparent 70%);
-  transition:opacity .28s ease;mix-blend-mode:screen;
-}
-.tilt-card.tilting::after{opacity:1}
-body.no-fx .tilt-card,
-body.perf-low .tilt-card{transform:none!important}
-body.no-fx .tilt-card::after,
-body.perf-low .tilt-card::after{display:none}
-body.no-fx .tilt-card > *,
-body.perf-low .tilt-card > *{transform:none}
+/* ---------- 3D card tilt: removed ------------------------------------------
+   Cards used to lean toward the pointer with translateZ depth. The 3D
+   transform shifts hit-testing, so clicks near buttons landed off-target.
+   The JS that applied .tilt-card is gone; these rules went with it. */
 
 /* ---------- Modals ---------- */
 body.modal-open{overflow:hidden}
@@ -1488,7 +1462,6 @@ body.modal-open{overflow:hidden}
   .cursor{display:none!important}
   .crt .beam{display:none}
   .crt .tracking,.crt .dropout{display:none}
-  .tilt-card{transform:none!important}
 }
 
 /* ---------- Strobe burst ---------- */
