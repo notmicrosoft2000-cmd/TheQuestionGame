@@ -1,15 +1,28 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Windows one-file build for the Remastered edition.
+#
+# Built by .github/workflows/build-windows-remastered.yml, which runs from the
+# repo root. PyInstaller resolves Analysis() script paths and EXE(icon=) against
+# the *current working directory*, not the spec file, so every path here is
+# anchored to the spec file's own directory via SPECPATH.
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
+
+HERE = os.path.dirname(os.path.abspath(SPEC))
+SRC = os.path.join(HERE, "run_remastered.py")
+ASSETS = os.path.join(HERE, "TheQuestionGameRemastered", "assets")
+ICON = os.path.join(ASSETS, "windowq.ico")
 
 hiddenimports = ['cv2', 'numpy', 'requests', 'pygame']
 hiddenimports += collect_submodules('pyttsx3')
 
 
 a = Analysis(
-    ['run_remastered.py'],
-    pathex=[],
+    [SRC],
+    pathex=[HERE],
     binaries=[],
-    datas=[('TheQuestionGameRemastered\\assets', 'assets')],
+    datas=[(ASSETS, 'assets')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -39,5 +52,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['TheQuestionGameRemastered\\assets\\windowq.ico'],
+    icon=[ICON],
 )

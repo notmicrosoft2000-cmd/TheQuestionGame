@@ -1,15 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
+# Linux one-file build for the Remastered edition.
+#
+# Built by .github/workflows/build-linux-remastered.yml, which runs from the
+# repo root. PyInstaller resolves Analysis() script paths against the *current
+# working directory*, not the spec file, so everything is anchored to the spec
+# file's own directory via SPECPATH.
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
+
+HERE = os.path.dirname(os.path.abspath(SPEC))
+SRC = os.path.join(HERE, "run_remastered.py")
+ASSETS = os.path.join(HERE, "TheQuestionGameRemastered", "assets")
 
 hiddenimports = ['cv2', 'numpy', 'requests', 'pygame']
 hiddenimports += collect_submodules('pyttsx3')
 
 
 a = Analysis(
-    ['run_remastered.py'],
-    pathex=[],
+    [SRC],
+    pathex=[HERE],
     binaries=[],
-    datas=[('TheQuestionGameRemastered/assets', 'assets')],
+    datas=[(ASSETS, 'assets')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
