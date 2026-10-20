@@ -2502,7 +2502,7 @@
 
   const FALLBACKS = {
     classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz", apk: "TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" },
-    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
+    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz", apk: "TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk" }
   };
 
   function downloadUrl(tag, file) {
