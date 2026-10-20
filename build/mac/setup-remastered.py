@@ -2,11 +2,11 @@ import os
 
 from setuptools import setup
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 setup(
     name="TheQuestionGameRemastered",
-    version="2.02",
+    version="3.0.2",
     description="The Question Game Remastered",
     app=[os.path.join(ROOT, "games", "remastered", "run_remastered.py")],
     options={
@@ -22,8 +22,8 @@ setup(
                 "CFBundleName": "The Question Game Remastered",
                 "CFBundleDisplayName": "The Question Game Remastered",
                 "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongameremastered",
-                "CFBundleShortVersionString": "2.02",
-                "CFBundleVersion": "2.02",
+                "CFBundleShortVersionString": "3.0.2",
+                "CFBundleVersion": "3.0.2",
                 "LSApplicationCategoryType": "public.app-category.games",
                 "NSHighResolutionCapable": True,
                 "NSCameraUsageDescription": "The Question Game Remastered checks whether you are still paying attention during the session.",

@@ -1,0 +1,7 @@
+# Linux build dependencies (used by .github/workflows/build-linux-remastered.yml)
+# opencv-python-headless: webcam VideoCapture works without needing libGL on servers/CI.
+pygame
+numpy
+opencv-python-headless
+requests
+pyttsx3

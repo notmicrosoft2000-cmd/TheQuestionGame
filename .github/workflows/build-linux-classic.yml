@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install --upgrade pip && pip install pyinstaller && pip install -r requirements-linux.txt
+        run: pip install --upgrade pip && pip install pyinstaller && pip install -r build/requirements-linux.txt
 
       - name: Build with PyInstaller
         run: pyinstaller --clean --noconfirm games/classic/TheQuestionGame-linux.spec

@@ -5,9 +5,9 @@ Three desktop games plus the website, in one repo.
 ## Layout
 
 ```
-index.html  css/  js/  img/        the website (served from repo root on
-bossfight.mp3  jumpscare.mp3        GitHub Pages — do not move these)
-windowq.png  logsmusic.ogg         shared build assets (site + game bundles)
+index.html  legacy.html  css/  js/  img/      the website (served from repo root
+forum-reactions.json  bossfight.mp3            on GitHub Pages — do not move these)
+jumpscare.mp3  windowq.png  logsmusic.ogg      shared build assets (site + game bundles)
 
 games/
 ├── classic/      the original game            → python games/classic/TheQuestionGame.py
@@ -16,8 +16,10 @@ games/
                     (a prequel; requires only pygame + numpy)
 
 .github/workflows/   CI: builds Linux/macOS binaries on GitHub Releases
-mac/                 py2app build scripts for the macOS builds (used by CI)
-requirements-*.txt   CI build dependencies (shared by the classic/remastered builds)
+build/mac/           py2app build scripts for the macOS builds (used by CI)
+build/requirements-*.txt   CI build dependencies (shared by the classic/remastered builds)
+archive/             frozen pre-reorg snapshot of the repo (not built, not served)
+tools/               local build tooling (gitignored)
 ```
 
 ## Running a game

@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install --upgrade pip && pip install -r requirements-mac-remastered.txt
+        run: pip install --upgrade pip && pip install -r build/requirements-mac-remastered.txt
 
       - name: Build app icon from windowq.png
         run: |
@@ -34,7 +34,7 @@ jobs:
           iconutil -c icns icon.iconset -o icon.icns
 
       - name: Build .app with py2app
-        run: python mac/setup-remastered.py py2app
+        run: python build/mac/setup-remastered.py py2app
 
       - name: Create .dmg
         run: |

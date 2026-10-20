@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="The Question Game — a text-based horror experience by Neptune Productions. It asks. You answer. Try to escape before the questions end.">
+  <meta name="theme-color" content="#000000">
+  <title>THE QUESTION GAME — by Neptune Productions</title>
+  <link rel="icon" type="image/png" href="windowq.png">
+  <link rel="apple-touch-icon" href="windowq.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=24">
+</head>
+<body>
+
+  <noscript>
+    <style>
+      #boot{display:none !important}
+      .reveal{opacity:1 !important; transform:none !important}
+      [data-stagger]>*{opacity:1 !important; transform:none !important}
+      .cursor{display:none !important}
+    </style>
+  </noscript>
+
+  <div class="crt" aria-hidden="true">
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="beam"></div>
+    <div class="sweep"></div>
+    <canvas id="ash"></canvas>
+    <canvas id="noise"></canvas>
+    <div class="flash"></div>
+    <div class="blink-flash"></div>
+  </div>
+
+  <div class="hud hud-tl" aria-hidden="true">
+    <span class="rec-dot"></span> REC&nbsp;<span id="recTime">00:00:00</span>
+  </div>
+  <div class="hud hud-tr" aria-hidden="true">
+    SIGNAL: <span class="sig" id="sigStatus">STABLE</span>
+  </div>
+  <div class="hud hud-bl" aria-hidden="true">v2.04</div>
+  <div class="hud hud-br" aria-hidden="true">NEPTUNE PRODUCTIONS [C]</div>
+
+  <div id="boot" aria-hidden="true">
+    <div class="boot-inner">
+      <div class="boot-log" id="bootLog"></div>
+      <div class="boot-prompt hidden" id="bootPrompt">&gt; [ ENTER ] TO BEGIN</div>
+    </div>
+  </div>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
+  <div class="scare" id="scare" aria-hidden="true">HELLO</div>
+  <div class="gif-scare" id="gifScare" aria-hidden="true"><img src="img/jumpscare.gif" alt="" draggable="false"></div>
+  <div class="static-scare" id="staticScare" aria-hidden="true"><canvas id="staticCnv"></canvas></div>
+  <div class="crt-glare" id="crtGlare" aria-hidden="true"></div>
+  <div class="lights-out" id="lightsOut" aria-hidden="true"></div>
+  <audio id="gifScareAudio" src="jumpscare.mp3" preload="auto"></audio>
+
+  <header class="nav" id="nav">
+    <div class="nav-row">
+      <a class="nav-brand" href="#home">TQG<span class="blink">_</span></a>
+      <div class="nav-right">
+        <div class="nav-status"><span class="led"></span> SYSTEM ACTIVE</div>
+        <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation">[ NAV ]</button>
+      </div>
+    </div>
+    <div class="contents" id="contents">
+      <a class="contents-link" href="#home"><span class="link-num">1</span> HOME</a>
+      <a class="contents-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
+      <a class="contents-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
+      <a class="contents-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
+      <a class="contents-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
+      <a class="contents-link" href="#quotes"><span class="link-num">6</span> QUOTES</a>
+      <a class="contents-link" href="#concerns"><span class="link-num">7</span> CONCERNS</a>
+      <a class="contents-link" href="#transmission"><span class="link-num">8</span> TRANSMISSION</a>
+      <a class="contents-link" href="#preview"><span class="link-num">9</span> PREVIEW</a>
+      <a class="contents-link logs-link hidden" href="#logs">LOGS</a>
+      <a class="contents-link" href="#dev">THE DEV</a>
+      <a class="contents-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
+    </div>
+  </header>
+
+  <nav class="side-panel" id="sidePanel" aria-label="Site navigation">
+    <div class="side-head"><span class="red">&gt;</span> NAVIGATION</div>
+    <div class="side-links">
+      <a class="side-link" href="#home"><span class="link-num">1</span> HOME</a>
+      <a class="side-link" href="#about"><span class="link-num">2</span> ABOUT / HISTORY</a>
+      <a class="side-link" href="#sessions"><span class="link-num">3</span> SESSIONS</a>
+      <a class="side-link" href="#evidence"><span class="link-num">4</span> EVIDENCE</a>
+      <a class="side-link" href="#ambience"><span class="link-num">5</span> AMBIENCE</a>
+      <a class="side-link" href="#quotes"><span class="link-num">6</span> QUOTES</a>
+      <a class="side-link" href="#concerns"><span class="link-num">7</span> CONCERNS</a>
+      <a class="side-link" href="#transmission"><span class="link-num">8</span> TRANSMISSION</a>
+      <a class="side-link" href="#preview"><span class="link-num">9</span> SESSION PREVIEW</a>
+      <a class="side-link logs-link hidden" href="#logs">LOGS</a>
+      <a class="side-link" href="#dev">THE DEV</a>
+      <a class="side-link dl-glow" href="#download"><span class="link-num">0</span> DOWNLOAD</a>
+    </div>
+    <div class="side-foot">NEPTUNE PRODUCTIONS [C]</div>
+  </nav>
+
+  <main>
+    <section class="hero view active" id="home" data-view="home">
+      <div class="hero-meta">
+        <span>NEPTUNE PRODUCTIONS [C]</span>
+        <span>TEXT-BASED HORROR EXPERIENCE</span>
+      </div>
+
+      <div class="hero-badge"><span class="led"></span> BUILD v2.04 — WINDOWS / MACOS / LINUX</div>
+
+      <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
+      <h1 class="glitch" data-text="GAME">GAME</h1>
+
+      <p class="hero-sub"><span id="heroType"></span><span class="caret"></span></p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#download">[ PLAY / DOWNLOAD ]</a>
+        <a class="btn btn-ghost" href="#sessions">[ VIEW SESSIONS ]</a>
+      </div>
+
+      <div class="hero-hint">[ TAB ] CYCLE &nbsp;·&nbsp; [ ENTER ] CONFIRM &nbsp;·&nbsp; PLAY WITH HEADPHONES</div>
+    </section>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track" id="tickerTrack"></div>
+    </div>
+
+    <section class="section view" id="about" data-view="about">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> ABOUT THE EXPERIENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="about-grid">
+        <div class="about-copy reveal">
+          <p>This is not a quiz. It is a set of questions, and a quiet observer sitting behind them.</p>
+          <p>You sit down. It starts typing. One question at a time, until it is finished with you.</p>
+          <p class="dim">A text-based horror experience. The game itself sends nothing from your machine.</p>
+          <p class="about-quote">"Are you sitting comfortably?"</p>
+        </div>
+        <div class="stats reveal">
+          <div class="stat"><span class="stat-num" id="qCounter">100+</span><span class="stat-label">QUESTIONS TO ANSWER</span></div>
+          <div class="stat"><span class="stat-num">01</span><span class="stat-label">QUESTION AT A TIME</span></div>
+          <div class="stat"><span class="stat-num">00</span><span class="stat-label">SKIP BUTTONS</span></div>
+          <div class="stat"><span class="stat-num">∞</span><span class="stat-label">IT WATCHES YOU PLAY</span></div>
+        </div>
+      </div>
+
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> HISTORY — THE FILE HAS BEEN FOUND BEFORE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">These are the records that survive.</p>
+
+      <div class="timeline reveal">
+        <div class="t-entry">
+          <span class="t-year">1993</span>
+          <div class="t-body">
+            <h3 class="t-title">THE FIRST COPY</h3>
+            <p>A stack of floppy disks labelled THE QUESTION GAME appears on a table at a computer fair. No vendor claims them. Nobody remembers carrying them in.</p>
+          </div>
+        </div>
+        <div class="t-entry">
+          <span class="t-year">1999</span>
+          <div class="t-body">
+            <h3 class="t-title">NO MENU. ONLY QUESTIONS.</h3>
+            <p>A collector boots one of the disks at home. The questions begin immediately. There is no menu, no settings, no way out except the last question.</p>
+          </div>
+        </div>
+        <div class="t-entry">
+          <span class="t-year">2004</span>
+          <div class="t-body">
+            <h3 class="t-title">THE OLD THREAD</h3>
+            <p>The same questions appear on a defunct message board. The thread is dated before the board was created. The poster has no account.</p>
+          </div>
+        </div>
+        <div class="t-entry">
+          <span class="t-year">2011</span>
+          <div class="t-body">
+            <h3 class="t-title">ONE HUNDRED QUESTIONS</h3>
+            <p>A single-page Q&amp;A program circulates on a file-sharing network. One hundred questions. People who finish it are never quite the same twice.</p>
+          </div>
+        </div>
+        <div class="t-entry">
+          <span class="t-year">2019</span>
+          <div class="t-body">
+            <h3 class="t-title">THE TAPE</h3>
+            <p>A VHS copy surfaces at an estate sale. On the tape, the questions are already running. The screen shows a machine that is unplugged.</p>
+          </div>
+        </div>
+        <div class="t-entry t-entry-last">
+          <span class="t-year">TODAY</span>
+          <div class="t-body">
+            <h3 class="t-title">YOU</h3>
+            <p>You found this page. Or — it found you. It has been asking questions for a very long time. It is very good at waiting.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section view" id="sessions" data-view="sessions">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE SESSIONS</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">A descent in three parts. Best experienced in the dark, with headphones.</p>
+
+      <div class="sessions-grid" data-stagger>
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 01</span>
+            <span class="session-status ok">BEGIN</span>
+          </div>
+          <h3 class="session-name">A QUIET START</h3>
+          <ul class="session-points">
+            <li>You answer. It listens.</li>
+            <li>The room gets colder.</li>
+            <li>The questions stop being polite.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">PART ONE</span></div>
+          <p class="session-login">ARE YOU SITTING COMFORTABLY?</p>
+        </article>
+
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 02</span>
+            <span class="session-status warn">CONTINUES</span>
+          </div>
+          <h3 class="session-name">IT FINDS YOU</h3>
+          <ul class="session-points">
+            <li>You came back. It knows you did.</li>
+            <li>The questions remember your answers.</li>
+            <li>Something sits with you now.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:60%"></span><span class="bar-label">PART TWO</span></div>
+          <p class="session-login">WHY DID YOU COME BACK?</p>
+        </article>
+
+        <article class="session reveal">
+          <div class="session-head">
+            <span class="session-code">SESSION 03</span>
+            <span class="session-status danger">FINAL</span>
+          </div>
+          <h3 class="session-name">THE DARKNESS FINDS ITS VOICE</h3>
+          <ul class="session-points">
+            <li>The questions begin to answer themselves.</li>
+            <li>There is something behind the static.</li>
+            <li>You are not the first. You will not be the last.</li>
+          </ul>
+          <div class="session-progress"><span class="bar" style="--w:100%"></span><span class="bar-label">PART THREE</span></div>
+          <p class="session-login">THERE IS SOMETHING IN THE ROOM WITH YOU.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section view" id="evidence" data-view="evidence">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> EVIDENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Captured directly from the running game — v2.02 classic, no staging, no touch-up. These are the actual frames on the actual build.</p>
+
+      <div class="gallery" data-stagger>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-title.png" alt="The Question Game v2.02 — title screen, glowing text over drifting ash" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 001 — MAIN MENU</span>
+            <span class="shot-desc">THE TITLE BREATHES. THE ASH DRIFTS. IT IS WAITING FOR YOU TO SIT DOWN.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-question.png" alt="The Question Game v2.02 — an in-game question with answers" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 002 — INTERROGATION</span>
+            <span class="shot-desc">IT ASKS. YOU ANSWER. THE CARET BLINKS WHILE IT DECIDES IF YOU ARE LYING.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-question2.png" alt="The Question Game v2.02 — a question still being typed out" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 003 — MID-TRANSMISSION</span>
+            <span class="shot-desc">IT TYPES WHILE YOU READ. THE CARET WAITS AT THE END OF THE SENTENCE.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-settings.png" alt="The Question Game v2.02 — the control panel settings screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 004 — CONTROL PANEL</span>
+            <span class="shot-desc">TEXT SPEED. VHS EFFECTS. RESET ALL DATA. IT ADJUSTS ITSELF TO YOU.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-help.png" alt="The Question Game v2.02 — the help screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 005 — NO HELP FOR YOU</span>
+            <span class="shot-desc">THE CONTROLS ARE SIMPLE. THE WARNING IS NOT A SUGGESTION.</span>
+          </figcaption>
+        </figure>
+        <figure class="shot reveal">
+          <div class="shot-frame">
+            <img src="img/evidence-logs.png" alt="The Question Game v2.02 — the secret LOGS archive screen" loading="lazy" width="1600" height="1200">
+            <span class="shot-cam">REC ●</span>
+            <span class="shot-sig">SIGNAL: STABLE</span>
+          </div>
+          <figcaption class="shot-cap">
+            <span class="shot-id">EVIDENCE 006 — THE ARCHIVE [ 2013 ]</span>
+            <span class="shot-desc">FOUR CHARACTERS TYPED QUICKLY UNLOCK THIS. THE SAME CODE WORKS HERE.</span>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section view" id="ambience" data-view="ambience">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> AMBIENCE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">The room tone from inside the game — the same looping logs theme that plays while it reads your answers. Streaming from this build's own audio file.</p>
+
+      <div class="player reveal" id="ambiencePlayer">
+        <div class="player-head">
+          <span class="player-led"></span>
+          <span class="player-title">LOGSONIC.EXE — ROOM TONE</span>
+          <span class="player-status" id="ambienceStatus">STANDBY</span>
+        </div>
+        <div class="player-controls">
+          <button class="player-btn" id="ambienceToggle" type="button">[ PLAY ]</button>
+          <button class="player-btn ghost" id="ambienceMute" type="button">[ MUTE ]</button>
+          <span class="player-note">SOURCE: logsmusic.ogg — THE GAME'S OWN AUDIO FILE, STREAMED FROM THIS BUILD. HEADPHONES ADVISED.</span>
+        </div>
+      </div>
+      <audio id="ambienceAudio" src="logsmusic.ogg" loop preload="none"></audio>
+    </section>
+
+    <section class="section view" id="quotes" data-view="quotes">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> WHAT THE MACHINE HEARD</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Transcript fragments recovered from machines that survived a full session. Names withheld. Rooms never quite the same.</p>
+
+      <div class="quotes" data-stagger>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"It asked me one hundred questions and I answered every single one of them. I still don't remember typing most of them. The ones I do remember — I answered honestly. I've never been sure that was a good idea."</p>
+          <footer class="quote-by">— SESSION LOG 017 · SUBJECT "K"</footer>
+        </blockquote>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"I closed the laptop at question forty-four. The room was quiet for three hours. Then my phone buzzed with a single message: 'UNFINISHED WORK.' I did not finish the session. It still knew."</p>
+          <footer class="quote-by">— SESSION LOG 023 · SUBJECT "R"</footer>
+        </blockquote>
+        <blockquote class="quote reveal">
+          <p class="quote-text">"There is no way to describe the last question without sounding insane, so I won't. I'll only say this: I answered it. And I have checked every mirror in this house since."</p>
+          <footer class="quote-by">— SESSION LOG 031 · SUBJECT "M"</footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <section class="section view" id="concerns" data-view="concerns">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> ADDRESSING CONCERNS</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Because the game is meant to unsettle you, here is exactly what it does — and does not — do.</p>
+
+      <div class="concerns reveal">
+        <details class="concern" open>
+          <summary>IS THIS A VIRUS?</summary>
+          <div class="concern-body">No. The full source is public on GitHub for anyone to read. The game is a single program that runs only while you play it. It does not install anything, modify other software, or register itself to start with your system.</div>
+        </details>
+        <details class="concern">
+          <summary>DOES IT USE MY CAMERA OR MICROPHONE?</summary>
+          <div class="concern-body">The classic edition never activates a camera or microphone on either platform. The Remastered edition can briefly request your camera <i>only</i> as an in-fiction scare — deny the permission and the scare is skipped, and the game keeps running. Neither edition records audio, and nothing is ever saved from the camera.</div>
+        </details>
+        <details class="concern">
+          <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
+          <div class="concern-body">The classic edition makes no network requests at all — everything you type stays in a local save file on your machine. The Remastered edition can call an AI service to write your questions when a network is available (it works offline with built-in questions otherwise), but the answers you choose are sent only in a short line of generated-fiction context, are never stored by the developer, and remain yours. Either way, playable fully disconnected.</div>
+        </details>
+        <details class="concern">
+          <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
+          <div class="concern-body">A short list of scripted effects: it plays audio, briefly moves or shakes its own window, can change your desktop wallpaper, and may show a full-screen flash. These are timed events inside the fiction. It cannot lock you out, delete files, or control anything outside its own window and the two effects above. Effects are per-session and do not persist after you quit.</div>
+        </details>
+        <details class="concern">
+          <summary>IS IT SAFE TO PLAY?</summary>
+          <div class="concern-body">It is designed to startle you: sudden sounds, flashes, and screen changes. Do not play if you have photosensitive epilepsy or are prone to panic reactions, and do not play while driving, working, or in a context where being startled is a hazard. There is no real danger — but you should decide for yourself, with the lights on first.</div>
+        </details>
+        <details class="concern">
+          <summary>HOW DO I UNINSTALL IT?</summary>
+          <div class="concern-body">Windows: delete the folder you unzipped — nothing else was installed. macOS: delete The Question Game.app from Applications, and delete the folder ~/Library/Application Support/TheQuestionGame if you also want your local answers gone. That is the entire uninstall process.</div>
+        </details>
+        <details class="concern">
+          <summary>WHERE DO I REPORT A BUG OR A PROBLEM?</summary>
+          <div class="concern-body">Open an issue on the GitHub repository (linked in THE DEV section). Bug reports are read and answered. If the game did something you did not expect on your system, that is exactly what we want to hear about.</div>
+        </details>
+      </div>
+    </section>
+
+    <section class="section view" id="transmission" data-view="transmission">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> LIVE TRANSMISSION</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Type anything. The entity answers — in one sentence, by live AI.</p>
+
+      <div class="signal-box reveal">
+        <label class="signal-label" for="typeIn">> TRANSMIT A SIGNAL_</label>
+        <div class="signal-row">
+          <span class="signal-prompt">&gt;</span>
+          <input id="typeIn" class="type-in" type="text" maxlength="120" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Enter a signal" placeholder="...">
+          <button id="signalSend" class="signal-send" type="button">SEND</button>
+        </div>
+        <div class="signal-keys" id="signalKeys"></div>
+        <div class="ai-log hidden" id="aiLog"></div>
+        <p class="signal-hint">PRESS ENTER OR SEND. IT ALWAYS ANSWERS IN ONE SENTENCE.</p>
+        <p class="signal-disclosure">WHAT YOU TYPE HERE IS SENT TO A THIRD-PARTY AI SERVICE (GROQ) AND IS NOT STORED OR LOGGED BY THIS SITE. IT IS THE ONLY PLACE THIS SITE SENDS TEXT. THE GAME ITSELF SENDS NOTHING.</p>
+      </div>
+    </section>
+
+    <section class="section view" id="preview" data-view="preview">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> SESSION PREVIEW</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">A scripted preview of the game's interrogation. Answer honestly.</p>
+
+      <div class="terminal reveal" id="term">
+        <div class="terminal-bar">
+          <span class="dots"><span class="dot dot-red"></span><span class="dot dot-green"></span><span class="dot dot-dim"></span></span>
+          <span>TRANSMISSION.EXE</span>
+          <span id="termStatus">RECEIVING FEED</span>
+        </div>
+        <div class="terminal-body">
+          <div class="term-lines" id="termLines"></div>
+          <div class="term-options hidden" id="termOptions"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section view locked" id="logs" data-view="logs">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE ARCHIVE</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">RECOVERY PROCEDURE — ENCRYPTED. TYPE THE SEQUENCE TO DECRYPT.</p>
+
+      <div class="logs-lock" id="logsLock">
+        <p class="logs-lock-text">FOUR CHARACTERS. TYPED QUICKLY.<br>THAT WAS THE TEST. NOT THE QUESTIONS BEFORE IT.</p>
+        <p class="logs-hint">PRESS: <span class="logs-keys">2</span><span class="logs-keys">0</span><span class="logs-keys">1</span><span class="logs-keys">3</span></p>
+        <p class="logs-lock-foot">THE SAME CODE WORKS INSIDE THE GAME — TYPED ON THE MAIN MENU. IT ALWAYS HAS.</p>
+      </div>
+
+      <div class="logs-grid hidden" id="logsGrid">
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 04 — UNDATED</span>
+          <p class="logs-body">The questions were never the point. The pauses were. We started timing the silences before we started reading the answers.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 23 — UNDATED</span>
+          <p class="logs-body">Neptune Productions is not a studio. It was never registered as one.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 30 — UNDATED</span>
+          <p class="logs-body">If you are reading this, you typed the code quickly enough. That was the test. Not the questions before it.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 47 — UNDATED</span>
+          <p class="logs-body">We archived a dozen sessions that look almost identical. Small variations in hesitation, different times of day. An emergent pattern we did not anticipate.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 77 — UNDATED</span>
+          <p class="logs-body">Sometimes we leave a breadcrumb. If someone follows it twice, they find the key.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 117 — UNDATED</span>
+          <p class="logs-body">There is a record of a late-night session where the subject didn't blink for five minutes. Screenshots show small changes in the wallpaper at odd intervals. No system process had permission to alter those pixels.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 140 — UNDATED</span>
+          <p class="logs-body">A user reported their mouse moving on its own. Video shows the cursor sliding in regular arcs every 17 seconds. Correlations do not equal causation, but patterns are patterns.</p>
+        </article>
+        <article class="logs-entry reveal">
+          <span class="logs-id">ENTRY 169 — UNDATED</span>
+          <p class="logs-body">We asked a subject to check their Dock. They reported nothing unusual. We had already changed it while they were reading.</p>
+        </article>
+        <p class="logs-return">THE ARCHIVE IS OPEN NOW. IT WILL NOT CLOSE AGAIN.</p>
+      </div>
+    </section>
+
+    <section class="section view" id="dev" data-view="dev">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> THE DEV</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Behind the entity: one person, building strange software at night.</p>
+
+      <div class="dev-grid">
+        <div class="about-copy reveal">
+          <p>Neptune Productions is a single developer. The Question Game is a hobby project made for people who like to be unsettled on purpose.</p>
+          <p>The fiction on this page is fiction. The code is real, open source, and does exactly what the <a href="#concerns">CONCERNS</a> section says — no more, no less.</p>
+          <p class="dim">Found a bug? Saw the game do something it should not? That is the best kind of message to send.</p>
+        </div>
+
+        <div class="dev-card reveal">
+          <h3 class="dev-card-title">CONTACT</h3>
+          <ul class="dev-list">
+            <li><span class="mark">▸</span> Discord — <button class="discord-copy dev-copy" type="button" title="Copy Discord handle">neptunetheii [COPY]</button></li>
+            <li><span class="mark">▸</span> GitHub — <a href="https://github.com/notmicrosoft2000-cmd" target="_blank" rel="noopener">notmicrosoft2000-cmd</a></li>
+            <li><span class="mark">▸</span> Repository — <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame" target="_blank" rel="noopener">thequestiongame</a></li>
+          </ul>
+
+          <h3 class="dev-card-title mt">SUGGESTION INBOX</h3>
+          <p class="dev-note">Ideas, scare ideas, bug reports, or requests for mercy — all read. It opens a prefilled form on GitHub.</p>
+          <a class="btn btn-primary" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/issues/new?title=%5BSUGGESTION%5D+&amp;body=%0A%0A---%0A%0AType%20your%20suggestion%20above.%20If%20this%20is%20a%20bug%20report%2C%20include%20your%20platform%20and%20what%20happened.%0A" target="_blank" rel="noopener">[ OPEN THE INBOX ]</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section view" id="download" data-view="download">
+      <div class="section-head reveal">
+        <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
+        <div class="section-line"></div>
+      </div>
+      <p class="section-sub reveal">Windows 10 / 11, macOS and Linux, two editions. No installation required. They only need permission.</p>
+
+      <div class="download-grid">
+        <div class="releases-col">
+        <div class="release reveal">
+          <div class="release-top">
+            <div>
+              <span class="tag tag-green">STABLE CLASSIC — v2.02</span>
+              <h3 class="release-version" id="relVersion">v2.02-classic</h3>
+              <p class="release-date" id="relDate">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="release-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="platform-options" data-stagger>
+            <div class="platform-card" id="winCard">
+              <div class="platform-head">
+                <span class="platform-os">WINDOWS</span>
+                <span class="tag tag-green hidden" id="winDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGame.exe</b> — no installation required.</p>
+              <a class="platform-btn" id="dlWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-status" id="dlWindowsStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="macCard">
+              <div class="platform-head">
+                <span class="platform-os">MACOS</span>
+                <span class="tag tag-green hidden" id="macDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game</b> into your Applications folder.</p>
+              <a class="platform-btn" id="dlMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <p class="platform-status" id="dlMacStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="linuxCard">
+              <div class="platform-head">
+                <span class="platform-os">LINUX</span>
+                <span class="tag tag-green hidden" id="linuxDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGame</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
+              <a class="platform-btn" id="dlLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.02-classic/TheQuestionGame-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <p class="platform-status" id="dlLinuxStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="androidCard">
+              <div class="platform-head">
+                <span class="platform-os">ANDROID</span>
+                <span class="tag tag-green hidden" id="androidDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Android 8+ (ARM64). An <b>APK</b> — unsigned, sideloaded, cold to the touch. Installs instantly. The device remembers.</p>
+              <a class="platform-btn" id="dlAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlAndroidStatus">READY — DIRECT LINK</p>
+            </div>
+          </div>
+
+          <div class="release-fallback hidden" id="releaseFallback">
+            <a class="asset-btn" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener">[ OPEN GITHUB RELEASES ]</a>
+          </div>
+
+          <div class="release-note">
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS) or TAR.GZ (Linux) — the release contains the assets the game needs to run.
+          </div>
+
+          <div class="release-note mac-note">
+            macOS: the app is unsigned, so on first launch right-click it and choose <b>Open</b> (or run <code>xattr -cr /Applications/The&nbsp;Question&nbsp;Game.app</code> in Terminal).
+          </div>
+
+          <div class="release-warn">
+            THIS IS A WORK OF INTERACTIVE HORROR FICTION.<br>
+            It contains mature themes and moments designed to unsettle you. The game itself transmits nothing — your answers stay on your machine.
+            If you are easily disturbed, do not play alone — and do not play at night.
+          </div>
+        </div>
+
+        <div class="release reveal rem">
+          <div class="release-top">
+            <div>
+              <span class="tag tag-green">LATEST — v2.04 REMASTERED</span>
+              <h3 class="release-version" id="remRelVersion">v2.04-remastered</h3>
+              <p class="release-date" id="remRelDate">CONTACTING RELEASE SERVER...</p>
+            </div>
+            <div class="release-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="platform-options" data-stagger>
+            <div class="platform-card" id="remWinCard">
+              <div class="platform-head">
+                <span class="platform-os">WINDOWS</span>
+                <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live.</p>
+              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-status" id="dlRemWindowsStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="remMacCard">
+              <div class="platform-head">
+                <span class="platform-os">MACOS</span>
+                <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
+              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="remLinuxCard">
+              <div class="platform-head">
+                <span class="platform-os">LINUX</span>
+                <span class="tag tag-green hidden" id="remLinuxDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
+              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v2.04-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
+            </div>
+            <div class="platform-card" id="remAndroidCard">
+              <div class="platform-head">
+                <span class="platform-os">ANDROID</span>
+                <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
+              </div>
+              <p class="platform-desc">Android 8+ (ARM64). An <b>APK</b> — the remastered edition, shrunk down, carried inside you. It vibrates when no one is near.</p>
+              <a class="platform-btn" id="dlRemAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlRemAndroidStatus">READY — DIRECT LINK</p>
+            </div>
+          </div>
+
+          <div class="release-alpha">
+            ⚠ ALPHA BUILD ⚠<br>
+            <span>THIS EDITION IS EXPECTED TO CRASH. A LOT. GLITCHES, BREAKAGES AND MISSING CONTENT ARE PART OF THE EXPERIENCE. THE CLASSIC EDITION ABOVE IS THE STABLE ONE. PLAY AT YOUR OWN RISK.</span>
+          </div>
+
+          <div class="release-fallback hidden" id="remReleaseFallback">
+            <a class="asset-btn" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases" target="_blank" rel="noopener">[ OPEN GITHUB RELEASES ]</a>
+          </div>
+
+          <div class="release-note">
+            IMPORTANT: Do not share a single binary. Download the full ZIP (Windows), DMG (macOS) or TAR.GZ (Linux) — the release contains the assets the game needs to run.
+          </div>
+
+          <div class="release-warn rem-warn">
+            THE REMASTERED EDITION MAY BRIEFLY REQUEST YOUR CAMERA AS A SCARE.<br>
+            Deny it and the scare is skipped — the game keeps running. Your answers stay on your machine.
+          </div>
+        </div>
+        </div>
+
+        <aside class="side reveal">
+          <h3 class="side-title">IN THIS BUILD</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> 100+ questions</li>
+            <li><span class="mark">▸</span> Three-part narrative</li>
+            <li><span class="mark">▸</span> Text-based — keyboard only</li>
+            <li><span class="mark">▸</span> Atmospheric procedural audio</li>
+            <li><span class="mark">▸</span> VHS / static visual treatment</li>
+            <li><span class="mark">▸</span> It remembers what you tell it</li>
+            <li><span class="mark">▸</span> The game sends nothing from your machine</li>
+          </ul>
+          <h3 class="side-title mt">SYSTEM REQUIREMENTS</h3>
+          <ul class="feature-list">
+            <li><span class="mark">▸</span> OS — Windows 10 / 11 (64-bit), macOS 14+ (Apple Silicon) or Linux (64-bit, SDL2 + ALSA)</li>
+            <li><span class="mark">▸</span> Screen — 800×600, resizable</li>
+            <li><span class="mark">▸</span> Input — Keyboard only (TAB / ENTER)</li>
+            <li><span class="mark">▸</span> Network — Optional</li>
+            <li><span class="mark">▸</span> Camera — Not required to play</li>
+            <li><span class="mark">▸</span> Storage — ~70 MB</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-line"></div>
+    <p>NEPTUNE PRODUCTIONS [C] — THE QUESTION GAME v2.04</p>
+    <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
+    <button class="discord-copy footer-discord" type="button" title="Copy Discord handle">[ DISCORD: neptunetheii — CLICK TO COPY ]</button>
+    <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>
+  </footer>
+
+  <div class="modal-overlay hidden" id="warnModal" role="dialog" aria-modal="true" aria-labelledby="warnTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title" id="warnTitle">⚠ STROBE / PHOTOSENSITIVITY WARNING</h3>
+        <button class="modal-x" id="warnClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>THE QUESTION GAME CONTAINS <span class="red">FLASHING LIGHTS, RAPID SCREEN CHANGES AND A SUDDEN FULL-SCREEN FLASH</span> AS PART OF ITS SCARES. THIS SITE PREVIEW ALSO FLASHES.</p>
+        <p>If you or anyone playing has photosensitive epilepsy, or has ever had a seizure triggered by screens or flashing lights, <b>do not play</b>. A small percentage of people may experience symptoms even without a prior history.</p>
+        <p>Play in a well-lit room, at a safe distance from the screen, and stop immediately if you feel any discomfort.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="warnCancel" type="button">[ I'LL SKIP THIS ]</button>
+        <button class="modal-btn" id="warnAccept" type="button">[ I UNDERSTAND — CONTINUE ]</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+    <div class="modal wide">
+      <div class="modal-head">
+        <h3 class="modal-title" id="guideTitle">INSTALL GUIDE</h3>
+        <button class="modal-x" id="guideClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="guide-tabs" role="tablist">
+        <button class="guide-tab" id="tabWin" type="button" role="tab" aria-selected="false">WINDOWS</button>
+        <button class="guide-tab" id="tabMac" type="button" role="tab" aria-selected="false">MACOS</button>
+        <button class="guide-tab hidden secret-tab" id="tabSecret" type="button" role="tab" aria-selected="false">SECRET</button>
+      </div>
+      <div class="modal-body">
+        <div class="guide-pane" id="guideWin">
+          <ol class="guide-steps">
+            <li><b>Unzip the download.</b> Open the ZIP in File Explorer and click <b>Extract All</b> (or right-click the ZIP → <b>Extract All</b>).</li>
+            <li><b>Open the extracted folder</b> and double-click <code>TheQuestionGame.exe</code> (Classic) or <code>TheQuestionGameRemastered.exe</code> (Remastered).</li>
+            <li><b>Windows SmartScreen:</b> Windows will likely show <i>"Windows protected your PC"</i> because the game is unsigned. Click <b>More info</b> → <b>Run anyway</b>.</li>
+            <li><b>Still blocked?</b> Right-click the .exe → <b>Properties</b> → tick <b>Unblock</b> → <b>OK</b>, then run it again.</li>
+            <li><b>That's it.</b> No installation. To uninstall, delete the folder you unzipped.</li>
+          </ol>
+        </div>
+        <div class="guide-pane hidden" id="guideMac">
+          <ol class="guide-steps">
+            <li><b>Open the DMG</b> by double-clicking the downloaded file.</li>
+            <li><b>Drag</b> <code>The Question Game</code> (or <code>The Question Game Remastered</code>) into your <b>Applications</b> folder.</li>
+            <li><b>Gatekeeper:</b> the first launch will warn the app is from an unidentified developer. <b>Right-click</b> (or Control-click) the app → <b>Open</b> → click <b>Open</b> again in the dialog.</li>
+            <li><b>Alternative:</b> open Terminal and run <code>xattr -cr /Applications/The&nbsp;Question&nbsp;Game.app</code>, then double-click to launch.</li>
+            <li><b>That's it.</b> No installation. To uninstall, delete the app and <code>~/Library/Application Support/TheQuestionGame</code>.</li>
+          </ol>
+        </div>
+        <div class="guide-pane hidden" id="guideSecret">
+          <p class="secret-text">THERE IS NO SECRET TAB. IT MADE ONE BECAUSE IT NOTICED YOU WERE READING CAREFULLY. THE DOWNLOAD WILL WORK. THE GAME WILL REMEMBER THIS.</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn ghost" id="guideCancel" type="button">[ BACK ]</button>
+        <button class="modal-btn" id="guideGo" type="button">[ I'VE READ IT — BEGIN DOWNLOAD ]</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mock-pop hidden" id="mockPop" role="dialog" aria-label="Interrupted transmission">
+    <div class="mock-head">
+      <span class="mock-title">TRANSMISSION INTERRUPT</span>
+      <button class="mock-x" id="mockX" type="button" aria-label="Dismiss">✕</button>
+    </div>
+    <div class="mock-body" id="mockBody"></div>
+    <div class="mock-actions">
+      <button class="mock-btn" id="mockMore" type="button">[ MOCK ME MORE ]</button>
+      <button class="mock-btn ghost" id="mockDismiss" type="button">[ IGNORE ]</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/config.js?v=24"></script>
+  <script src="js/main.js?v=24"></script>
+</body>
+</html>

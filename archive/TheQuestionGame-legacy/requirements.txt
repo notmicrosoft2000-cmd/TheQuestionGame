@@ -1,0 +1,5 @@
+pygame
+requests
+numpy
+opencv-python
+pyttsx3

@@ -5,10 +5,10 @@ from setuptools import setup
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 setup(
-    name="TheQuestionGame",
+    name="TheQuestionGameRemastered",
     version="2.02",
-    description="The Question Game",
-    app=[os.path.join(ROOT, "games", "classic", "TheQuestionGame.py")],
+    description="The Question Game Remastered",
+    app=[os.path.join(ROOT, "run_remastered.py")],
     options={
         "py2app": {
             "argv_emulation": True,
@@ -16,19 +16,17 @@ setup(
             "packages": ["pygame", "numpy", "cv2", "requests"],
             "excludes": ["tkinter", "PyQt5", "PySide2", "matplotlib", "scipy"],
             "resources": [
-                os.path.join(ROOT, "windowq.png"),
-                os.path.join(ROOT, "logsmusic.ogg"),
-                os.path.join(ROOT, "games", "classic", "readme.txt"),
+                os.path.join(ROOT, "TheQuestionGameRemastered", "assets"),
             ],
             "plist": {
-                "CFBundleName": "The Question Game",
-                "CFBundleDisplayName": "The Question Game",
-                "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongame",
+                "CFBundleName": "The Question Game Remastered",
+                "CFBundleDisplayName": "The Question Game Remastered",
+                "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongameremastered",
                 "CFBundleShortVersionString": "2.02",
                 "CFBundleVersion": "2.02",
                 "LSApplicationCategoryType": "public.app-category.games",
                 "NSHighResolutionCapable": True,
-                "NSCameraUsageDescription": "The Question Game checks whether you are still paying attention during the session.",
+                "NSCameraUsageDescription": "The Question Game Remastered checks whether you are still paying attention during the session.",
             },
         }
     },

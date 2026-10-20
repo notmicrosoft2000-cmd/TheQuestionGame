@@ -2,7 +2,7 @@ import os
 
 from setuptools import setup
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 setup(
     name="TheSimplerTimes",

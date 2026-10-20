@@ -1,0 +1,7 @@
+# Windows build dependencies (used by .github/workflows/build-windows-remastered.yml)
+pyinstaller
+pygame
+numpy
+opencv-python
+requests
+pyttsx3
