@@ -1,9 +1,9 @@
 """Procedural audio: every sound effect is synthesized once at startup into a
-cached pool, plus a looping ambient drone and the LOGS-screen music track."""
-import math
+cached pool, plus looping music tracks (menu/logs/bossfight) and ambience."""
+import os
 import random
+import sys
 import threading
-import time
 
 import numpy as np
 import pygame
@@ -16,6 +16,18 @@ _POOL_SIZE = 5
 _SOUND_CACHE = {}
 _ambience_channel = None
 _logs_music_playing = False
+_current_music = None
+_music_lock = threading.Lock()
+_sfx_duck = 1.0
+
+
+def set_sfx_duck(factor):
+    """Lower (or restore) all sound-effect volumes so music can breathe."""
+    global _sfx_duck
+    try:
+        _sfx_duck = max(0.0, min(1.0, float(factor)))
+    except Exception:
+        _sfx_duck = 1.0
 
 
 def _mk(type_sound):
@@ -46,6 +58,7 @@ def _mk_beep():
 def _mk_error():
     t = np.linspace(0, 0.2, int(_SAMPLE_RATE * 0.2), False)
     wave = np.sin(2 * np.pi * 150 * t) + np.sin(2 * np.pi * 155 * t)
+    wave = np.clip(wave, -1, 1)
     return pygame.mixer.Sound(buffer=np.int16(wave * 18000))
 
 
@@ -106,6 +119,36 @@ def _mk_scream():
     return pygame.mixer.Sound(buffer=np.int16(combined * 20000))
 
 
+def _assets_dir():
+    """Where the editable sound assets live (next to the package, or in a bundle)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bundled = os.path.join(meipass, "assets")
+        if os.path.isdir(bundled):
+            return bundled
+    return os.path.join(here, "assets")
+
+
+def _music_path(name):
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(os.path.join(meipass, "assets", name))
+        candidates.append(os.path.join(meipass, name))
+    candidates += [
+        os.path.join(here, "assets", name),
+        os.path.join(here, name),
+        os.path.join(os.path.dirname(here), name),
+        name,
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return None
+
+
 def build_sound_cache():
     _SOUND_CACHE["type"] = [_mk(None) for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["ui_nav"] = [_mk_nav()]
@@ -118,6 +161,60 @@ def build_sound_cache():
     _SOUND_CACHE["deep_rumble"] = [_mk_rumble() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["reverse_chord"] = [_mk_reverse_chord() for _ in range(_POOL_SIZE)]
     _SOUND_CACHE["static_scream"] = [_mk_scream() for _ in range(_POOL_SIZE)]
+    _load_asset_sounds()
+    try:
+        pygame.mixer.music.set_volume(0.5)
+    except Exception:
+        pass
+
+
+# Map a cache key to the asset basename it should prefer on disk.
+ASSET_SOUNDS = {
+    "ui_nav": "ui_nav",
+    "ui_select": "ui_select",
+    "mech_beep": "mech_beep",
+    "error": "error",
+    "glitch": "glitch",
+    "static_burst": "static_burst",
+    "heartbeat": "heartbeat",
+    "deep_rumble": "deep_rumble",
+    "reverse_chord": "reverse_chord",
+    "static_scream": "static_scream",
+    "ambience": "ambience",
+}
+
+
+def _load_asset_sounds():
+    """Prefer real files under assets/; keep the synthesized fallback otherwise.
+
+    On the very first run the assets do not exist yet, so they are generated
+    here (see `sfx_gen`) and then loaded. If generation is impossible (no numpy
+    writer, read-only folder) the shipped procedural versions stay in place.
+    """
+    assets_dir = _assets_dir()
+    wanted = list(ASSET_SOUNDS.values())
+    paths = {}
+    try:
+        from . import sfx_gen
+        paths = sfx_gen.ensure_assets(assets_dir, names=wanted)
+    except Exception:
+        paths = {}
+        for name in wanted:
+            p = _music_path(name + ".mp3") or _music_path(name + ".ogg") or _music_path(name + ".wav")
+            if p:
+                paths[name] = p
+    for key, basename in ASSET_SOUNDS.items():
+        path = paths.get(basename)
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            snd = pygame.mixer.Sound(path)
+        except Exception:
+            continue
+        if key == "ambience":
+            _SOUND_CACHE["_ambience_path"] = path
+        else:
+            _SOUND_CACHE[key] = [snd]
 
 
 def _pick(name):
@@ -125,80 +222,129 @@ def _pick(name):
     return random.choice(pool) if pool else None
 
 
+def _safe_play(sound, volume):
+    """play() returns None when the mixer has no free channels — guard it."""
+    try:
+        chan = sound.play()
+        if chan:
+            chan.set_volume(volume * _sfx_duck)
+    except Exception:
+        pass
+
+
 def play_type_sound():
     s = _pick("type")
     if s:
-        s.play().set_volume(0.15)
+        _safe_play(s, 0.15)
 
 
 def play_ui_nav_sound():
     s = _pick("ui_nav")
     if s:
-        s.play().set_volume(0.2)
+        _safe_play(s, 0.2)
 
 
 def play_ui_select_sound():
     s = _pick("ui_select")
     if s:
-        s.play().set_volume(0.3)
+        _safe_play(s, 0.3)
 
 
 def play_mechanical_beep():
     s = _pick("mech_beep")
     if s:
-        s.play().set_volume(0.25)
+        _safe_play(s, 0.25)
 
 
 def play_error_sound():
     s = _pick("error")
     if s:
-        s.play().set_volume(0.4)
+        _safe_play(s, 0.4)
 
 
 def play_glitch_sound():
     s = _pick("glitch")
     if s:
-        s.play().set_volume(0.3)
+        _safe_play(s, 0.3)
 
 
 def play_static_burst():
     s = _pick("static_burst")
     if s:
-        s.play().set_volume(0.18)
+        _safe_play(s, 0.18)
 
 
 def play_heartbeat():
     s = _pick("heartbeat")
     if s:
-        s.play().set_volume(0.55)
+        _safe_play(s, 0.55)
 
 
 def play_deep_rumble():
     s = _pick("deep_rumble")
     if s:
-        s.play().set_volume(0.5)
+        _safe_play(s, 0.5)
 
 
 def play_reverse_chord():
     s = _pick("reverse_chord")
     if s:
-        s.play().set_volume(0.35)
+        _safe_play(s, 0.35)
+
+
+_jumpscare_cache = {}
+
+
+def play_jumpscare():
+    path = _music_path("jumpscare.mp3")
+    if not path:
+        return
+    try:
+        snd = _jumpscare_cache.get(path)
+        if snd is None:
+            snd = pygame.mixer.Sound(path)
+            _jumpscare_cache[path] = snd
+        chan = snd.play()
+        if chan:
+            chan.set_volume(0.6 * _sfx_duck)
+    except Exception:
+        pass
+
+
+def play_bossfight():
+    play_music("bossfight.mp3", loops=-1, fade_ms=600)
 
 
 def play_static_scream():
     s = _pick("static_scream")
     if s:
-        s.play().set_volume(0.45)
+        _safe_play(s, 0.45)
 
 
 def start_ambience():
     global _ambience_channel
+    # Prefer the asset on disk (generated on first run, then user-replaceable).
+    path = _SOUND_CACHE.get("_ambience_path")
+    if path and os.path.exists(path):
+        try:
+            snd = _SOUND_CACHE.get("_ambience_sound")
+            if snd is None:
+                snd = pygame.mixer.Sound(path)
+                _SOUND_CACHE["_ambience_sound"] = snd
+            _ambience_channel = snd.play(-1)
+            if _ambience_channel:
+                _ambience_channel.set_volume(0.2)
+            return
+        except Exception:
+            pass
+    # Fallback: synthesize the drone in memory.
     try:
         t = np.linspace(0, 4.0, int(_SAMPLE_RATE * 4.0), False)
         wave = np.sin(2 * np.pi * 50 * t) * 0.5 + np.random.normal(0, 0.03, len(t))
         sound = pygame.mixer.Sound(buffer=np.int16(wave * 12000))
         _ambience_channel = sound.play(-1)
-        _ambience_channel.set_volume(0.2)
+        if _ambience_channel:
+            _ambience_channel.set_volume(0.2)
     except Exception:
         pass
 
@@ -211,51 +357,66 @@ def stop_ambience():
         except Exception:
             pass
         _ambience_channel = None
+    stop_music(600)
 
 
 def start_logs_music():
-    global _logs_music_playing
+    play_music("logsmusic.ogg", loops=-1, fade_ms=400)
+
+
+def _stop_music(fade_ms=400):
     try:
-        path = config.asset_path("logsmusic.ogg")
-        pygame.mixer.music.load(path)
-        pygame.mixer.music.set_volume(0.0)
-        pygame.mixer.music.play(-1)
-        _logs_music_playing = True
-
-        def _fadein(ms=800):
-            steps = max(4, int(ms / 50))
-            for i in range(1, steps + 1):
-                if not _logs_music_playing:
-                    break
-                try:
-                    pygame.mixer.music.set_volume(float(i) / steps * 0.2)
-                except Exception:
-                    pass
-                time.sleep(ms / steps / 1000.0)
-
-        threading.Thread(target=_fadein, daemon=True).start()
+        pygame.mixer.music.fadeout(int(fade_ms))
     except Exception:
-        pass
-
-
-def stop_logs_music():
-    global _logs_music_playing
-    if _logs_music_playing:
         try:
             pygame.mixer.music.stop()
         except Exception:
             pass
-        _logs_music_playing = False
+    global _current_music, _logs_music_playing
+    _current_music = None
+    _logs_music_playing = False
 
 
-def fade_logs_music(duration_ms=1000):
-    global _logs_music_playing
-    if _logs_music_playing:
-        try:
-            pygame.mixer.music.fadeout(int(duration_ms))
-        except Exception:
-            try:
-                pygame.mixer.music.stop()
-            except Exception:
-                pass
-        _logs_music_playing = False
+def play_music(name, loops=-1, fade_ms=400):
+    if not config.MUSIC_ENABLED:
+        return
+    global _current_music, _logs_music_playing
+    # Same track already rolling? Just keep it — do not restart it on every
+    # state change (title -> play would otherwise reset the song mid-phrase).
+    try:
+        if _current_music == name and pygame.mixer.music.get_busy():
+            return
+    except Exception:
+        pass
+    path = _music_path(name)
+    if not path:
+        return
+    try:
+        pygame.mixer.music.load(path)
+        pygame.mixer.music.play(loops=loops, fade_ms=fade_ms)
+        _current_music = name
+        _logs_music_playing = (name == "logsmusic.ogg")
+    except Exception:
+        pass
+
+
+def set_music_volume(volume):
+    """Set the looping-music volume (0.0-1.0), clamped and fail-safe."""
+    try:
+        pygame.mixer.music.set_volume(max(0.0, min(1.0, float(volume))))
+    except Exception:
+        pass
+
+
+def stop_music(fade_ms=400):
+    _stop_music(fade_ms)
+
+
+def stop_logs_music():
+    if _logs_music_playing or _current_music == "logsmusic.ogg":
+        _stop_music(0)
+
+
+def fade_logs_music(duration_ms=800):
+    if _logs_music_playing or _current_music == "logsmusic.ogg":
+        _stop_music(duration_ms)

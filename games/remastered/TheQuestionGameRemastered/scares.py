@@ -48,6 +48,10 @@ def _do_whisper(game):
     threading.Thread(target=os_layer.whisper_text, args=(line,), daemon=True).start()
     game.fx["whisper_text"] = '"' + line + '"'
     game.fx["whisper_until"] = game.now + 3.5
+    # It says something aggressive — the window should take the hit with it.
+    os_layer.shake_game_window(cycles=14, amplitude=40)
+    game.fx["screen_shake_until"] = game.now + 0.7
+    game.fx["shake_amp"] = max(int(game.fx.get("shake_amp", 0) or 0), 16)
 
 
 def _do_window_shake(game):
@@ -105,8 +109,48 @@ def _do_static_scream(game):
     audio.play_static_scream()
 
 
+def _do_jumpscare(game):
+    """The big one — loud stinger + strobe + corruption, only at high escalation."""
+    audio.play_jumpscare()
+    game.fx["flicker_until"] = game.now + 1.5
+    game.fx["corrupt_until"] = max(game.fx["corrupt_until"], game.now + 1.5)
+    game.fx["rgb_split_until"] = max(game.fx["rgb_split_until"], game.now + 1.5)
+
+
+def _do_window_teleport(game):
+    os_layer.teleport_window_random()
+    audio.play_glitch_sound()
+
+
+def _do_window_drift(game):
+    threading.Thread(target=os_layer.drift_window, args=(8.0,), daemon=True).start()
+    audio.play_deep_rumble()
+
+
+def _do_rgb_split(game):
+    game.fx["rgb_split_until"] = game.now + 2.0
+    audio.play_mechanical_beep()
+
+
+def _do_screen_tear(game):
+    game.fx["screen_tear_until"] = game.now + 1.5
+    audio.play_static_burst()
+
+
 def _do_reverse_chord(game):
     threading.Thread(target=audio.play_reverse_chord, daemon=True).start()
+
+
+def _do_windows_shake(game):
+    """Windows: shake every OTHER open window on the desktop."""
+    os_layer.shake_other_windows()
+    audio.play_deep_rumble()
+
+
+def _do_windows_minimize(game):
+    """Windows: minimize everything else, leaving the player alone with us."""
+    os_layer.minimize_other_windows()
+    audio.play_mechanical_beep()
 
 
 # Fixed, AI-choosable set.
@@ -124,15 +168,30 @@ SCARE_REGISTRY = {
     "corruption": _do_corruption,
     "static_scream": _do_static_scream,
     "reverse_chord": _do_reverse_chord,
+    "window_teleport": _do_window_teleport,
+    "window_drift": _do_window_drift,
+    "rgb_split": _do_rgb_split,
+    "screen_tear": _do_screen_tear,
+    "jumpscare": _do_jumpscare,
+    "windows_shake": _do_windows_shake,
+    "windows_minimize": _do_windows_minimize,
 }
+
+# Stacking guard: at most one scare per kind within this window (seconds).
+_COOLDOWN = 6.0
+_last_applied = {}
 
 
 def apply_scare(game, name):
     fn = SCARE_REGISTRY.get(name)
-    if fn:
-        try:
-            fn(game)
-            return True
-        except Exception:
-            pass
-    return False
+    if not fn:
+        return False
+    now = game.now
+    if now - _last_applied.get(name, -999.0) < _COOLDOWN:
+        return False
+    _last_applied[name] = now
+    try:
+        fn(game)
+        return True
+    except Exception:
+        return False

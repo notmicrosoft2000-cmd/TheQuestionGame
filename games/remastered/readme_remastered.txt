@@ -26,15 +26,59 @@ LINUX (64-bit):
 
 NOTES:
 - Only the first few questions are fixed. Everything after them is written
-  live by an AI, so no two sessions are the same.
-- The AI may choose local effects: screen flicker, webcam flash, whispered
-  speech, window shake, mouse movement, wallpaper changes, notifications,
-  and sound. It only ever picks from a fixed local set — nothing else runs.
+  live by an AI, so no two sessions are the same. Questions are generated in
+  the background while you read, so there is no wait between them.
+- The AI may choose local effects: screen flicker, screen tearing, chromatic
+  splitting, webcam flash, whispered speech, window shake, window teleport,
+  slow window drift, mouse movement, wallpaper changes, notifications,
+  jump scares, and sound. On Windows it can also shake or minimize every other
+  window you have open. It only ever picks from a fixed local set — nothing
+  else runs.
+- The window is locked at a fixed size with no title bar and no close,
+  minimize, or maximize buttons. Close attempts (the X, Alt+F4, the menu
+  EXIT item) are refused, and refused loudly — escalation is the point. On
+  Windows it also keeps itself pinned on top, flashes the taskbar entry, and
+  strips the close item out of the system menu, so the only way out is the
+  Task Manager (Activity Monitor on macOS).
+- It watches the machine: some questions are built from what is actually open
+  and where you actually are ("Discord is running…", "Are you currently in
+  {your city}, {your country}?"), it shows your country's flag, and it notices
+  when you open the Task Manager. The AI is told roughly where you are, so it
+  can tailor questions to your nation.
+- It opens the camera and tells you it is doing so — once in Run 1, and again
+  in later runs.
+- It catches contradictions: answer "Are you alone?" one way and it will ask
+  again later, then throw the difference back at you. Long pauses and quick
+  answers both get called out, and there is a badge for staring at a question
+  for a full minute.
+- Music: logsmusic.ogg on the hidden logs screen, bossfight.mp3 through
+  Session 3, jumpscare.mp3 on the big scares.
 - If the AI is unreachable, the game falls back to built-in questions and
   still works offline.
+- Location is approximate and derived from your network address (city-level),
+  not GPS. The flag and nation-tailored questions need a working connection;
+  without one the game simply omits them.
 - A webcam scare may briefly request your camera. Deny it and the game skips
   it without asking again.
 
+AI PROVIDERS (advanced):
+- The game ships with NO API key. It asks Neptune's relay, which holds the key
+  and forwards the request to Groq (model openai/gpt-oss-120b). Nothing secret is
+  in this build, and the key can be rotated server-side without a new release.
+- Settings -> AI Source switches between:
+    Relay    the built-in server relay (default; needs internet)
+    Local    a local Ollama model, if you have one installed
+    Offline  no network at all; the built-in question bank only
+- Point at a different relay or bring your own key with env vars:
+    TQG_RELAY_URL / TQG_RELAY_TOKEN   a self-hosted relay (see server/relay.py)
+    TQG_AI_PROVIDER=groq + TQG_GROQ_KEY=...   your own Groq key, direct
+- The game talks to any OpenAI-compatible chat API. Other providers (openrouter,
+  openai, deepseek, ollama) are one env var away; see config.py.
+- If the relay is unreachable the game falls back to the offline question bank
+  instantly, so it always runs.
+
 RUNNING FROM SOURCE:
-- pip install -r requirements.txt
+- pip install -r build/requirements-mac-remastered.txt (or the linux one)
 - python -m TheQuestionGameRemastered.main
+- Testing: set TQG_DATA_DIR to a temp dir so saves stay out of your real
+  profile (the automated tests do this).

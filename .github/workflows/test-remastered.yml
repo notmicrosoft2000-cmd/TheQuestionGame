@@ -1,0 +1,69 @@
+name: Test Remastered
+
+on:
+  push:
+    paths:
+      - "games/remastered/**"
+      - "build/requirements-linux.txt"
+      - ".github/workflows/test-remastered.yml"
+  pull_request:
+    paths:
+      - "games/remastered/**"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Headless smoke + regression + FPS assert
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
+          sudo apt-get install -y --no-install-recommends libasound2 || \
+            sudo apt-get install -y --no-install-recommends libasound2t64
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --upgrade pip && pip install -r build/requirements-linux.txt
+
+      - name: Run smoke test (asserts frame budget + behaviour)
+        run: python games/remastered/tests/smoke_test.py
+
+      - name: Verify audio assets generate + load
+        run: |
+          python - <<'PY'
+          import os, tempfile
+          os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+          os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+          import pygame
+          pygame.init()
+          try:
+              pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
+          except Exception as e:
+              print("mixer unavailable in CI, skipping:", e)
+              raise SystemExit(0)
+          import sys
+          sys.path.insert(0, "games/remastered")
+          from TheQuestionGameRemastered import sfx_gen
+          with tempfile.TemporaryDirectory() as d:
+              made = sfx_gen.ensure_assets(d)
+              missing = [n for n in sfx_gen.SOUND_SPECS if n not in made]
+              assert not missing, "did not generate: %s" % missing
+              for name, path in made.items():
+                  assert os.path.exists(path) and os.path.getsize(path) > 128, path
+                  pygame.mixer.Sound(path)  # must decode
+              print("generated + decoded %d sounds" % len(made))
+          print("AUDIO_ASSETS_OK")
+          PY
+
+      - name: Test the AI relay
+        run: python server/test_relay.py

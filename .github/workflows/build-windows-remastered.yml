@@ -1,0 +1,57 @@
+name: Build Remastered Windows
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Remastered binary for Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.release.tag_name, 'remastered')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install --upgrade pip; pip install -r build/requirements-windows.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm games/remastered/TheQuestionGameRemastered.spec
+
+      - name: Package binary
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist\TheQuestionGameRemastered.exe)) { Write-Error "exe not produced"; exit 1 }
+          New-Item -ItemType Directory -Force -Path winroot | Out-Null
+          Copy-Item dist\TheQuestionGameRemastered.exe winroot\
+          Copy-Item games\remastered\readme_remastered.txt winroot\readme.txt
+          Compress-Archive -Path winroot\* -DestinationPath TheQuestionGameRemastered.zip -Force
+
+      - name: Upload to release
+        if: github.event_name == 'release' && contains(github.event.release.tag_name, 'remastered')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" TheQuestionGameRemastered.zip --clobber
+
+      - name: Upload to latest remastered release (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(gh release list --limit 10 --json tagName -q '.[].tagName' | grep -i remastered | head -1)
+          if [ -n "$TAG" ]; then
+            gh release upload "$TAG" TheQuestionGameRemastered.zip --clobber
+          else
+            echo "No remastered release found to attach to; skipping upload."
+            exit 1
+          fi

@@ -12,6 +12,7 @@ import pygame
 from . import ai_client
 from . import audio
 from . import config
+from . import interjections
 from . import os_layer
 from . import persistence
 from . import scares
@@ -39,6 +40,9 @@ LOGS_ENTRIES = [
     "ENTRY 77 — UNDATED\n\nSometimes we leave a breadcrumb.\nIf someone follows it twice, they find the key.",
     "ENTRY 99 — UNDATED\n\nAt the end we found a photograph of an empty chair.\nIt was labeled 'waiting'.\nWe kept it.",
     "ENTRY 140 — UNDATED\n\nA user reported their mouse moving on its own.\nVideo shows the cursor sliding in regular arcs every 17 seconds.\nWe matched the intervals to the heartbeat samples collected during Run 3.",
+    "ENTRY 166 — UNDATED\n\nSubject tried to close the window forty times in a row.\nOn the ninth try the window moved itself out from under the cursor.\nSubject stopped after that. They did not leave.",
+    "ENTRY 172 — UNDATED\n\nThe camera feed was never required.\nWe leave it off most sessions now — the ones who notice it anyway\nare the ones worth watching.",
+    "ENTRY 203 — UNDATED\n\nThere are no buttons in the title bar of this build.\nWe removed them in version three after someone mistook them for a promise.",
 ]
 
 CREDITS_TEXT = "\n".join([
@@ -53,14 +57,30 @@ CREDITS_TEXT = "\n".join([
 ])
 
 _TITLE = "THE QUESTION GAME"
-_TITLE_SUB = "R E M A S T E R E D"
+_TITLE_SUB = "(R)"
+
+# What the entity hisses at you when you reach for the close button. The window
+# reacting "angry" is the point: it should feel like you hurt it.
+_ANGRY_CLOSE_LINES = [
+    "Do not touch that.",
+    "We felt that.",
+    "You do not get to leave.",
+    "Try it again. I dare you.",
+    "You are only making it worse.",
+    "Take your hand off the window.",
+]
 
 
 class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
-        self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), pygame.RESIZABLE)
+        try:
+            pygame.mixer.set_num_channels(16)  # default 8 exhausts under scare layers
+        except Exception:
+            pass
+        flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
+        self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -94,13 +114,33 @@ class Game:
             "flicker_until": 0.0,
             "corrupt_until": 0.0,
             "webcam_flash_until": 0.0,
+            "rgb_split_until": 0.0,
+            "screen_tear_until": 0.0,
             "whisper_text": None,
             "whisper_until": 0.0,
         }
 
+        self.session_history = []
+        self.close_attempts = 0
+        self._used_scares = set()
+        self._scares_fired = 0
+        self._proc_check_at = 0.0
+        self._start_time = time.time()
+        self._app_comment_done = False
+        self._last_cmd_time = time.time()
+        self._next_beep_time = time.time() + random.uniform(*config.BACKGROUND_BEEP_INTERVAL)
+        self._lore_injected = set()
+        self._font_cache = None
+        self._font_cache_key = None
+        self._black_overlay_cache = None
+        self._black_overlay_key = None
+
         self.menu_options = ["PLAY", "SETTINGS", "HELP", "ABOUT", "EXIT"]
+        # If LOGS was unlocked in a previous session, keep it on the menu.
+        if self.game_state.get("logs_unlocked") and "LOGS" not in self.menu_options:
+            self.menu_options.insert(len(self.menu_options) - 1, "LOGS")
         self.selected_option = 0
-        self.settings_options = ["Text Speed", "VHS Effects", "Text Sway", "Text Size", "Reset All Data", "< Back"]
+        self.settings_options = ["Font", "Text Speed", "VHS Effects", "Text Sway", "Text Size", "AI Source", "Reset All Data", "< Back"]
         self.settings_selected = 0
         self.settings_idx = self._load_settings_idx()
         self.about_selected = 0
@@ -111,6 +151,8 @@ class Game:
         self.badge_toast_id = None
         self.badge_toast_at = 0
         self.close_msg_until = 0
+        self._close_burst = 0
+        self._last_close_try = -999.0
         self.idle_tracker = {"focused": True, "lost_at": 0, "last_away": 0, "pending": False}
         self.shake_x, self.shake_y = 0, 0
 
@@ -128,6 +170,10 @@ class Game:
         audio.build_sound_cache()
         audio.start_ambience()
         os_layer.start_background_prefetch()
+        if config.WINDOW_LOCKED:
+            os_layer.set_window_topmost()
+            os_layer.disable_system_close()
+            os_layer.start_topmost_keeper()
         self._startup_badges()
         self._begin_session()
 
@@ -155,10 +201,26 @@ class Game:
         elif sway >= 1.5:
             idx["Text Sway"] = 3
         size = s.get("text_size", 1.0)
-        if size <= 0.8:
+        if size <= 0.85:
             idx["Text Size"] = 0
-        elif size >= 1.2:
+        elif size <= 1.1:
+            idx["Text Size"] = 1
+        elif size <= 1.4:
             idx["Text Size"] = 2
+        else:
+            idx["Text Size"] = 3
+        # Font is a label, not a number.
+        font_label = s.get("font", "Courier")
+        try:
+            idx["Font"] = config.SETTING_OPTIONS["Font"].index(font_label)
+        except (ValueError, KeyError):
+            idx["Font"] = 0
+        # AI Source is also a label.
+        source_label = s.get("ai_source", "Relay")
+        try:
+            idx["AI Source"] = config.SETTING_OPTIONS["AI Source"].index(source_label)
+        except (ValueError, KeyError):
+            idx["AI Source"] = 0
         return idx
 
     def _startup_badges(self):
@@ -187,8 +249,180 @@ class Game:
             threading.Thread(target=os_layer.set_desktop_wallpaper,
                              args=(self.game_state.get("fav_color", "black"),), daemon=True).start()
         self.active_script = script.build_session(self.game_state, self.ai)
+        self.session_history = []
+        self._used_scares = set()
+        self._scares_fired = 0
         self.current_step = 0
+        self._skip_inactive()
         self._reset_question_state()
+        self._prefetch_question(self.current_step)
+
+    def _prefetch_question(self, index, force=False):
+        """Start a background fetch for a pending step (lazy generation).
+
+        Two kinds of placeholders exist: `ai_pending` (written by the model)
+        and `dynamic_pending` (built from real machine state). Both resolve on
+        a worker thread; `q` is written last as the "ready" flag.
+        """
+        if index >= len(self.active_script):
+            return
+        step = self.active_script[index]
+        if step.get("type") not in ("ai_pending", "dynamic_pending"):
+            return
+        if step.get("q") is not None:
+            return
+        if step.get("_fetching") and not force:
+            return
+        step["_fetching"] = True
+        target = self._fetch_dynamic_step if step.get("type") == "dynamic_pending" else self._fetch_ai_step
+        threading.Thread(target=target, args=(step,), daemon=True).start()
+
+    def _fetch_dynamic_step(self, step):
+        """Fill a dynamic_pending step from cached machine state (off-thread)."""
+        q, opts, meta, extra = None, [], {}, []
+        try:
+            data = interjections.resolve_dynamic(step.get("_resolver"), self.game_state, self.run_count)
+            q = data.get("q")
+            opts = data.get("opts") or []
+            meta = data.get("meta") or {}
+            extra = data.get("extra") or []
+        except Exception:
+            q, opts = None, []
+        if not q or len(opts) < 2:
+            q = q or "Are you still there?"
+            opts = opts or ["...", "..."]
+        for key, value in meta.items():
+            step[key] = value
+        if extra:
+            step["_extra_steps"] = extra
+        step["_injected"] = True
+        step["opts"] = opts
+        step["type"] = "choice"
+        step["q"] = q
+        # Warm the country flag in the background if this was a location step.
+        try:
+            geo = step.get("_location_card")
+            if geo and geo.get("country_code"):
+                ui.prefetch_flag(geo.get("country_code"))
+        except Exception:
+            pass
+
+    def _skip_inactive(self):
+        """Advance past steps whose `_condition` is not met (Classic-style
+        conditional questions, e.g. blinds only if there is a window)."""
+        answers = self.game_state.get("answers", {})
+        while self.current_step < len(self.active_script):
+            step = self.active_script[self.current_step]
+            cond = step.get("_condition")
+            if not cond:
+                break
+            req_id, req_val = cond
+            if answers.get(req_id) == req_val:
+                break
+            self.current_step += 1
+
+    def _enforce_scare_floor(self):
+        """Guarantee each run fires at least SCARE_FLOOR effects.
+
+        The model picks its own scares and often answers "none" — which means a
+        whole run can pass without the machine ever touching the player. This
+        tops the run up with locally chosen effects (never repeating one already
+        spent) so the escalation curve is real, not left to chance. Do nothing on
+        the final beats so the ending stays clean.
+        """
+        floor = config.SCARE_FLOOR.get(self.run_count, 0)
+        if self._scares_fired >= floor:
+            return
+        # Don't fire over the ending, and don't bunch effects up.
+        if self.current_step >= len(self.active_script) - 2:
+            return
+        if self.now - getattr(self, "_last_forced_scare", -999) < 5.0:
+            return
+        pool = [n for n in config.SCARE_FLOOR_POOL if n not in self._used_scares]
+        if not pool:
+            return
+        name = random.choice(pool)
+        try:
+            if scares.apply_scare(self, name):
+                self._used_scares.add(name)
+                self._scares_fired += 1
+                self._last_forced_scare = self.now
+        except Exception:
+            pass
+
+    def _ai_facts(self):
+        """Assemble everything the entity is allowed to 'know' about this player.
+
+        This is what makes the AI feel like it is actually watching: their name,
+        what is open on their machine, what they said in earlier sessions, how
+        often they hesitated, and which effects it has already spent.
+        """
+        facts = {}
+        try:
+            facts["hesitations"] = self.game_state.get("hesitation_count", 0)
+            facts["lies"] = self.game_state.get("lie_count", 0)
+        except Exception:
+            pass
+        facts["used_scares"] = sorted(getattr(self, "_used_scares", set()))
+        try:
+            name = os_layer.get_cached_username()
+            if name:
+                facts["name"] = name
+        except Exception:
+            pass
+        try:
+            procs = os_layer.get_cached_processes()
+            apps = [k for k, v in procs.items() if v]
+            if apps:
+                facts["apps"] = apps
+        except Exception:
+            pass
+        # Quotes from previous sessions: the strongest callbacks the game has.
+        try:
+            earlier = []
+            for _id, rec in (self.game_state.get("answers", {}) or {}).items():
+                if isinstance(rec, dict):
+                    ans = rec.get("answer")
+                else:
+                    ans = rec
+                if ans:
+                    earlier.append(str(ans))
+            if earlier:
+                facts["earlier_runs"] = ", ".join(earlier[-6:])
+        except Exception:
+            pass
+        return facts
+
+    def _fetch_ai_step(self, step):
+        """Fill an ai_pending placeholder from the AI (offline fallback built in).
+
+        `q` is written last — the main thread treats a non-None `q` as the
+        "ready" flag, so no half-filled step can ever be drawn.
+        """
+        q, opts, scare, src = None, [], None, None
+        try:
+            result = ai_client.next_question(self.ai, self.run_count,
+                                             list(self.session_history),
+                                             geo=os_layer.get_cached_geo(),
+                                             facts=self._ai_facts())
+            q = result.get("q")
+            opts = result.get("opts") or []
+            scare = result.get("scare")
+            src = result.get("_source")
+        except Exception:
+            q, opts = None, []
+        if not q or len(opts) < 2:
+            q = q or "Are you still there?"
+            opts = opts or ["...", "..."]
+            scare = None
+        step["opts"] = opts
+        if scare:
+            step["scare"] = scare
+        if src:
+            step["_source"] = src
+        step["_id"] = step.get("_id") or "ai"
+        step["type"] = "choice"
+        step["q"] = q
 
     def _reset_question_state(self):
         self.typing_state = "THINKING"
@@ -200,11 +434,32 @@ class Game:
 
     def _apply_settings(self):
         s = self.game_state.setdefault("settings", {})
+        s["font"] = config.SETTING_OPTIONS["Font"][self.settings_idx["Font"]]
         s["text_speed"] = config.SETTING_MAPS["Text Speed"][self.settings_idx["Text Speed"]]
         s["vhs_intensity"] = config.SETTING_MAPS["VHS Effects"][self.settings_idx["VHS Effects"]]
         s["sway_intensity"] = config.SETTING_MAPS["Text Sway"][self.settings_idx["Text Sway"]]
         s["text_size"] = config.SETTING_MAPS["Text Size"][self.settings_idx["Text Size"]]
+        source = config.SETTING_OPTIONS["AI Source"][self.settings_idx["AI Source"]]
+        s["ai_source"] = source
+        self._apply_ai_source(source)
         persistence.save_game_state(self.game_state)
+
+    def _apply_ai_source(self, source):
+        """Point the game at the chosen AI backend and rebuild the client.
+
+        Relay  -> Neptune's server holds the key (the shipped default).
+        Local  -> a local Ollama model, if one is installed.
+        Offline-> no network at all; the offline question bank only.
+        """
+        provider = config.AI_SOURCE_PROVIDERS.get(source, "relay")
+        if provider == "offline":
+            self.ai = None
+            return
+        config.AI_PROVIDER = provider
+        try:
+            self.ai = ai_client.ScaryAI()
+        except Exception:
+            self.ai = None
 
     # --- fade ----------------------------------------------------------------
     def start_fade(self, target):
@@ -228,19 +483,34 @@ class Game:
                 self.fade["active"] = False
 
     def _on_state_enter(self):
-        if self.state == "LOGS":
-            audio.start_logs_music()
-        elif self.state == "PLAYING":
+        if self.state == "PLAYING":
             self._begin_session()
-        elif self.state == "TITLE":
-            audio.stop_logs_music()
+        self._apply_stage_music()
+
+    def _apply_stage_music(self):
+        """Music scores the *menu* screens only (Settings / About / Help / Logs).
+
+        Gameplay and the title stay on ambience + SFX alone — the track is the
+        calm around the questions, not a soundtrack under them.
+        """
+        if not config.MUSIC_ENABLED:
+            return
+        menu_states = ("SETTINGS", "ABOUT", "HELP", "LOGS")
+        if not config.MUSIC_MENUS_ONLY:
+            menu_states = menu_states + ("TITLE", "PLAYING")
+        audio.set_sfx_duck(1.0)
+        if self.state in menu_states:
+            audio.set_music_volume(config.MUSIC_VOLUME)
+            audio.start_logs_music()
+        else:
+            audio.fade_logs_music(500)
 
     def _draw_fade(self):
         if self.fade["active"] and self.fade["alpha"] > 0:
-            overlay = pygame.Surface(self.screen.get_size())
-            overlay.fill((0, 0, 0))
+            overlay = self._black_overlay(*self.screen.get_size())
             overlay.set_alpha(max(0, min(255, int(self.fade["alpha"]))))
             self.screen.blit(overlay, (0, 0))
+            overlay.set_alpha(255)
 
     # --- badges --------------------------------------------------------------
     def _maybe_award(self, badge_id):
@@ -256,6 +526,15 @@ class Game:
         elif action == "start_webcam":
             if not ui.webcam_active:
                 ui.start_webcam_nonblocking()
+        elif action == "desktop_check":
+            self.captured_window_title = os_layer.get_foreground_window_title()
+            os_layer.move_window_right(0.8)
+
+            def _restore_desktop():
+                time.sleep(4)
+                os_layer.move_window_center(0.8)
+
+            threading.Thread(target=_restore_desktop, daemon=True).start()
         elif action == "r3_intro_shake":
             os_layer.shake_game_window(cycles=5, amplitude=15)
             audio.play_deep_rumble()
@@ -297,18 +576,50 @@ class Game:
             self.current_step += 1
             self._reset_question_state()
             return
+        elapsed = self.now - self.question_start_time
         answer = step["opts"][self.selected_answer]
-        persistence.save_answer(self.game_state, step["_id"], answer, self.now - self.question_start_time)
+        # Little window shuffle on committing to an answer (Windows/macOS).
+        os_layer.nudge_window()
+        self.session_history.append({"q": step["q"], "a": answer})
+        persistence.save_answer(self.game_state, step["_id"], answer, elapsed)
+        self._note_answer_meta(step, answer, elapsed)
         result = self.handle_step_action(step.get("action"), step)
         scare = step.get("scare")
         if scare:
-            scares.apply_scare(self, scare)
+            if scares.apply_scare(self, scare):
+                self._scares_fired += 1
+            # Remember it so the AI never fires the same effect twice in a run.
+            self._used_scares.add(scare)
+        self._enforce_scare_floor()
         if result == "EXIT":
             self.pending_exit = True
             self.exit_message_at = self.now
             return
+        # Runtime-injected questions (Classic bite): dynamic extras first, then
+        # rebuttals / hesitation / tailored reactions.
+        injected = list(step.get("_extra_steps") or [])
+        injected += interjections.after_answer(step, answer, elapsed, self.game_state, self.run_count)
+        for offset, extra in enumerate(injected):
+            self.active_script.insert(self.current_step + 1 + offset, extra)
         self.current_step += 1
+        self._skip_inactive()
+        self._prefetch_question(self.current_step)
         self._reset_question_state()
+        if self.fx["whisper_until"] <= self.now:
+            self._maybe_false_memory()
+
+    def _note_answer_meta(self, step, answer, elapsed):
+        """Post-answer bookkeeping Classic kept in save_answer(): hesitation
+        counting, the patient_one badge, and contradiction (lie) detection."""
+        if elapsed > config.HESITATION_THRESHOLD:
+            persistence.record_hesitation(self.game_state)
+        if elapsed >= config.PATIENT_ONE_THRESHOLD:
+            self._maybe_award("patient_one")
+        prev_id = step.get("_contradiction_check")
+        if config.ENABLE_CONTRADICTIONS and prev_id:
+            prev = self.game_state.get("answers", {}).get(prev_id)
+            if prev is not None and answer != prev:
+                persistence.record_lie(self.game_state, step["_id"])
 
     # --- input ---------------------------------------------------------------
     def _handle_key(self, key):
@@ -355,11 +666,11 @@ class Game:
             elif option == "LOGS":
                 self.start_fade("LOGS")
             elif option == "EXIT":
-                os_layer.attempt_close_with_warning()
-                self.close_msg_until = self.now + 2.5
+                # EXIT is a real exit: it stops the loop cleanly. (The window's
+                # close button is still the thing it fights you over.)
+                self.running = False
         elif key == pygame.K_ESCAPE:
-            os_layer.attempt_close_with_warning()
-            self.close_msg_until = self.now + 2.5
+            self._resist_close()
 
     def _check_cheat(self, key):
         if key in self._CHEAT_CODE:
@@ -372,6 +683,7 @@ class Game:
                 persistence.save_game_state(self.game_state)
                 if "LOGS" not in self.menu_options:
                     self.menu_options.insert(len(self.menu_options) - 1, "LOGS")
+                    self._maybe_award("the_archivist")
                 self._cheat_buffer = []
                 audio.play_glitch_sound()
         elif key not in (pygame.K_TAB, pygame.K_RETURN, pygame.K_ESCAPE, pygame.K_UP, pygame.K_DOWN):
@@ -441,8 +753,84 @@ class Game:
         self.now = time.time()
         self._update_fade()
         self._update_idle()
+        self._update_process_awareness()
         if self.state in ("PLAYING", "EXITFADE") and not self.pending_exit:
             self._update_playing()
+            self._maybe_comment_on_apps()
+            self._update_background_interference()
+
+    def _update_process_awareness(self):
+        """It watches you open the Task Manager. Twice per second, no polls
+        from the render loop — reads the cache os_layer fills in the background."""
+        if not (config.ENABLE_TASKMGR_DETECT or config.ENABLE_DISCORD_DETECT):
+            return
+        if self.state not in ("PLAYING", "EXITFADE"):
+            return
+        if self.now - self._proc_check_at < 0.5:
+            return
+        self._proc_check_at = self.now
+        procs = os_layer.get_cached_processes()
+        if config.ENABLE_TASKMGR_DETECT and procs.get("taskmgr"):
+            if not self.game_state.get("taskmgr_seen"):
+                self.game_state["taskmgr_seen"] = True
+                persistence.save_game_state(self.game_state)
+                self._maybe_award("task_manager")
+                self._say_aggressive('"The Task Manager will not help you."', duration=4.0)
+                self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 1.5)
+                audio.play_glitch_sound()
+                # Classic also threw a question at you, not just a whisper.
+                if self.state == "PLAYING":
+                    self.active_script.insert(
+                        self.current_step + 1,
+                        interjections.build_taskmgr_comment(self.current_step),
+                    )
+        if config.ENABLE_DISCORD_DETECT and procs.get("discord"):
+            self._maybe_award("not_alone")
+
+    def _update_background_interference(self):
+        """Classic's low-level ambient: a cmd flash every ~30s and a random
+        error beep, so the machine never feels fully at rest."""
+        if not config.ENABLE_BACKGROUND_INTERFERENCE:
+            return
+        if self.state not in ("PLAYING", "EXITFADE") or self.pending_exit:
+            return
+        if self.now - self._last_cmd_time > config.BACKGROUND_INTERFERENCE_INTERVAL:
+            self._last_cmd_time = self.now
+            os_layer.flash_cmd()
+        if self.now > self._next_beep_time:
+            self._next_beep_time = self.now + random.uniform(*config.BACKGROUND_BEEP_INTERVAL)
+            audio.play_error_sound()
+
+    def _maybe_comment_on_apps(self):
+        """One-shot beat: it names a program it can see running (run 2+)."""
+        if self._app_comment_done or self.run_count < 2:
+            return
+        if self.now - self._start_time < 12.0:
+            return
+        self._app_comment_done = True
+        comment = os_layer.comment_on_open_apps()
+        if comment:
+            self.fx["whisper_text"] = '"' + comment.replace("\n", " ") + '"'
+            self.fx["whisper_until"] = self.now + 5.0
+            audio.play_mechanical_beep()
+
+    def _maybe_false_memory(self):
+        """Classic beat: it misquotes an answer you actually gave."""
+        # Once per save, Classic threw this as a real question with rebuttals.
+        if (not self.game_state.get("false_memory_used")
+                and len(self.session_history) >= 4 and random.random() < 0.15):
+            self.game_state["false_memory_used"] = True
+            persistence.save_game_state(self.game_state)
+            self.active_script.insert(self.current_step, interjections.build_false_memory())
+            audio.play_glitch_sound()
+            return
+        history = self.session_history
+        if len(history) < 2 or random.random() > 0.18:
+            return
+        h = random.choice(history[:-1])
+        line = 'You said "%s." You said it twice.' % h["a"]
+        self._say_aggressive('"' + line + '"', duration=4.5)
+        audio.play_glitch_sound()
 
     def _update_idle(self):
         if self.state in ("PLAYING", "EXITFADE"):
@@ -456,6 +844,16 @@ class Game:
                 if away > 4.0:
                     self.idle_tracker["last_away"] = away
                     self.idle_tracker["pending"] = True
+        if self.idle_tracker.get("pending"):
+            self.idle_tracker["pending"] = False
+            away = self.idle_tracker["last_away"]
+            self._say_aggressive(random.choice([
+                '"You were gone %d seconds. Where."' % int(away),
+                '"Do not leave it waiting again."',
+                '"We counted every second of the %d."' % int(away),
+            ]), duration=4.5)
+            audio.play_glitch_sound()
+            self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 0.8)
 
     def _update_playing(self):
         if self.current_step >= len(self.active_script):
@@ -468,7 +866,35 @@ class Game:
             if self.now - self.wait_start_time >= step.get("time", 4):
                 self._confirm_answer()
             return
+        if step.get("q") is None:
+            # AI placeholder still generating — THINKING dots hold the line.
+            self._prefetch_question(self.current_step)
+            self.typing_state = "THINKING"
+            return
+        if not step.get("_seen"):
+            # Question just landed after a fetch — give it a real "thinking" beat
+            # so fast network responses don't skip the THINKING phase.
+            step["_seen"] = True
+            # Every new question, the window jumps to a fresh spot near centre
+            # (Windows/macOS; a no-op where the OS forbids self-positioning).
+            os_layer.move_window_near_center()
+            if step.get("_contradiction_check") and config.ENABLE_CONTRADICTIONS:
+                step = interjections.contradiction_rephrase(step, self.game_state)
+                step["_seen"] = True
+                self.active_script[self.current_step] = step
+            self.thinking_timer = self.now
+            self.typing_state = "THINKING"
         text = step["q"]
+        # Prefetch the *next* step only when it does not depend on this answer
+        # (machine-state beats). Prefetching an AI question here meant the model
+        # was asked before the player had answered, so it always ran ~2 questions
+        # behind and never saw the latest answer — the exact bug behind "the
+        # answer isn't sent back to the AI".
+        nxt_index = self.current_step + 1
+        if nxt_index < len(self.active_script):
+            nxt = self.active_script[nxt_index]
+            if nxt.get("type") == "dynamic_pending" or config.AI_PREFETCH_LOOKAHEAD:
+                self._prefetch_question(nxt_index)
         if self.typing_state == "THINKING":
             if self.now - self.thinking_timer > 0.9:
                 self.typing_state = "TYPING"
@@ -482,21 +908,70 @@ class Game:
                 if self.typing_index >= len(text):
                     self.typing_state = "WAITING"
         elif self.typing_state == "WAITING":
-            if self.game_state.get("settings", {}).get("vhs_intensity", 1.0) > 0:
-                pass
+            if self.run_count >= 3:
+                self._run3_low_grade_glitch()
+
+    def _run3_low_grade_glitch(self):
+        """Run 3 never settles: a slow trickle of tiny corruptions/flickers."""
+        if self.now < getattr(self, "_next_r3_glitch", 0.0):
+            return
+        self._next_r3_glitch = self.now + random.uniform(4.0, 9.0)
+        if random.random() < 0.5:
+            self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 0.7)
+        elif random.random() < 0.5:
+            self.fx["rgb_split_until"] = max(self.fx["rgb_split_until"], self.now + 0.6)
+        else:
+            self.fx["flicker_until"] = max(self.fx["flicker_until"], self.now + 0.5)
+        audio.play_glitch_sound()
 
     # --- drawing --------------------------------------------------------------
     def _fonts(self):
-        return ui.get_scaled_fonts(self.game_state, *self.screen.get_size())
+        """Cached fonts — pygame.font.Font() construction was the single
+        biggest per-frame cost (3 objects × 4-6 calls/frame). Rebuild only
+        when the window size or text-size setting changes."""
+        key = (self.screen.get_width(), self.screen.get_height(),
+               self.game_state.get("settings", {}).get("text_size", 1.0))
+        if self._font_cache_key != key:
+            self._font_cache = ui.get_scaled_fonts(self.game_state, key[0], key[1])
+            self._font_cache_key = key
+        return self._font_cache
+
+    def _black_overlay(self, w, h):
+        """Reusable full-screen black overlay (fades + exits)."""
+        if self._black_overlay_key != (w, h):
+            self._black_overlay_cache = pygame.Surface((w, h))
+            self._black_overlay_cache.fill((0, 0, 0))
+            self._black_overlay_key = (w, h)
+        return self._black_overlay_cache
 
     def _draw(self):
         self.screen.fill(config.COLOR_BLACK)
         w, h = self.screen.get_size()
 
-        if self.run_count >= 3 and self.state in ("PLAYING", "EXITFADE"):
-            self.shake_x, self.shake_y = random.randint(-8, 8), random.randint(-8, 8)
+        if self.state in ("PLAYING", "EXITFADE"):
+            # A violent shake fired alongside an aggressive line outranks the
+            # ambient run-3 tremor, so the jolt is unmistakable.
+            if self.fx.get("screen_shake_until", 0.0) > self.now:
+                amp = int(self.fx.get("shake_amp", 16) or 16)
+                self.shake_x = random.randint(-amp, amp)
+                self.shake_y = random.randint(-amp, amp)
+            elif self.run_count >= 3:
+                self.shake_x, self.shake_y = random.randint(-8, 8), random.randint(-8, 8)
+            else:
+                self.shake_x, self.shake_y = 0, 0
         else:
             self.shake_x, self.shake_y = 0, 0
+
+        # Background dressing goes down *before* the content so the text is
+        # painted over it and stays crisp: rolling scan sweep, drifting ash,
+        # breathing vignette, and the faint tape head line.
+        vhs = self.game_state.get("settings", {}).get("vhs_intensity", 1.0)
+        if vhs > 0:
+            ui.draw_scan_sweep(self.screen, w, h, self.now)
+        ui.draw_dust(self.screen, w, h, self.now)
+        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
+        if self.state in ("PLAYING", "EXITFADE") and config.VHS_STATIC_LINE > 0:
+            ui.draw_static_line(self.screen, w, h, self.now, config.VHS_STATIC_LINE)
 
         if self.state == "LOADING":
             self._draw_loading(w, h)
@@ -515,8 +990,8 @@ class Game:
 
         self._draw_fade()
         if self.close_msg_until > self.now:
-            font_med, font_small = self._fonts()[1], self._fonts()[2]
-            msg = os_layer.get_close_intercept_message()
+            font_small = self._fonts()[2]
+            msg = os_layer.get_close_intercept_message(self.close_attempts).replace("\n", " ")
             surf = font_small.render(msg, True, config.COLOR_RED)
             self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h - 50))
 
@@ -526,13 +1001,12 @@ class Game:
             if not still:
                 self.badge_toast_id = None
 
-        # Ambient dressing, applied over every state like the Classic edition:
-        # rolling scan sweep, drifting ash, breathing vignette, VHS scanlines.
-        if self.game_state.get("settings", {}).get("vhs_intensity", 1.0) > 0:
-            ui.draw_scan_sweep(self.screen, w, h, self.now)
-        ui.draw_dust(self.screen, w, h, self.now)
-        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
+        # Foreground CRT finish, applied over every state: VHS scanlines, then
+        # the full stack (tracking, static, tube curvature, phosphor mask).
+        # Last, so the tube look reads as being in front of the content.
         ui.apply_vhs_effects(self.screen, w, h, self.game_state)
+        if config.CRT_ENABLED and vhs > 0:
+            ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs)
 
         pygame.display.flip()
 
@@ -548,6 +1022,7 @@ class Game:
         self.screen.blit(cal, (w // 2 - cal.get_width() // 2, h // 2 + 30))
         if t > 1.6:
             self.state = "TITLE"
+            self._on_state_enter()
 
     def _draw_title(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -561,17 +1036,24 @@ class Game:
                 ui.render_animated_wrapped_text(self.screen, "THIS IS YOUR LAST CHANCE", font_small,
                                                 config.COLOR_RED, 20, 20, 300, self.now)
 
-        title_lines = ["The", "Question", "Game"]
+        title_lines = ["THE", "QUESTION", "GAME"]
         if self.run_count == 2:
             title_lines = ["....", "...", "Leave."]
 
         base_y = int(h * 0.10)
+        # Occasional character scramble, straight from the website's title.
+        scramble_on = (self.now % 7.0) < 0.45
         for i, line in enumerate(title_lines):
             sway_x = int(math.sin(self.now * 1.8 + i) * 6)
             sway_y = int(math.cos(self.now * 1.2 + i) * 3)
-            ui.draw_glowing_text(self.screen, line, font_large,
+            draw_line = ui.scramble_text(line, self.now, 0.35) if scramble_on else line
+            ui.draw_glowing_text(self.screen, draw_line, font_large,
                                  int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
                                  self.now, color=title_color, glow_color=(150, 0, 0))
+            # Website hero: red/cyan split copies jittering over the base.
+            ui.render_glitch_text(self.screen, draw_line, font_large,
+                                  int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
+                                  self.now, color=title_color)
 
         sub = font_med.render(_TITLE_SUB, True, (150, 0, 0))
         self.screen.blit(sub, (int(w * 0.08), base_y + 3 * 65 + 8))
@@ -579,7 +1061,7 @@ class Game:
         run_label = font_small.render("SESSION %d / 3" % self.run_count, True, (120, 40, 40))
         self.screen.blit(run_label, (int(w * 0.08), base_y + 3 * 65 + 8 + font_med.get_height() + 6))
 
-        menu_y_start = h - 310
+        menu_y_start = h - 310 if len(self.menu_options) <= 5 else h - 348
         for i, option in enumerate(self.menu_options):
             sel = (i == self.selected_option)
             base_col = config.COLOR_GREEN if sel else config.COLOR_WHITE
@@ -591,23 +1073,35 @@ class Game:
                 p2 = 0.5 + 0.5 * math.sin(self.now * 4.0 + i * 0.6)
                 base_col = tuple(min(255, int(c * (0.7 + 0.5 * p2))) for c in base_col)
             prefix = f"> {option}" if sel else f"  {option}"
-            surf = font_med.render(prefix, True, base_col)
-            try:
-                surf.set_alpha(alpha)
-            except Exception:
-                pass
-            self.screen.blit(surf, (int(w * 0.08), menu_y_start + i * 45))
+            if sel:
+                ui.render_glitch_text(self.screen, prefix, font_med,
+                                      int(w * 0.08), menu_y_start + i * 45,
+                                      self.now, color=base_col)
+            else:
+                surf = font_med.render(prefix, True, base_col)
+                try:
+                    surf.set_alpha(alpha)
+                except Exception:
+                    pass
+                self.screen.blit(surf, (int(w * 0.08), menu_y_start + i * 45))
 
-        cred = font_small.render("NEPTUNE PRODUCTIONS [C]", True, (60, 60, 60))
+        cred = font_small.render("NEPTUNE PRODUCTIONS (C)", True, (60, 60, 60))
         self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
 
         ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
         self.screen.blit(ver, (w - ver.get_width() - 12, h - ver.get_height() - 8))
 
+    def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
+        """Section titles get the website's glow + red/cyan glitch split."""
+        x, y = int(w * 0.08), int(h * y_factor)
+        ui.draw_glowing_text(self.screen, text, font_large, x, y, self.now,
+                             color=config.COLOR_RED, glow_color=(150, 0, 0))
+        ui.render_glitch_text(self.screen, text, font_large, x, y, self.now,
+                              color=config.COLOR_RED)
+
     def _draw_settings(self, w, h):
         font_large, font_med, font_small = self._fonts()
-        title = font_large.render("SETTINGS", True, config.COLOR_RED)
-        self.screen.blit(title, (int(w * 0.08), int(h * 0.08)))
+        self._draw_heading("SETTINGS", w, h, font_large)
         start_y = int(h * 0.22)
         for i, option in enumerate(self.settings_options):
             color = config.COLOR_WHITE if i == self.settings_selected else (110, 110, 110)
@@ -624,8 +1118,7 @@ class Game:
 
     def _draw_about(self, w, h):
         font_large, font_med, font_small = self._fonts()
-        title = font_large.render("ABOUT", True, config.COLOR_RED)
-        self.screen.blit(title, (int(w * 0.08), int(h * 0.06)))
+        self._draw_heading("ABOUT", w, h, font_large, 0.06)
         options = ["About Info", "Credits", "< Back"]
         for i, option in enumerate(options):
             color = config.COLOR_WHITE if i == self.about_selected else (110, 110, 110)
@@ -634,35 +1127,32 @@ class Game:
             self.screen.blit(surf, (int(w * 0.08), int(h * 0.16) + i * (font_small.get_linesize() + 6)))
 
         if self.about_selected == 0:
-            ui.render_wrapped_text(self.screen, self.about_text, font_small, config.COLOR_WHITE,
-                                   int(w * 0.08), int(h * 0.30), int(w * 0.8))
+            ui.render_text_block(self.screen, self.about_text, font_small, config.COLOR_WHITE,
+                                 int(w * 0.08), int(h * 0.30), int(w * 0.8))
         elif self.about_selected == 1:
-            ui.render_wrapped_text(self.screen, CREDITS_TEXT, font_small, config.COLOR_WHITE,
-                                   int(w * 0.08), int(h * 0.30), int(w * 0.8))
+            ui.render_text_block(self.screen, CREDITS_TEXT, font_small, config.COLOR_WHITE,
+                                 int(w * 0.08), int(h * 0.30), int(w * 0.8))
 
     def _draw_help(self, w, h):
         font_large, font_med, font_small = self._fonts()
-        title = font_large.render("HELP", True, config.COLOR_RED)
-        self.screen.blit(title, (int(w * 0.08), int(h * 0.08)))
-        ui.render_wrapped_text(self.screen, self.help_text, font_small, config.COLOR_WHITE,
-                               int(w * 0.08), int(h * 0.22), int(w * 0.8))
+        self._draw_heading("HELP", w, h, font_large)
+        ui.render_text_block(self.screen, self.help_text, font_small, config.COLOR_WHITE,
+                             int(w * 0.08), int(h * 0.22), int(w * 0.8))
         hint = font_small.render("[ESC] BACK", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
 
     def _draw_logs(self, w, h):
         font_large, font_med, font_small = self._fonts()
-        title = font_large.render("LOGS", True, config.COLOR_RED)
-        self.screen.blit(title, (int(w * 0.08), int(h * 0.06)))
+        self._draw_heading("LOGS", w, h, font_large, 0.06)
         y = int(h * 0.16)
         for entry in LOGS_ENTRIES:
-            lines = entry.split("\n")
-            for line in lines:
+            for line in entry.split("\n"):
                 if y > h - 40:
                     break
                 color = (90, 90, 90) if line.startswith("ENTRY") else config.COLOR_WHITE
-                surf = font_small.render(line, True, color)
-                self.screen.blit(surf, (int(w * 0.08), y))
-                y += font_small.get_linesize() + 4
+                ui.render_text_block(self.screen, line, font_small, color,
+                                     int(w * 0.08), y, int(w * 0.8))
+                y += ui.wrapped_line_count(line, font_small, color, int(w * 0.8)) * (font_small.get_linesize() + 4)
             y += 8
         hint = font_small.render("[ESC] BACK", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
@@ -672,10 +1162,19 @@ class Game:
         ui.update_webcam_surface()
 
         if self.pending_exit or self.current_step >= len(self.active_script):
-            overlay = pygame.Surface((w, h))
-            overlay.fill((0, 0, 0))
-            self.screen.blit(overlay, (0, 0))
-            if self.pending_exit and self.now - self.exit_message_at > 2.0:
+            self.screen.blit(self._black_overlay(w, h), (0, 0))
+            if self.pending_exit:
+                # Make leaving explicit: the session is over, reopen for the next.
+                font_small = self._fonts()[2]
+                if self.run_count >= 3:
+                    msg = "close this window. do not open it again."
+                else:
+                    msg = "close this window, then open it again for the next session."
+                surf = font_small.render(msg, True, (120, 20, 20))
+                self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h // 2 + 30))
+                if self.now - self.exit_message_at > 2.0:
+                    self.running = False
+            elif self.current_step >= len(self.active_script):
                 self.running = False
             return
 
@@ -689,43 +1188,60 @@ class Game:
 
         if step_type == "wait":
             text = step["q"]
-            ui.render_animated_wrapped_text(self.screen, text, font_med, config.COLOR_WHITE,
-                                            base_x, base_y, max_width, self.now)
-            prompt = font_small.render(". . .", True, config.COLOR_DIM_RED)
-            self.screen.blit(prompt, (base_x, h - int(h * 0.18)))
+            ui.render_text_block(self.screen, text, font_med, config.COLOR_WHITE,
+                                 base_x, base_y, max_width, t=self.now, sway_amp=2,
+                                 outline=config.TEXT_OUTLINE_COLOR)
+            ui.draw_text(self.screen, ". . .", font_small, config.COLOR_DIM_RED,
+                         base_x, h - int(h * 0.18))
         else:
-            text = step["q"]
+            text = step["q"] or ""
             t_color = config.COLOR_RED if ("afraid" in text.lower() or self.run_count >= 3) else config.COLOR_WHITE
             if self.typing_state == "THINKING":
                 dots = ["...", "....", ".....", "......"][int(self.now * 2) % 4]
-                surf = font_med.render(dots, True, config.COLOR_DIM_RED)
-                self.screen.blit(surf, (base_x, base_y))
+                ui.draw_text(self.screen, dots, font_med, config.COLOR_DIM_RED, base_x, base_y)
             elif self.typing_state == "TYPING":
                 partial = text[:self.typing_index]
                 sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
-                if sway > 0:
-                    ui.render_animated_wrapped_text(self.screen, partial, font_med, t_color,
-                                                    base_x, base_y, max_width, self.now,
-                                                    sway_amp=int(2 + 4 * sway), alpha_base=210)
-                else:
-                    ui.render_wrapped_text(self.screen, partial, font_med, t_color,
-                                           base_x, base_y, max_width)
+                sway_amp = int(2 + 4 * sway) if sway > 0 else 0
+                ui.render_text_block(self.screen, partial, font_med, t_color,
+                                     base_x, base_y, max_width,
+                                     t=self.now if sway_amp else None, sway_amp=sway_amp,
+                                     alpha_base=255, outline=config.TEXT_OUTLINE_COLOR)
                 if partial and int(self.now * 2.4) % 2 == 0:
                     cx, cy = ui.wrap_cursor_pos(partial, font_med, base_x, base_y, max_width)
                     caret = font_med.render("_", True, t_color)
                     self.screen.blit(caret, (cx, cy))
             elif self.typing_state == "WAITING":
                 sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
-                if sway > 0:
-                    ui.render_animated_wrapped_text(self.screen, text, font_med, t_color,
-                                                    base_x, base_y, max_width, self.now,
-                                                    sway_amp=int(2 + 4 * sway), alpha_base=210)
-                else:
-                    ui.render_wrapped_text(self.screen, text, font_med, t_color,
-                                           base_x, base_y, max_width)
+                sway_amp = int(2 + 4 * sway) if sway > 0 else 0
                 opts = step["opts"]
                 opts_x = base_x
-                opts_y = base_y + len(text.split("\n")) * (font_med.get_linesize() + 4) + 40
+                line_h = font_med.get_linesize() + 4
+                # Size the question by its *wrapped* height, not its hard-newline
+                # count — a soft-wrapped question is several visual lines tall and
+                # used to have the options drawn straight on top of it.
+                q_lines = ui.wrapped_line_count(text, font_med, t_color, max_width)
+                opts_y = base_y + q_lines * line_h + 34
+                opts_gap = font_med.get_linesize() + 10
+                # Long questions can wrap far enough to push options off-screen;
+                # tighten the row gap (and lift the block) rather than overlap.
+                bottom = h - 24
+                if opts:
+                    avail = bottom - opts_y
+                    if len(opts) * opts_gap > avail:
+                        opts_gap = max(font_med.get_linesize(), avail // len(opts))
+                    if opts_y + len(opts) * opts_gap > bottom:
+                        opts_y = max(base_y + q_lines * line_h + 12, bottom - len(opts) * opts_gap)
+                # Readability wash: a calm patch of screen under the block, so
+                # the question doesn't drown in static and scanlines.
+                block_bottom = (opts_y + len(opts) * opts_gap) if opts else base_y + q_lines * line_h
+                ui.draw_readability_panel(self.screen, base_x - 20, base_y - 16,
+                                          max_width + 40, block_bottom - base_y + 30)
+                # Website-style body text: red/cyan split + occasional jitter + sway.
+                ui.render_glitch_block(self.screen, text, font_med, t_color,
+                                       base_x, base_y, max_width,
+                                       t=self.now, sway_amp=sway_amp,
+                                       alpha_base=255)
                 sel_color = config.COLOR_RED if self.run_count >= 3 else config.COLOR_GREEN
                 for i, option in enumerate(opts):
                     if i == self.selected_answer:
@@ -734,13 +1250,13 @@ class Game:
                     else:
                         color = config.COLOR_WHITE
                     prefix = "> " if i == self.selected_answer else "  "
-                    surf = font_med.render(prefix + option, True, color)
-                    self.screen.blit(surf, (opts_x, opts_y + i * (font_med.get_linesize() + 10)))
+                    ui.draw_text(self.screen, prefix + option, font_med, color,
+                                 opts_x, opts_y + i * opts_gap)
 
         # whisper reaction line
         if self.fx["whisper_text"] and self.fx["whisper_until"] > self.now:
-            surf = font_small.render(self.fx["whisper_text"], True, (150, 0, 0))
-            self.screen.blit(surf, (base_x, h - int(h * 0.28)))
+            ui.draw_text(self.screen, self.fx["whisper_text"].replace("\n", " "),
+                         font_small, (150, 0, 0), base_x, h - int(h * 0.28))
 
         # webcam feed
         if ui.webcam_active and ui.webcam_surface is not None:
@@ -756,6 +1272,11 @@ class Game:
             iw, ih = self.local_image.get_size()
             self.screen.blit(self.local_image, (w - iw - 40, 40))
 
+        # location card — it names where you are (Classic's location bite)
+        loc = step.get("_location_card")
+        if loc:
+            ui.draw_location_card(self.screen, loc, w, h)
+
         # overlays
         if self.fx["corrupt_until"] > self.now:
             ui.apply_corruption(self.screen, w, h, self.now)
@@ -763,36 +1284,114 @@ class Game:
             ui.apply_flicker(self.screen, w, h)
         if self.fx["webcam_flash_until"] > self.now:
             ui.apply_shadow_static(self.screen, w, h, intensity=1.5)
+        if self.fx["screen_tear_until"] > self.now:
+            ui.apply_screen_tear(self.screen, w, h)
+        if self.fx["rgb_split_until"] > self.now:
+            amount = 4 + int(4 * math.sin(self.now * 21.0))
+            ui.apply_rgb_split(self.screen, w, h, amount=max(2, amount))
 
         ui.apply_shadow_static(self.screen, w, h,
                                intensity=1.5 if self.run_count >= 3 else 1.0)
 
+    # --- aggression helpers ----------------------------------------------------
+    def _say_aggressive(self, text, duration=3.5, violent=True):
+        """Show an aggressive line and shove the window at the same moment — the
+        shout and the shake land together.
+
+        Windows/macOS get a real, violent window shake. Elsewhere (Wayland
+        forbids self-positioning) it degrades to an in-frame screen shake, so the
+        jolt still reads."""
+        self.fx["whisper_text"] = text
+        self.fx["whisper_until"] = max(float(self.fx.get("whisper_until", 0.0)), self.now + duration)
+        if violent:
+            os_layer.shake_game_window(cycles=14, amplitude=40)
+            self.fx["screen_shake_until"] = self.now + 0.7
+            self.fx["shake_amp"] = max(int(self.fx.get("shake_amp", 0) or 0), 16)
+
+    # --- close resistance -------------------------------------------------------
+    def _resist_close(self):
+        """Close attempts are refused and escalate into scares. Only a
+        Task Manager force-kill ends the game."""
+        rapid = self.now - self._last_close_try < 4.0 and self.close_attempts > 0
+        self._last_close_try = self.now
+        self.close_attempts += 1
+        # Spamming the close button ranks it up faster than waiting between tries:
+        # attempt 4 in a row already counts as a much higher threat level.
+        self._close_burst = self._close_burst + 1 if rapid else 0
+        n = self.close_attempts + self._close_burst
+        self.close_msg_until = self.now + 2.5
+        os_layer.attempt_close_with_warning()
+        # Immediate and loud: a hissed line plus a violent shake on frame one.
+        self._say_aggressive(random.choice(_ANGRY_CLOSE_LINES), duration=3.4, violent=True)
+        self.fx["flicker_until"] = max(self.fx["flicker_until"], self.now + 0.45)
+        audio.play_error_sound()
+        # Windows-first bite: keep the window punched to the front, flash the
+        # taskbar entry, and re-kill the system close item as they fight it.
+        if os_layer.SYSTEM == "Windows":
+            os_layer.set_window_topmost()
+            if n >= 2:
+                os_layer.flash_window()
+            if n >= 4:
+                os_layer.force_foreground()
+        if n >= 2:
+            self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 0.9)
+            os_layer.shake_game_window(cycles=8, amplitude=26)
+        if n >= 3:
+            self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 1.7)
+            audio.play_glitch_sound()
+            os_layer.shake_game_window(cycles=10, amplitude=32)
+        if n >= 4:
+            os_layer.teleport_window_random()
+            audio.play_static_scream()
+            os_layer.shake_game_window(cycles=12, amplitude=38)
+        if n >= 6:
+            os_layer.begin_mouse_move(random.randint(40, config.WINDOW_W - 40),
+                                      random.randint(40, config.WINDOW_H - 40))
+            os_layer.show_os_notification(config.APP_NAME, "You cannot leave.")
+        if n >= 8 and n % 2 == 0:
+            # Mid-game: more aggressive repositioning and a hard shake.
+            os_layer.teleport_window_random()
+            os_layer.shake_game_window(cycles=16, amplitude=44)
+        if n >= 10 and n % 3 == 0:
+            self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 2.6)
+            audio.play_static_scream()
+        if n >= config.CLOSE_RESIST_MAX and n % 4 == 0:
+            # "You live here now" phase: constant drift, no rest.
+            os_layer.drift_window(8.0)
+
     # --- main loop ------------------------------------------------------------
     def run(self):
+        os_layer.start_window_float()
         while self.running:
-            dt = self.clock.tick(config.FRAMERATE) / 1000.0
+            self.clock.tick(config.FRAMERATE)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    os_layer.attempt_close_with_warning()
-                    self.close_msg_until = self.now + 2.5
+                    if config.BLOCK_CLOSE_ATTEMPTS:
+                        self._resist_close()
+                    else:
+                        self.running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_F4 and (event.mod & pygame.KMOD_ALT):
-                        os_layer.attempt_close_with_warning()
-                        self.close_msg_until = self.now + 2.5
+                        if config.BLOCK_CLOSE_ATTEMPTS:
+                            self._resist_close()
+                        else:
+                            self.running = False
                     else:
                         self._handle_key(event.key)
-                elif event.type == pygame.VIDEORESIZE:
+                elif event.type == pygame.VIDEORESIZE and not config.WINDOW_LOCKED:
                     self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                elif event.type == pygame.MOUSEMOTION:
+                    # Subtle hover parallax — the window leans toward the cursor
+                    # (Windows/macOS only; no-op on Wayland).
+                    sw, sh = self.screen.get_size()
+                    os_layer.set_hover_offset(event.pos[0], event.pos[1], sw, sh)
 
             os_layer.update_window_anim()
             os_layer.update_mouse_anim()
             os_layer.nudge_mouse_from_close()
-            ui.poll_picture_result()
-
-            if self.state == "PLAYING":
-                pic = ui.poll_picture_result()
-                if pic is not None:
-                    self.local_image = pic
+            pic = ui.poll_picture_result()
+            if pic is not None:
+                self.local_image = pic
 
             self._update()
             self._draw()

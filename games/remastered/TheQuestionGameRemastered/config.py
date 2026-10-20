@@ -3,36 +3,213 @@ import platform
 import sys
 
 APP_NAME = "The Question Game Remastered"
-VERSION = "2.04"
+VERSION = "3.0.2"
 
-# --- AI (embedded key — rotate it if it gets abused) ---
-GROQ_KEY = "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"
-GROQ_MODEL = "llama-3.3-70b-versatile"
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_TIMEOUT = 30
-GROQ_MAX_TOKENS = 320
-GROQ_TEMPERATURE = 1.05
+# --- AI providers ------------------------------------------------------------
+# Everything here is FREE — no paid key is ever required:
+#   * Ollama   — fully local, no key at all (install Ollama, pull llama3.2)
+#   * OpenRouter — free account, free models (":free" suffix), no credit card
+#   * Groq     — free tier; embedded key below (rotate it if abused)
+#   * OpenAI / DeepSeek — optional paid, only used if you set their key
+#
+# Default is Groq's free tier (Neptune's call — no paid key, no setup, fast).
+# Alternatives, all free, are one env var away:
+#   TQG_AI_PROVIDER=auto       -> Ollama if it has a usable model, else OpenRouter
+#                                 if TQG_OPENROUTER_KEY is set, else Groq
+#   TQG_AI_PROVIDER=ollama     -> fully local (needs a non-thinking model pulled,
+#                                 e.g. `ollama pull llama3.2:3b`);
+#                                 the qwen3 thinking builds installed on this
+#                                 machine dump chain-of-thought as the answer
+#                                 and are auto-skipped.
+#   TQG_AI_PROVIDER=openrouter -> free-tier ":free" models (free signup key)
+#
+# All endpoints speak the OpenAI-compatible chat/completions schema, so adding
+# a provider is a config-only change. The offline bank always backstops.
+#
+# SHIPPED DEFAULT: the "relay". The game contains NO API key — it sends its
+# request to Neptune's server, which holds the key and forwards it. This is why
+# a fresh install needs no setup, and why the key can be rotated without
+# re-releasing the game. See server/relay.py.
+#
+#   Relay URL:       default below                     -> TQG_RELAY_URL
+#   Relay app token: the shared secret, if enabled     -> TQG_RELAY_TOKEN
+#   OpenRouter key:  https://openrouter.ai/keys        -> TQG_OPENROUTER_KEY
+#   Ollama host:     default http://localhost:11434    -> TQG_OLLAMA_HOST
+#
+# The relay is tried first; if it is unreachable the game falls through to any
+# provider below with a key, and finally to the offline bank. A player who wants
+# to bring their own key can set TQG_GROQ_KEY and select TQG_AI_PROVIDER=groq.
+RELAY_URL = os.environ.get("TQG_RELAY_URL", "https://wikipedia.tail06361a.ts.net/ai/v1/chat/completions")
+RELAY_TOKEN = os.environ.get("TQG_RELAY_TOKEN", "")
 
-# Human-authored fixed opening per session; the AI fills everything after it.
+AI_PROVIDER = os.environ.get("TQG_AI_PROVIDER", "relay")
+
+AI_PROVIDERS = {
+    # Neptune's relay: no key here on purpose — the server injects it.
+    "relay": {
+        "url": RELAY_URL,
+        "key": RELAY_TOKEN or "relay",
+        "model": os.environ.get("TQG_RELAY_MODEL", "openai/gpt-oss-120b"),
+        "extra": {"reasoning_effort": os.environ.get("TQG_RELAY_EFFORT", "low")},
+        "header_token": RELAY_TOKEN,
+    },
+    # Direct Groq, only used if the player supplies their own key (or the relay
+    # falls through). Empty by default so no key ships in the build.
+    "groq": {
+        "url": os.environ.get("TQG_GROQ_URL", "https://api.groq.com/openai/v1/chat/completions"),
+        "key": os.environ.get("TQG_GROQ_KEY", ""),
+        "model": os.environ.get("TQG_GROQ_MODEL", "openai/gpt-oss-120b"),
+        # gpt-oss models accept reasoning_effort; "low" keeps replies snappy.
+        "extra": {"reasoning_effort": os.environ.get("TQG_GROQ_EFFORT", "low")},
+    },
+    "openrouter": {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "key": os.environ.get("TQG_OPENROUTER_KEY", ""),
+        "model": os.environ.get("TQG_OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+    },
+    "openai": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "key": os.environ.get("TQG_OPENAI_KEY", ""),
+        "model": os.environ.get("TQG_OPENAI_MODEL", "gpt-4o-mini"),
+    },
+    "deepseek": {
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "key": os.environ.get("TQG_DEEPSEEK_KEY", ""),
+        "model": os.environ.get("TQG_DEEPSEEK_MODEL", "deepseek-chat"),
+    },
+    "ollama": {
+        "url": os.environ.get("TQG_OLLAMA_HOST", "http://localhost:11434") + "/v1/chat/completions",
+        "key": "ollama",
+        "model": os.environ.get("TQG_OLLAMA_MODEL", "llama3.2"),
+    },
+}
+AI_TIMEOUT = 12  # short: dead network must reach the offline bank quickly
+AI_MAX_TOKENS = 320
+AI_TEMPERATURE = 1.05
+
+# Legacy aliases (kept so anything still referencing GROQ_* keeps working).
+GROQ_KEY = AI_PROVIDERS["groq"]["key"]
+GROQ_MODEL = AI_PROVIDERS["groq"]["model"]
+GROQ_URL = AI_PROVIDERS["groq"]["url"]
+GROQ_TIMEOUT = AI_TIMEOUT
+GROQ_MAX_TOKENS = AI_MAX_TOKENS
+GROQ_TEMPERATURE = AI_TEMPERATURE
+
+# Human-authored fixed opening per session. Only the first block of it is
+# guaranteed to run *before* the AI chimes in — the rest is interleaved, so the
+# machine feels alive from the opening minutes instead of only at the tail.
 FIXED_OPENING_COUNT = 6
 
-# How many AI questions to attempt per run.
-AI_QUESTION_COUNT = {1: 12, 2: 10, 3: 8}
+# How many authored beats to play before the first AI question in each run.
+# Run 1 eases you in; by run 3 it improvises almost immediately.
+AI_OPENS_AT = {1: 5, 2: 3, 3: 2}
+
+# How many AI questions to place in each run. Sessions get LONGER and meaner as
+# they go, not shorter: run 3 is the real ending and should feel endless.
+AI_QUESTION_COUNT = {1: 14, 2: 18, 3: 26}
+
+# Minimum number of local effects that MUST fire in each run, regardless of what
+# the model chooses. Guarantees the escalation is felt even offline or when the
+# AI keeps answering "none".
+SCARE_FLOOR = {1: 2, 2: 5, 3: 9}
+
+# Effects the forced floor is allowed to use. Deliberately excludes the ones that
+# hijack hardware or the player's machine (webcam_flash, jumpscare, wallpaper,
+# picture, windows_*, notification) so a top-up can never do something drastic
+# behind the player's back — it just leans on tone.
+SCARE_FLOOR_POOL = [
+    "flicker", "whisper", "heartbeat", "rumble", "corruption",
+    "reverse_chord", "rgb_split", "screen_tear", "window_drift", "static_scream",
+]
+
+# Roughly one AI question every N authored/injected beats once the AI is open,
+# so the authored script and the machine trade off instead of running in blocks.
+AI_INTERLEAVE_EVERY = 2
 
 # Local horror effects the AI may pick from (implemented in scares.py).
 AI_SCARE_NAMES = [
     "flicker", "webcam_flash", "whisper", "window_shake", "mouse_move",
     "wallpaper", "picture", "notification", "heartbeat", "rumble",
     "corruption", "static_scream", "reverse_chord",
+    "window_teleport", "window_drift", "rgb_split", "screen_tear",
+    "jumpscare", "windows_shake", "windows_minimize",
 ]
 
 # --- Display ---
 WINDOW_W, WINDOW_H = 800, 600
+WINDOW_LOCKED = True
+BLOCK_CLOSE_ATTEMPTS = True
+CLOSE_RESIST_MAX = 30   # attempts before the constant-drift "you live here now" phase
 WEBCAM_DURATION = 20
 FRAMERATE = 60
+ENABLE_TASKMGR_DETECT = True
+ENABLE_DISCORD_DETECT = True
+MUSIC_ENABLED = True
+WEBCAM_DISTORTION = True   # glitch bars / inversion on the live camera feed
+SFX_DUCK_UNDER_MUSIC = 0.55  # SFX volume multiplier while bossfight.mp3 plays
+KEEP_WINDOW_ON_TOP = True   # re-assert HWND_TOPMOST so it cannot be buried
+
+# Background music. The track only scores the *menu* screens (Settings /
+# About / Help / Logs) — gameplay and the title stay on ambience + SFX only.
+MENU_MUSIC = True
+MUSIC_MENUS_ONLY = True       # True = no music on TITLE or during PLAYING
+MUSIC_VOLUME = 0.5            # menu screens
+MUSIC_VOLUME_IN_GAME = 0.32   # (only used if MUSIC_MENUS_ONLY is off)
+
+# --- CRT / VHS look ----------------------------------------------------------
+# The frame is finished through a CRT + VHS pass: phosphor triad mask, curved
+# tube edges, row curvature, tracking slips, head-switching noise, drifting
+# static and a rolling refresh bar.
+CRT_ENABLED = True
+CRT_INTENSITY = 1.0           # scaled by the VHS Effects setting at runtime
+CRT_CURVATURE = 0.16          # 0 = flat panel, 0.16 = strongly bowed tube
+CRT_CURVE_BANDS = 26          # horizontal slices used to fake the bow (costly if high)
+VHS_TRACKING = True           # horizontal slips + tracking bars
+VHS_STATIC = 1.0              # drifting static/snow density multiplier
+VHS_STATIC_LINE = 1.0         # faint drifting head line on the main screen
+CRT_CORNER_ROUND = 26         # px of rounded/blackened tube corner (0 = square)
+
+# --- Window motion (Windows + macOS only; Wayland forbids apps moving windows)
+# The window gently floats up and down the whole time, and jumps to a fresh
+# spot near the centre every time a question lands.
+WINDOW_FLOAT = True
+WINDOW_FLOAT_AMPLITUDE = 14   # pixels of vertical travel
+WINDOW_FLOAT_PERIOD = 4.2     # seconds per full bob
+WINDOW_JITTER_NEAR_CENTER = True   # nudge near the centre on each new question
+WINDOW_JITTER_RANGE = 90      # pixels either side of dead centre
+WINDOW_ANSWER_NUDGE = 13      # little shuffle of the window when you answer
+WINDOW_HOVER_AMPLITUDE = 6    # subtle hover parallax (px) toward the cursor
+
+# --- AI loop -----------------------------------------------------------------
+# Prefetching the *next* question while the current one is on screen meant the
+# model never saw the player's latest answer (it always ran ~2 questions
+# behind). Off = each question is generated the moment it is needed, using the
+# full up-to-date history, with THINKING dots covering the network wait.
+AI_PREFETCH_LOOKAHEAD = False
+
+# --- Location awareness (Classic mentioned where you are) -------------------
+ENABLE_LOCATION = True        # resolve city/country and ask about it
+ENABLE_COUNTRY_FLAG = True    # download + show your country's flag
+AI_TAILOR_TO_NATION = True    # let the AI reference the player's country
+
+# --- Classic "bite" mechanics (ported from games/classic) --------------------
+# The fixed opening plus the AI questions are the skeleton; these are the
+# teeth Classic had — contradictions, tailored callbacks, machine awareness.
+ENABLE_DYNAMIC_QUESTIONS = True       # location/process/app questions built from real machine state
+ENABLE_CONTRADICTIONS = True          # "Are you alone?" asked again, then thrown back at you
+ENABLE_HESITATION_CALLOUT = True      # pausing too long gets noticed (Classic: 20s)
+ENABLE_BACKGROUND_INTERFERENCE = True  # periodic cmd flash + error beep like Classic
+HESITATION_THRESHOLD = 20.0           # seconds before a pause is called out
+PATIENT_ONE_THRESHOLD = 60.0          # seconds on one question -> "patient_one" badge
+BACKGROUND_INTERFERENCE_INTERVAL = 30.0   # flash_cmd() cadence
+BACKGROUND_BEEP_INTERVAL = (15.0, 45.0)   # randomized error-sound cadence
 
 # --- Persistence ---
 def get_appdata_dir():
+    # Test override: keeps smoke/integration runs off the real save data.
+    override = os.environ.get("TQG_DATA_DIR")
+    if override:
+        return override
     system = platform.system()
     if system == "Windows":
         base = os.environ.get("APPDATA", os.path.expanduser("~"))
@@ -79,23 +256,30 @@ DEFAULT_STATE = {
 
 # Settings UI options -> numeric values.
 SETTING_OPTIONS = {
+    "Font": ["Courier", "Terminal", "Mono", "Sans", "Serif"],
     "Text Speed": ["Fast", "Normal", "Slow"],
     "VHS Effects": ["Off", "Low", "Normal", "High"],
     "Text Sway": ["Off", "Low", "Normal", "High"],
-    "Text Size": ["Small", "Normal", "Large"],
+    "Text Size": ["Small", "Normal", "Large", "Huge"],
+    "AI Source": ["Relay", "Local", "Offline"],
 }
 SETTING_MAPS = {
     "Text Speed": [0.015, 0.04, 0.08],
     "VHS Effects": [0.0, 0.4, 1.0, 2.0],
     "Text Sway": [0.0, 0.4, 1.0, 1.8],
-    "Text Size": [0.8, 1.0, 1.25],
+    "Text Size": [0.8, 1.0, 1.25, 1.6],
 }
 SETTING_DEFAULTS = {
+    "Font": 0,
     "Text Speed": 1,
     "VHS Effects": 2,
     "Text Sway": 2,
     "Text Size": 1,
+    "AI Source": 0,
 }
+
+# "AI Source" label -> which provider the game selects on that choice.
+AI_SOURCE_PROVIDERS = {"Relay": "relay", "Local": "ollama", "Offline": "offline"}
 
 COLOR_BLACK = (0, 0, 0)
 COLOR_WHITE = (220, 220, 220)
@@ -103,6 +287,11 @@ COLOR_GREEN = (0, 220, 0)
 COLOR_RED = (200, 0, 0)
 COLOR_DARK_RED = (100, 0, 0)
 COLOR_DIM_RED = (60, 0, 0)
+
+# Readability: a 1px dark halo under body/UI text so it stays legible on top of
+# static, scanlines and curvature.
+TEXT_OUTLINE = True
+TEXT_OUTLINE_COLOR = (0, 0, 0)
 
 # Local asset lookup: packaged builds ship assets next to the exe; source
 # builds find them in the package folder.

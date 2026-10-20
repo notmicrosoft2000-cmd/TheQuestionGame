@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import threading
 
 from . import config
@@ -12,6 +11,10 @@ BADGE_CATALOG = {
     "persistent": ("Persistent", "Came back a third time."),
     "photographer": ("Photographer", "Let it look at your pictures."),
     "the_final_eye": ("The Final Eye", "Reached the real ending."),
+    "the_archivist": ("The Archivist", "Found the logs behind the code."),
+    "not_alone": ("Not Alone", "Discord was running. It noticed."),
+    "task_manager": ("Deadlocked", "Opened the Task Manager. It saw you."),
+    "patient_one": ("Patient One", "Spent over a minute deciding on a single answer."),
 }
 
 _lock = threading.Lock()
@@ -44,8 +47,11 @@ def load_game_state():
         state = dict(config.DEFAULT_STATE)
         loaded = _load_json(config.STATE_FILE, {})
         state.update(loaded)
+        # Deep-copy every mutable container so we never mutate the module-level
+        # DEFAULT_STATE by reference (a shallow dict() shares these objects).
         state["answers"] = dict(loaded.get("answers", {}))
         state["answer_times"] = dict(loaded.get("answer_times", {}))
+        state["lie_ids"] = list(loaded.get("lie_ids", []))
         settings = dict(config.DEFAULT_STATE["settings"])
         settings.update(loaded.get("settings", {}))
         state["settings"] = settings
@@ -97,6 +103,7 @@ def reset_all_data():
     state = dict(config.DEFAULT_STATE)
     state["answers"] = {}
     state["answer_times"] = {}
+    state["lie_ids"] = []
     state["settings"] = dict(config.DEFAULT_STATE["settings"])
     save_game_state(state)
     return state
