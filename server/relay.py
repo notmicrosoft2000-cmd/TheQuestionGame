@@ -46,6 +46,13 @@ MAX_TOKENS = int(os.environ.get("RELAY_MAX_TOKENS", "320"))
 RATE = int(os.environ.get("RELAY_RATE", "30"))
 BURST = int(os.environ.get("RELAY_BURST", "10"))
 UPSTREAM_TIMEOUT = float(os.environ.get("RELAY_TIMEOUT", "20"))
+# Groq's free tier enforces tokens-per-minute, so a short burst of questions can
+# return 429 even though *we* are well inside our own per-IP window. A 429 there
+# is transient and clears in a second or two; without a retry the game gives up
+# and drops the player onto the offline bank mid-session, which reads as the AI
+# being broken. Retry a couple of times, respecting Retry-After, then give up.
+UPSTREAM_RETRIES = int(os.environ.get("RELAY_UPSTREAM_RETRIES", "2"))
+UPSTREAM_RETRY_MAX_WAIT = float(os.environ.get("RELAY_RETRY_MAX_WAIT", "6"))
 
 # Only these body fields are ever forwarded — everything else is dropped, so a
 # caller cannot switch models, ask for 100k tokens, or attach tools/functions.
@@ -53,6 +60,26 @@ _ALLOWED_FIELDS = {"messages", "temperature", "max_tokens", "reasoning_effort"}
 
 _hits = {}          # ip -> list[timestamp]
 _hits_lock = threading.Lock()
+
+
+def _retry_after_seconds(err):
+    """How long to wait after a 429 — honour Retry-After, else a short default.
+
+    Capped so a hostile or confused upstream cannot pin a handler thread for
+    long; this is a latency tweak, not a queue.
+    """
+    raw = ""
+    try:
+        raw = (err.headers.get("Retry-After") or "").strip()
+    except Exception:
+        raw = ""
+    wait = 1.0
+    if raw:
+        try:
+            wait = float(raw)
+        except ValueError:
+            wait = 1.0
+    return max(0.25, min(wait, UPSTREAM_RETRY_MAX_WAIT))
 
 
 def _rate_ok(ip):
@@ -178,8 +205,20 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as resp:
-                out = resp.read()
+            # Retry a transient upstream 429 (free-tier tokens/minute) a couple of
+            # times before surfacing it — see UPSTREAM_RETRIES above.
+            for attempt in range(UPSTREAM_RETRIES + 1):
+                try:
+                    with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as resp:
+                        out = resp.read()
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 429 or attempt >= UPSTREAM_RETRIES:
+                        raise
+                    wait = _retry_after_seconds(e)
+                    print("[*] upstream 429, retrying in %.1fs (attempt %d/%d)"
+                          % (wait, attempt + 1, UPSTREAM_RETRIES), flush=True)
+                    time.sleep(wait)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(out)))

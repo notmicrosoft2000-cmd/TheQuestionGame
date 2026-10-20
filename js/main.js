@@ -1894,6 +1894,44 @@
   const isTouch = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints || 0) > 0;
   if (isTouch) document.body.classList.add("touch-device");
 
+  /* ---------- 3D card tilt (v3.0.2) --------------------------------------
+     The game leans its window toward the cursor; the site does the same to its
+     cards. Pointer-only: disabled on touch, reduced-motion and perf-low, and it
+     yields completely to the .no-fx switch. Transform is written straight to
+     style (no layout read in the loop) so it never triggers reflow mid-frame. */
+  const tiltCards = $$(".platform-card, .release, .session, .stat");
+  if (!isTouch && !reduceMotion && !PERF.low && tiltCards.length) {
+    const MAX_TILT = 8;    // degrees — past ~10 it stops reading as glass
+    const LIFT = 6;        // px of lift toward the viewer on hover
+    document.body.classList.add("tilt-on");
+    tiltCards.forEach((card) => {
+      card.classList.add("tilt-card");
+      card.addEventListener("pointerenter", () => {
+        card.parentNode && card.parentNode.classList.add("tilt-scene");
+        card.classList.add("tilting");
+      });
+      card.addEventListener("pointermove", (e) => {
+        const r = card.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        const px = (e.clientX - r.left) / r.width;   // 0..1 across the card
+        const py = (e.clientY - r.top) / r.height;   // 0..1 down the card
+        const rx = (0.5 - py) * MAX_TILT * 2;        // top edge tips away
+        const ry = (px - 0.5) * MAX_TILT * 2;
+        card.style.transform =
+          "rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) +
+          "deg) translateZ(" + LIFT + "px)";
+        card.style.setProperty("--sheen-x", (px * 100).toFixed(1) + "%");
+        card.style.setProperty("--sheen-y", (py * 100).toFixed(1) + "%");
+      });
+      const settle = () => {
+        card.classList.remove("tilting");
+        card.style.transform = "";
+      };
+      card.addEventListener("pointerleave", settle);
+      card.addEventListener("blur", settle, true);
+    });
+  }
+
   const cursor = $("#cursor");
   if (cursor && window.matchMedia("(pointer: fine)").matches) {
     let mX = innerWidth / 2, mY = innerHeight / 2, eX = mX, eY = mY;

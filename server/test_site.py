@@ -109,6 +109,31 @@ for ident in ("remRelVersion", "remRelDate", "relVersion", "relDate",
 print("== no API key is committed to the site ==")
 check("js/config.js has no gsk_ key", "gsk_" not in read("js/config.js"))
 
+print("== the VHS/3D remaster layers are wired end to end ==")
+css = read("css/style.css")
+# Markup, styling and behaviour must all three exist, or the effect is dead.
+for cls in ("mask-rgb", "tracking", "dropout", "edge-bend"):
+    check("index.html has the %s layer" % cls, ('class="%s"' % cls) in index)
+    check("style.css defines .crt .%s" % cls, (".crt .%s" % cls) in css)
+check("index.html has the VHS deck chrome", 'class="vhs-chrome"' in index)
+check("tilt styles exist in css", ".tilt-card" in css)
+check("tilt driver exists in main.js", "tiltCards" in mainjs)
+check("tilt respects the perf switch", "PERF.low" in mainjs and "tiltCards" in mainjs)
+check("tilt respects reduced motion", "!reduceMotion" in mainjs)
+check("new layers are behind the no-fx switch",
+      "body.no-fx .crt .tracking" in css and "body.no-fx .vhs-chrome" in css)
+
+print("== the site does not repeat the disproven claims ==")
+# The classic edition DOES open the camera and DOES call ip-api.com; claiming
+# otherwise was a factual error on the page. Guard against it coming back.
+check("no 'classic edition never activates a camera'",
+      "never activates a camera" not in index)
+check("no 'classic edition makes no network requests'",
+      "makes no network requests" not in index)
+check("the location lookup is disclosed", "IP-geolocation" in index)
+check("the camera is disclosed as on by default",
+      "on by default" in index and "camera" in index.lower())
+
 print()
 if FAILS:
     print("SITE_FAIL: " + ", ".join(FAILS))

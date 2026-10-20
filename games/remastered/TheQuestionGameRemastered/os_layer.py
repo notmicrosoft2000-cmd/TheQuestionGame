@@ -881,32 +881,115 @@ def _norm_geo(city="", region="", country="", cc="", lat=None, lon=None, tz=""):
 def _geo_from_ipwho(d):
     if not d.get("success", True):
         return None
-    return _norm_geo(d.get("city"), d.get("region"), d.get("country"),
-                     d.get("country_code"), d.get("latitude"), d.get("longitude"),
-                     (d.get("timezone") or {}).get("id", "") if isinstance(d.get("timezone"), dict) else d.get("timezone", ""))
+    tz = d.get("timezone")
+    tz_id = tz.get("id", "") if isinstance(tz, dict) else (tz or "")
+    utc = tz.get("utc", "") if isinstance(tz, dict) else ""
+    geo = _norm_geo(d.get("city"), d.get("region"), d.get("country"),
+                    d.get("country_code"), d.get("latitude"), d.get("longitude"),
+                    tz_id)
+    geo["utc_offset"] = utc
+    return geo
 
 
 def _geo_from_ipapi(d):
     if d.get("status") != "success":
         return None
-    return _norm_geo(d.get("city"), d.get("regionName"), d.get("country"),
-                     d.get("countryCode"), d.get("lat"), d.get("lon"), d.get("timezone", ""))
+    geo = _norm_geo(d.get("city"), d.get("regionName"), d.get("country"),
+                    d.get("countryCode"), d.get("lat"), d.get("lon"), d.get("timezone", ""))
+    geo["utc_offset"] = d.get("offset")  # seconds east of UTC
+    return geo
 
 
 def _geo_from_ipinfo(d):
     loc = (d.get("loc") or "").split(",")
     lat = loc[0] if len(loc) == 2 else None
     lon = loc[1] if len(loc) == 2 else None
-    return _norm_geo(d.get("city"), d.get("region"), d.get("country"),
-                     d.get("country"), lat, lon, d.get("timezone", ""))
+    geo = _norm_geo(d.get("city"), d.get("region"), d.get("country"),
+                    d.get("country"), lat, lon, d.get("timezone", ""))
+    geo["utc_offset"] = None
+    return geo
 
 
-# Ordered best-effort sources; the first that answers with data wins.
+# Ordered best-effort sources; the first that answers with data wins. Every
+# entry is HTTPS unless config.GEO_ALLOW_INSECURE is turned on — a plaintext
+# geo lookup can be rewritten by anything on the path between the player and
+# the provider, which is exactly the kind of "lie" this guard exists to stop.
 _GEO_SOURCES = (
-    ("https://ipwho.is/", _geo_from_ipwho),
-    ("http://ip-api.com/json/", _geo_from_ipapi),
-    ("https://ipinfo.io/json", _geo_from_ipinfo),
+    ("https://ipwho.is/", _geo_from_ipwho, False),
+    ("http://ip-api.com/json/", _geo_from_ipapi, True),
+    ("https://ipinfo.io/json", _geo_from_ipinfo, False),
 )
+
+
+def _local_utc_offset_hours():
+    """The machine's real UTC offset in hours, straight from the OS clock.
+
+    A VPN rewrites the IP address, but it does not move the player's clock: the
+    system timezone still says where they actually are. That mismatch is the
+    tell we use. Returns None when the offset cannot be determined.
+    """
+    try:
+        if time.daylight and time.localtime().tm_isdst > 0:
+            return -time.altzone / 3600.0
+        return -time.timezone / 3600.0
+    except Exception:
+        return None
+
+
+def _ip_utc_offset_hours(geo):
+    """Normalise a provider's UTC-offset field into float hours (or None)."""
+    raw = geo.get("utc_offset")
+    if raw is None or raw == "":
+        return None
+    try:
+        if isinstance(raw, str):
+            raw = raw.strip()
+            sign = -1.0 if raw.startswith("-") else 1.0
+            parts = raw.lstrip("+-").split(":")
+            hours = float(parts[0])
+            if len(parts) > 1:
+                hours += float(parts[1]) / 60.0
+            return sign * hours
+        return float(raw) / 3600.0  # ip-api reports seconds east of UTC
+    except Exception:
+        return None
+
+
+def _geo_is_vpn_suspect(geo):
+    """True when the IP's location contradicts the machine's own clock.
+
+    Catches the common `openvpn`/WireGuard/Commercial-VPN case: a correctly
+    routed ISP address sits in the same rough timezone as the desktop, while an
+    exit node several zones away does not. Deliberately generous (2 hours by
+    default) so a legitimate cross-border route near a timezone seam is not
+    thrown away.
+    """
+    if not getattr(config, "GEO_VPN_GUARD", True):
+        return False
+    ip_off = _ip_utc_offset_hours(geo)
+    local_off = _local_utc_offset_hours()
+    if ip_off is None or local_off is None:
+        return False
+    limit = float(getattr(config, "GEO_VPN_MAX_OFFSET_HOURS", 2.0))
+    delta = abs(ip_off - local_off)
+    if delta > 12:  # wrap across the date line
+        delta = 24 - delta
+    return delta > limit
+
+
+def _geo_from_local_clock():
+    """Timezone-only fallback used when the IP answer is untrustworthy.
+
+    We keep no city (inventing one would be worse than staying vague) but the
+    country/region is still implied by the offset, so the AI can reference
+    "your timezone" without naming a place the player has never been.
+    """
+    off = _local_utc_offset_hours()
+    if off is None:
+        return {}
+    return {"city": "", "region": "", "country": "", "country_code": "",
+            "lat": None, "lon": None, "timezone": "", "utc_offset": None,
+            "local_utc_offset": off, "vpn_suspect": True, "clock_only": True}
 
 
 def fetch_geo():
@@ -914,26 +997,46 @@ def fetch_geo():
 
     Desktop apps cannot read GPS without special libraries/permissions, so we
     use IP geolocation (city-level) across several keyless providers and take
-    the first usable answer. Returns a normalised dict (possibly empty).
+    the first usable answer.
+
+    Because IP geolocation simply reports whichever address it sees, a VPN makes
+    every provider report the exit node's city. We cannot pierce the tunnel from
+    inside the app, so instead we cross-check the answer against the machine's
+    own clock (see `_geo_is_vpn_suspect`) and fall back to the OS timezone when
+    they disagree. Returns a normalised dict (possibly empty).
     """
     try:
         import requests
     except Exception:
         return {}
-    for url, extract in _GEO_SOURCES:
+    allow_insecure = bool(getattr(config, "GEO_ALLOW_INSECURE", False))
+    for url, extract, insecure in _GEO_SOURCES:
+        if insecure and not allow_insecure:
+            continue
         try:
             r = requests.get(url, timeout=4, headers={"User-Agent": "TheQuestionGame/3.0"})
             data = r.json()
             geo = extract(data)
             if geo and (geo.get("city") or geo.get("country")):
+                if _geo_is_vpn_suspect(geo):
+                    # The IP says one place, the clock says another — a VPN. Do
+                    # not name the exit node's city; hand back the clock instead.
+                    fallback = _geo_from_local_clock()
+                    fallback["rejected_geo"] = geo
+                    return fallback
+                geo["vpn_suspect"] = False
                 return geo
         except Exception:
             continue
-    return {}
+    return _geo_from_local_clock() if getattr(config, "GEO_VPN_GUARD", True) else {}
 
 
 def fetch_location():
     geo = fetch_geo()
+    # A VPN-suspect answer deliberately carries no city — say "your timezone"
+    # rather than a city the player is demonstrably not in.
+    if geo.get("vpn_suspect") and not geo.get("city"):
+        return "", ""
     return geo.get("city", ""), geo.get("country", "")
 
 

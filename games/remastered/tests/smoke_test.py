@@ -240,9 +240,16 @@ check("scare floor escalates per run",
       config.SCARE_FLOOR)
 check("scare floor pool only has implemented effects",
       all(n in sc.SCARE_REGISTRY for n in config.SCARE_FLOOR_POOL))
-check("scare floor never hijacks hardware",
-      not ({"jumpscare", "webcam_flash", "wallpaper", "picture", "windows_shake",
+# webcam_flash is the single, deliberate exception: the camera scare ships on
+# by default, so the floor may reach for it. Every *other* desktop-hijacking
+# effect must stay out, so a top-up can never do something drastic unasked.
+check("scare floor only hijacks hardware for the camera scare",
+      not ({"jumpscare", "wallpaper", "picture", "windows_shake",
             "windows_minimize", "notification"} & set(config.SCARE_FLOOR_POOL)),
+      config.SCARE_FLOOR_POOL)
+check("camera scare is guaranteed only when it is enabled",
+      ("webcam_flash" in config.SCARE_FLOOR_POOL) ==
+      (config.WEBCAM_ENABLED and config.WEBCAM_GUARANTEED),
       config.SCARE_FLOOR_POOL)
 _fired = {"n": 0}
 _orig_apply = sc.apply_scare

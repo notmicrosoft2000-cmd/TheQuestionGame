@@ -79,8 +79,14 @@ class Game:
             pygame.mixer.set_num_channels(16)  # default 8 exhausts under scare layers
         except Exception:
             pass
+        # A resizable frame, clamped between a floor and a ceiling. The ceiling
+        # is deliberately short of the desktop so the window can be stretched
+        # but never becomes fullscreen — there is no F11/Alt+Enter handler and
+        # pygame.FULLSCREEN is never used anywhere in this build.
         flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
         self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+        if not config.WINDOW_LOCKED:
+            self._apply_resize_limits()
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -176,6 +182,39 @@ class Game:
             os_layer.start_topmost_keeper()
         self._startup_badges()
         self._begin_session()
+
+    def _apply_resize_limits(self):
+        """Clamp the resizeable frame so it can never swallow the desktop.
+
+        There is no fullscreen toggle in this build by design; the cheapest way
+        to guarantee that is to cap the resizable window below the screen size.
+        SDL is asked to enforce the floor, and the ceiling is enforced by us in
+        `_on_resize` because SDL2 has no max-size hint.
+        """
+        try:
+            info = pygame.display.Info()
+            desktop_w, desktop_h = info.current_w, info.current_h
+        except Exception:
+            desktop_w, desktop_h = config.WINDOW_MAX_W, config.WINDOW_MAX_H
+        max_w = min(config.WINDOW_MAX_W, max(config.WINDOW_MIN_W, desktop_w - 80))
+        max_h = min(config.WINDOW_MAX_H, max(config.WINDOW_MIN_H, desktop_h - 120))
+        self._max_window = (max_w, max_h)
+        try:
+            pygame.display.set_window_minimum_size(config.WINDOW_MIN_W,
+                                                   config.WINDOW_MIN_H)
+        except Exception:
+            pass  # older SDL/pygame: the minimum is soft, the maximum still holds
+
+    def _on_resize(self, w, h):
+        """Accept a drag-to-resize, clamped between the floor and the ceiling."""
+        max_w, max_h = getattr(self, "_max_window",
+                               (config.WINDOW_MAX_W, config.WINDOW_MAX_H))
+        w = max(config.WINDOW_MIN_W, min(int(w), max_w))
+        h = max(config.WINDOW_MIN_H, min(int(h), max_h))
+        self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+        # The starfield is baked to a fixed size, so rebuild it for the new
+        # frame or the dressing would only cover part of the screen.
+        self.starfield = ui.build_starfield(w, h)
 
     # --- setup helpers -------------------------------------------------------
     def _load_settings_idx(self):
@@ -1345,8 +1384,9 @@ class Game:
             audio.play_static_scream()
             os_layer.shake_game_window(cycles=12, amplitude=38)
         if n >= 6:
-            os_layer.begin_mouse_move(random.randint(40, config.WINDOW_W - 40),
-                                      random.randint(40, config.WINDOW_H - 40))
+            _sw, _sh = self.screen.get_size()   # the frame may have been resized
+            os_layer.begin_mouse_move(random.randint(40, max(80, _sw - 40)),
+                                      random.randint(40, max(80, _sh - 40)))
             os_layer.show_os_notification(config.APP_NAME, "You cannot leave.")
         if n >= 8 and n % 2 == 0:
             # Mid-game: more aggressive repositioning and a hard shake.
@@ -1379,7 +1419,7 @@ class Game:
                     else:
                         self._handle_key(event.key)
                 elif event.type == pygame.VIDEORESIZE and not config.WINDOW_LOCKED:
-                    self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                    self._on_resize(event.w, event.h)
                 elif event.type == pygame.MOUSEMOTION:
                     # Subtle hover parallax — the window leans toward the cursor
                     # (Windows/macOS only; no-op on Wayland).

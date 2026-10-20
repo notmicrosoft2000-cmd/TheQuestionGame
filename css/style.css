@@ -101,12 +101,89 @@ button{font-family:inherit}
 @keyframes sweep{0%{transform:translateY(0)}100%{transform:translateY(160vh)}}
 #ash{position:absolute;inset:0;width:100%;height:100%;opacity:.6}
 #noise{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+
+/* ---------- Remastered VHS layer (v3.0.2) ----------------------------------
+   The game's tape look, rebuilt for the page: phosphor triad mask, a rolling
+   tracking bar, per-line dropout tears and a bowed-glass edge. Every piece is
+   decorative only — pointer-events:none, aria-hidden, and switched off wholesale
+   by body.no-fx, body.perf-low and prefers-reduced-motion. */
+.crt .mask-rgb{
+  position:absolute;inset:0;mix-blend-mode:overlay;
+  /* Vertical phosphor triads: R/G/B stripes 1px wide, the classic aperture mask */
+  background:repeating-linear-gradient(to right,
+    rgba(255,0,0,.16) 0 1px,rgba(0,255,0,.16) 1px 2px,rgba(0,0,255,.16) 2px 3px);
+  opacity:.55;
+}
+.crt .tracking{
+  position:absolute;left:0;right:0;top:-18vh;height:16vh;
+  background:linear-gradient(to bottom,
+    transparent 0%,rgba(255,255,255,.055) 34%,rgba(0,0,0,.34) 50%,
+    rgba(255,255,255,.075) 66%,transparent 100%);
+  transform:translateY(0) scaleY(1);
+  animation:tracking-roll 11s cubic-bezier(.4,0,.6,1) infinite;
+  will-change:transform;opacity:.9;
+}
+@keyframes tracking-roll{
+  0%{transform:translateY(0) scaleY(1)}
+  42%{transform:translateY(110vh) scaleY(1)}
+  43%{transform:translateY(112vh) scaleY(2.4)}   /* the bar catches and smears */
+  45%{transform:translateY(120vh) scaleY(.6)}
+  100%{transform:translateY(130vh) scaleY(1)}
+}
+/* Fast, irregular horizontal tear — reads as tape dropout, fires rarely */
+.crt .dropout{
+  position:absolute;left:0;right:0;height:6px;top:20%;
+  background:linear-gradient(to right,
+    rgba(255,255,255,.5),rgba(0,220,0,.25) 30%,rgba(255,255,255,.6) 55%,rgba(0,0,0,.5));
+  transform:translateX(-30%) scaleX(.2);opacity:0;filter:blur(.4px);
+  animation:dropout-tear 7s steps(1,end) infinite;
+  will-change:transform,opacity;
+}
+@keyframes dropout-tear{
+  0%,97.5%{opacity:0;transform:translateX(-30%) scaleX(.2)}
+  98%{opacity:.9;transform:translateX(4%) scaleX(.5)}
+  98.4%{opacity:.7;transform:translateX(-16%) scaleX(1.2)}
+  98.8%{opacity:.85;transform:translateX(22%) scaleX(.7)}
+  99.2%{opacity:0;transform:translateX(0) scaleX(1)}
+}
+/* Bowed-glass edges — thickens the tube illusion the flat vignette alone missed */
+.crt .edge-bend{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 130% 120% at 50% 50%,transparent 62%,rgba(0,0,0,.34) 88%,rgba(0,0,0,.72) 100%),
+    linear-gradient(90deg,rgba(0,0,0,.4),transparent 7%,transparent 93%,rgba(0,0,0,.4));
+  mix-blend-mode:multiply;
+}
+
+/* VHS deck chrome — corner stamps, deliberately faint so they never compete */
+.vhs-chrome{position:fixed;inset:0;pointer-events:none;z-index:9955}
+.vhs-tag{
+  position:absolute;font-family:var(--vt);font-size:clamp(.6rem,1.5vw,1rem);
+  letter-spacing:.14em;color:rgba(210,210,200,.72);
+  text-shadow:0 0 6px rgba(0,0,0,.9),0 0 2px rgba(0,220,0,.35);
+  mix-blend-mode:screen;
+}
+.vhs-tag-play{top:3.2rem;left:50%;transform:translateX(-50%)}
+.vhs-tag-len{top:3.2rem;right:1.4rem}
+.vhs-tag-val{bottom:1.2rem;left:1.4rem}
+.vhs-blink{animation:vhs-blink 1.4s steps(1,end) infinite}
+@keyframes vhs-blink{0%,49%{opacity:1}50%,100%{opacity:.25}}
+body.no-fx .vhs-chrome{display:none}
+body.perf-low .crt .mask-rgb,
+body.perf-low .crt .tracking,
+body.perf-low .crt .dropout,
+body.perf-low .crt .edge-bend{display:none}
+
 /* FX master switch — player can drop the static/CRT overlays after the LOGS
    unlock. The frame loops are also stopped in JS; this just hides the layers. */
 body.no-fx .crt .scanlines,
 body.no-fx .crt .vignette,
 body.no-fx .crt .beam,
 body.no-fx .crt .sweep,
+body.no-fx .crt .mask-rgb,
+body.no-fx .crt .tracking,
+body.no-fx .crt .dropout,
+body.no-fx .crt .edge-bend,
 body.no-fx #ash,
 body.no-fx #noise,
 body.no-fx .crt-glare,
@@ -1179,6 +1256,37 @@ footer p{font-family:var(--vt);font-size:1.2rem;letter-spacing:.12em;color:#8a8a
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .toast.red{color:var(--red);border-color:var(--red);box-shadow:var(--glow-red)}
 
+/* ---------- 3D card tilt (v3.0.2 remaster) ---------------------------------
+   Cards sit in a shared perspective and lean toward the pointer, with the
+   inner content pushed forward on translateZ so it reads as real depth rather
+   than a flat skew. Opt-in per frame via JS adding .tilt-on; the :hover rule is
+   a no-JS fallback. Never applied on touch or reduced-motion. */
+.tilt-scene{perspective:900px;perspective-origin:50% 40%}
+.tilt-card{
+  transform-style:preserve-3d;
+  transition:transform .28s cubic-bezier(.22,.61,.36,1),box-shadow .28s ease;
+  will-change:transform;
+}
+.tilt-card.tilting{transition:transform .06s linear}
+.tilt-card > *{transform:translateZ(22px)}
+.tilt-card .platform-os,
+.tilt-card .platform-name,
+.tilt-card .platform-desc{transform:translateZ(30px)}
+/* Sheen follows the tilt angle so the lean has a light source */
+.tilt-card::after{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:radial-gradient(60% 60% at var(--sheen-x,50%) var(--sheen-y,50%),
+    rgba(255,255,255,.09),transparent 70%);
+  transition:opacity .28s ease;mix-blend-mode:screen;
+}
+.tilt-card.tilting::after{opacity:1}
+body.no-fx .tilt-card,
+body.perf-low .tilt-card{transform:none!important}
+body.no-fx .tilt-card::after,
+body.perf-low .tilt-card::after{display:none}
+body.no-fx .tilt-card > *,
+body.perf-low .tilt-card > *{transform:none}
+
 /* ---------- Modals ---------- */
 body.modal-open{overflow:hidden}
 .modal-overlay{
@@ -1379,6 +1487,8 @@ body.modal-open{overflow:hidden}
   html{scroll-behavior:auto}
   .cursor{display:none!important}
   .crt .beam{display:none}
+  .crt .tracking,.crt .dropout{display:none}
+  .tilt-card{transform:none!important}
 }
 
 /* ---------- Strobe burst ---------- */

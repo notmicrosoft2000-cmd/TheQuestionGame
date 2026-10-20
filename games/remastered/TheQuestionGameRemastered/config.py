@@ -85,7 +85,12 @@ AI_PROVIDERS = {
 }
 AI_TIMEOUT = 12  # short: dead network must reach the offline bank quickly
 AI_MAX_TOKENS = 320
-AI_TEMPERATURE = 1.05
+# Sampling temperature. This used to sit at 1.05, which is above 1.0 and was the
+# single biggest cause of the model writing purple metaphor ("the void tightens")
+# instead of a plain question. Horror comes from being *specific and true*, not
+# from being florid, so we sample cooler — enough variety to never repeat a line,
+# not enough for the model to drift into poetry.
+AI_TEMPERATURE = 0.75
 
 # Legacy aliases (kept so anything still referencing GROQ_* keeps working).
 GROQ_KEY = AI_PROVIDERS["groq"]["key"]
@@ -121,6 +126,13 @@ SCARE_FLOOR_POOL = [
     "flicker", "whisper", "heartbeat", "rumble", "corruption",
     "reverse_chord", "rgb_split", "screen_tear", "window_drift", "static_scream",
 ]
+# webcam_flash is the one hardware effect the floor is allowed to reach for,
+# and only because the camera scare ships on by default (WEBCAM_GUARANTEED,
+# defined with the other webcam options further down). Without this the camera
+# would never fire on a run where the model keeps answering "none" or the AI is
+# in Offline mode — it would be a setting nobody ever sees. Everything else
+# that hijacks the desktop stays out of the floor.
+SCARE_FLOOR_INCLUDE_WEBCAM = True
 
 # Roughly one AI question every N authored/injected beats once the AI is open,
 # so the authored script and the machine trade off instead of running in blocks.
@@ -137,10 +149,22 @@ AI_SCARE_NAMES = [
 
 # --- Display ---
 WINDOW_W, WINDOW_H = 800, 600
-WINDOW_LOCKED = True
+WINDOW_LOCKED = False       # False = normal resizable frame (drag the edges)
+WINDOW_MIN_W, WINDOW_MIN_H = 640, 480
+WINDOW_MAX_W, WINDOW_MAX_H = 1600, 1200   # deliberately below 1080p: no fullscreen
+# The window can be stretched, but never fullscreen: there is no F11 / Alt+Enter
+# handler, the frame is a plain RESIZABLE window, and the ceiling above stops it
+# from swallowing the whole desktop. SDL's FULLSCREEN flags are never used.
 BLOCK_CLOSE_ATTEMPTS = True
 CLOSE_RESIST_MAX = 30   # attempts before the constant-drift "you live here now" phase
 WEBCAM_DURATION = 20
+# The camera scare is on by default: it needs no prompt and no opt-in, exactly
+# like the Classic edition. WEBCAM_GUARANTEED also lets the forced scare floor
+# pick it, so the camera still opens on a run where the model never chooses it.
+WEBCAM_ENABLED = True
+WEBCAM_GUARANTEED = True
+if WEBCAM_GUARANTEED and SCARE_FLOOR_INCLUDE_WEBCAM:
+    SCARE_FLOOR_POOL.append("webcam_flash")
 FRAMERATE = 60
 ENABLE_TASKMGR_DETECT = True
 ENABLE_DISCORD_DETECT = True
@@ -191,6 +215,18 @@ AI_PREFETCH_LOOKAHEAD = False
 ENABLE_LOCATION = True        # resolve city/country and ask about it
 ENABLE_COUNTRY_FLAG = True    # download + show your country's flag
 AI_TAILOR_TO_NATION = True    # let the AI reference the player's country
+# IP geolocation is trivially fooled by a VPN — the lookup just reports the exit
+# node. We cannot see past a tunnel from inside the app, but we *can* catch the
+# lie: a real ISP route sits in the same rough timezone as the machine's clock,
+# while a VPN exit usually does not. If the IP's UTC offset disagrees with the
+# local clock by more than GEO_VPN_MAX_OFFSET_HOURS, the IP city is treated as
+# untrustworthy and we fall back to the OS timezone instead of naming a city the
+# player is not in (being told the wrong city breaks the whole illusion).
+GEO_VPN_GUARD = True
+GEO_VPN_MAX_OFFSET_HOURS = 2.0
+# Never ask a plaintext HTTP geolocation endpoint — an on-path attacker (or the
+# captive-portal Wi-Fi the player is sitting on) can rewrite that answer freely.
+GEO_ALLOW_INSECURE = False
 
 # --- Classic "bite" mechanics (ported from games/classic) --------------------
 # The fixed opening plus the AI questions are the skeleton; these are the

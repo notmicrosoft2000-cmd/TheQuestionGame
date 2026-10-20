@@ -33,7 +33,9 @@ SOUND_SPECS = {
     "deep_rumble": (0.800, "rumble"),
     "reverse_chord": (1.200, "chord"),
     "static_scream": (0.350, "scream"),
-    "ambience":    (4.000, "ambience"),
+    # A long bed: at 30s the loop point is far enough apart that the ear stops
+    # hearing the cycle (the old 4s bed was audible as a repeating thump).
+    "ambience":    (30.000, "ambience"),
 }
 
 
@@ -107,12 +109,24 @@ def _gen(kind, dur):
         return np.clip(wave * 0.5 + noise * 0.5, -1, 1) * env * 20000
 
     if kind == "ambience":
-        # A slow, breathing low drone with a faint tape hiss under it.
-        drone = np.sin(2 * np.pi * 50 * t) * 0.5
-        drone += np.sin(2 * np.pi * 50.7 * t) * 0.25
-        lfo = 0.8 + 0.2 * np.sin(2 * np.pi * 0.13 * t)
-        hiss = rng.normal(0, 0.03, len(t))
-        return (drone * lfo + hiss) * 12000
+        # Long, breathing low drone with layered mains hum, slow drift and tape hiss.
+        # Longer than the old 4s loop so the cycle isn't obvious, denser so it
+        # feels wetter/closer to the classic remastered bed.
+        drone = np.sin(2 * np.pi * 50.0 * t) * 0.42
+        drone += np.sin(2 * np.pi * 49.6 * t) * 0.28
+        drone += np.sin(2 * np.pi * 50.7 * t) * 0.22
+        drone += np.sin(2 * np.pi * 25.0 * t) * 0.16  # sub-octave rumble
+        # Slow, irregular breathing
+        lfo1 = 0.7 + 0.3 * np.sin(2 * np.pi * 0.07 * t)
+        lfo2 = 0.85 + 0.15 * np.sin(2 * np.pi * 0.019 * t + 1.7)
+        lfo = lfo1 * lfo2
+        hiss = rng.normal(0, 0.05, len(t))
+        # Occasional crackle from tape
+        crackle = rng.normal(0, 0.012, len(t))
+        # very slow filter drift
+        drift = np.convolve(drone, np.ones(441)/441.0, mode="same") * 0.25
+        out = (drone * lfo + drift + hiss + crackle)
+        return np.clip(out, -1, 1) * 15000
 
     return np.zeros(len(t))
 

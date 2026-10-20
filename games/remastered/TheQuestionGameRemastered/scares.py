@@ -8,6 +8,7 @@ import random
 import threading
 
 from . import audio
+from . import config
 from . import os_layer
 from . import ui
 
@@ -37,6 +38,8 @@ def _do_flicker(game):
 
 
 def _do_webcam_flash(game):
+    if not config.WEBCAM_ENABLED:
+        return
     if not ui.webcam_active:
         ui.start_webcam_nonblocking()
     game.fx["webcam_flash_until"] = game.now + 4.0

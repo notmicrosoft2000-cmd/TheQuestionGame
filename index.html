@@ -46,13 +46,24 @@
 
   <div class="crt" aria-hidden="true">
     <div class="scanlines"></div>
+    <div class="mask-rgb"></div>
     <div class="vignette"></div>
     <div class="beam"></div>
     <div class="sweep"></div>
+    <div class="tracking"></div>
+    <div class="dropout"></div>
+    <div class="edge-bend"></div>
     <canvas id="ash"></canvas>
     <canvas id="noise"></canvas>
     <div class="flash"></div>
     <div class="blink-flash"></div>
+  </div>
+
+  <!-- VHS deck chrome: tape-counter corner stamps that sell the "playback" frame -->
+  <div class="vhs-chrome" aria-hidden="true">
+    <span class="vhs-tag vhs-tag-play">PLAY <span class="vhs-blink">&#9654;</span></span>
+    <span class="vhs-tag vhs-tag-len">SP</span>
+    <span class="vhs-tag vhs-tag-val">T-120</span>
   </div>
 
   <div class="hud hud-tl" aria-hidden="true">
@@ -468,11 +479,11 @@
         </details>
         <details class="concern">
           <summary>DOES IT USE MY CAMERA OR MICROPHONE?</summary>
-          <div class="concern-body">The classic edition never activates a camera or microphone on either platform. The Remastered edition can briefly request your camera <i>only</i> as an in-fiction scare — deny the permission and the scare is skipped, and the game keeps running. Neither edition records audio, and nothing is ever saved from the camera.</div>
+          <div class="concern-body">Neither edition records audio, and nothing is ever saved from the camera. Both editions can open the camera as an in-fiction scare: the classic edition does it silently, and the Remastered edition has it <i>on by default</i> — the camera opens when the scare fires, without asking first. Your operating system still shows its own camera permission prompt the first time, and if you deny it the camera simply fails to open, the scare is skipped, and the game keeps running. The live feed is drawn on screen for the duration of the scare and then discarded; no frame is written to disk or sent anywhere.</div>
         </details>
         <details class="concern">
           <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
-          <div class="concern-body">The classic edition makes no network requests at all — everything you type stays in a local save file on your machine. The Remastered edition can call an AI service to write your questions when a network is available (it works offline with built-in questions otherwise). The request goes to a relay server that holds the API key and forwards it — no key ships inside the game — and the answers you choose are sent only as a short line of generated-fiction context, are never stored by the developer, and remain yours. Either way, playable fully disconnected.</div>
+          <div class="concern-body">The classic edition has no AI and sends your answers nowhere — everything you type stays in a local save file on your machine. It does make one request: a plain HTTP lookup to a public IP-geolocation service, so the game can mention your city by name. That request carries no answers and no personal data, only your IP, which any site you visit sees anyway. The Remastered edition adds two more: the same kind of location lookup, and a call to an AI service to write your questions when a network is available (it works offline with built-in questions otherwise). The AI request goes to a relay server that holds the API key and forwards it — no key ships inside the game — and the answers you choose are sent only as a short line of generated-fiction context, are never stored by the developer, and remain yours. Either edition plays fully disconnected.</div>
         </details>
         <details class="concern">
           <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
