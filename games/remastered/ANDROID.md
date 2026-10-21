@@ -29,11 +29,15 @@ Build (virtualenv `~/.myenv`, where buildozer lives):
                                        # `buildozer android debug` → bin/
     ./build_android.sh android release # release build
 
-The debug APK from `bin/` is published on the GitHub release
+The debug APK from `bin/` was published on the GitHub release
 `v4.0.0-remastered` as
-`TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk`, which the
-download card on the site picks up automatically (the site scans the release's
-assets for a `.apk`).
+`TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk`.
+
+That was the last Android build. The v5.0.0 multiplayer alpha is **desktop
+only** — Windows, macOS and Linux — so there is no APK for it and the site's
+download card deliberately offers no Android link for that release. The site
+scans a release's assets for a `.apk`, so an APK dropped into a future release
+would be picked up automatically.
 
 SDK/NDK are already provisioned (`~/android/sdk`, NDK 28c), and `.buildozer/`
 caches every compiled recipe, so only the first build is long — later builds

@@ -2,7 +2,9 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  const REMASTER_TAG = "v4.0.0-remastered";
+  // The multiplayer alpha. This release ships the receiver build only — the
+  // operator's sender app is never published here.
+  const REMASTER_TAG = "v5.0.0-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -2469,7 +2471,9 @@
 
   const FALLBACKS = {
     classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz", apk: "TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" },
-    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz", apk: "TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk" }
+    // The multiplayer alpha is desktop only: Windows, macOS and Linux. There
+    // is no Android asset for it, so no apk fallback is offered.
+    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
   function downloadUrl(tag, file) {
@@ -2576,8 +2580,7 @@
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
       macBtn: "dlRemMac", macStatus: "dlRemMacStatus",
-      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus",
-      androidBtn: "dlRemAndroid", androidStatus: "dlRemAndroidStatus"
+      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus"
     }, FALLBACKS.remastered);
     (async () => {
       let tag = CLASSIC_TAG;

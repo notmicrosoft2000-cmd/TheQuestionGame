@@ -28,11 +28,10 @@
     <div style="position:fixed;top:0;left:0;right:0;z-index:999999;background:#000;color:#00dd00;font-family:monospace;font-size:13px;padding:14px 16px;line-height:1.6;border-bottom:2px solid #00dd00">
       <b>THE QUESTION GAME</b> needs JavaScript. On an old browser (IE 11 or earlier), use the
       <a href="legacy.html" style="color:#00ff88">LEGACY 2000 EDITION</a>.
-      &nbsp;Downloads:&nbsp;
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk" style="color:#00ff88">ANDROID (APK)</a>
+      &nbsp;Downloads (v5.0.0 multiplayer alpha — desktop only):&nbsp;
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a>
     </div>
   </noscript>
 
@@ -73,7 +72,7 @@
   <div class="hud hud-tr" aria-hidden="true">
     SIGNAL: <span class="sig" id="sigStatus">STABLE</span>
   </div>
-  <div class="hud hud-bl" aria-hidden="true">v4.0.0</div>
+  <div class="hud hud-bl" aria-hidden="true">v5.0.0</div>
   <div class="hud hud-br" aria-hidden="true"><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a></div>
 
   <div id="boot" aria-hidden="true">
@@ -153,7 +152,7 @@
         <span>TEXT-BASED HORROR EXPERIENCE</span>
       </div>
 
-      <div class="hero-badge"><span class="led"></span> BUILD v4.0.0 — WINDOWS / MACOS / LINUX</div>
+      <div class="hero-badge"><span class="led"></span> BUILD v5.0.0 — MULTIPLAYER ALPHA — WINDOWS / MACOS / LINUX</div>
 
       <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
       <h1 class="glitch" data-text="GAME">GAME</h1>
@@ -484,7 +483,7 @@
         </details>
         <details class="concern">
           <summary>DOES IT SEND MY ANSWERS ANYWHERE?</summary>
-          <div class="concern-body">The classic edition has no AI and sends your answers nowhere — everything you type stays in a local save file on your machine. It does make one request: a plain HTTP lookup to a public IP-geolocation service, so the game can mention your city by name. That request carries no answers and no personal data, only your IP, which any site you visit sees anyway. The Remastered edition adds two more: the same kind of location lookup, and a call to an AI service to write your questions when a network is available (it works offline with built-in questions otherwise). The AI request goes to a relay server that holds the API key and forwards it — no key ships inside the game — and the answers you choose are sent only as a short line of generated-fiction context, are never stored by the developer, and remain yours. Either edition plays fully disconnected.</div>
+          <div class="concern-body">The classic edition has no AI and sends your answers nowhere — everything you type stays in a local save file on your machine. It does make one request: a plain HTTP lookup to a public IP-geolocation service, so the game can mention your city by name. That request carries no answers and no personal data, only your IP, which any site you visit sees anyway. The Remastered edition adds two more: the same kind of location lookup, and a call to an AI service to write your questions when a network is available (it works offline with built-in questions otherwise). The AI request goes to a relay server that holds the API key and forwards it — no key ships inside the game — and the answers you choose are sent only as a short line of generated-fiction context, are never stored by the developer, and remain yours. The multiplayer alpha adds one more, to the same relay server: a small poll every few seconds so the ONLINE screen can show who else is playing right now. It carries a random id and the display name you chose, and nothing else. Either edition plays fully disconnected.</div>
         </details>
         <details class="concern">
           <summary>IT SOUNDS SKETCHY. WHAT DOES IT ACTUALLY DO TO MY SYSTEM?</summary>
@@ -719,6 +718,15 @@
           </div>
 
           <div class="story-card reveal">
+            <p class="story-kicker">OCTOBER 21, 2026</p>
+            <h3 class="story-headline">v5.0.0 — THE ROOM IS NO LONGER EMPTY</h3>
+            <div class="story-para">
+              <p>The remastered edition learned to listen to someone else. It joins a live room now — the ONLINE screen shows who else is playing, and the session stops being only yours.</p>
+              <p>And it stopped hiding. On GNOME/Wayland the window used to come up black while the game itself ran perfectly — the picture was drawn, but the compositor was told the window was transparent. It shows now, on Wayland and X11 alike.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
             <p class="story-kicker">TODAY</p>
             <h3 class="story-headline">THE PRANK KEEPS PAYING OFF</h3>
             <div class="story-para">
@@ -824,7 +832,7 @@
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux <span class="red">— Android support is paused</span>, two editions. No installation required. They only need permission.</p>
+      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux, two editions. No installation required. They only need permission. The remastered edition is now the <span class="red">multiplayer alpha</span> — desktop only.</p>
 
       <div class="download-grid">
         <div class="releases-col">
@@ -911,8 +919,8 @@
         <div class="release reveal rem">
           <div class="release-top">
             <div>
-              <span class="tag tag-green">LATEST — v4.0.0 REMASTERED</span>
-              <h3 class="release-version" id="remRelVersion">v4.0.0-remastered</h3>
+              <span class="tag tag-green">MULTIPLAYER ALPHA — v5.0.0</span>
+              <h3 class="release-version" id="remRelVersion">v5.0.0-remastered</h3>
               <p class="release-date" id="remRelDate">CONTACTING RELEASE SERVER...</p>
             </div>
             <div class="release-icon" aria-hidden="true">
@@ -928,8 +936,8 @@
                 <span class="platform-os">WINDOWS</span>
                 <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — every session is written live. No setup, no key.</p>
-              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — the multiplayer receiver build. No setup, no key.</p>
+              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
               <p class="platform-status" id="dlRemWindowsStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remMacCard">
@@ -938,7 +946,7 @@
                 <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
               </div>
               <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
-              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
               <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remLinuxCard">
@@ -947,7 +955,7 @@
                 <span class="tag tag-green hidden" id="remLinuxDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
-              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v5.0.0-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
               <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remAndroidCard">
@@ -955,27 +963,27 @@
                 <span class="platform-os">ANDROID</span>
                 <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">Android 8+ (ARM64). The remastered edition as an <b>APK</b> — sideloaded, debug-signed, installed in seconds. Touch controls are built in: tap an answer to pick it, tap again to lock it in.</p>
-              <a class="platform-btn" id="dlRemAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v4.0.0-remastered/TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
-              <p class="platform-status" id="dlRemAndroidStatus">READY</p>
+              <p class="platform-desc">The multiplayer alpha is <b>desktop only</b> — Windows, macOS and Linux. There is no Android build for v5.0.0.</p>
+              <a class="platform-btn platform-miss" id="dlRemAndroid" aria-disabled="true" data-os="ANDROID">ANDROID — NOT IN THIS ALPHA</a>
+              <p class="platform-status miss" id="dlRemAndroidStatus">THE MULTIPLAYER ALPHA SHIPS WINDOWS, MACOS AND LINUX ONLY.</p>
             </div>
           </div>
 
           <div class="release-alpha">
-            ⚠ ALPHA BUILD ⚠<br>
-            <span>THIS EDITION IS EXPECTED TO CRASH. A LOT. GLITCHES, BREAKAGES AND MISSING CONTENT ARE PART OF THE EXPERIENCE. THE CLASSIC EDITION ABOVE IS THE STABLE ONE. PLAY AT YOUR OWN RISK.</span>
+            ⚠ MULTIPLAYER ALPHA ⚠<br>
+            <span>THIS BUILD TALKS TO A LIVE RELAY. OTHER PLAYERS MAY BE IN THE SAME ROOM. GLITCHES, BREAKAGES AND MISSING CONTENT ARE PART OF THE EXPERIENCE. THE CLASSIC EDITION ABOVE IS THE STABLE ONE. PLAY AT YOUR OWN RISK.</span>
           </div>
 
           <div class="rem-features">
-            <h4 class="side-title mt">WHAT CHANGED IN v4.0.0</h4>
+            <h4 class="side-title mt">WHAT CHANGED IN v5.0.0</h4>
             <ul class="feature-list">
-              <li><span class="mark">▸</span> THE MACHINE IMPROVISES FROM THE FIRST MINUTES — AI questions are woven through the written opening instead of arriving after it.</li>
-              <li><span class="mark">▸</span> IT REMEMBERS — later sessions quote the answers you gave in earlier ones, and grow longer and meaner each run.</li>
-              <li><span class="mark">▸</span> IT KEEPS SCORE — a rising floor of effects guarantees the session escalates even when the model plays nice.</li>
-              <li><span class="mark">▸</span> REAL SOUND — every effect is a real audio file, generated on first run and yours to replace. Ambience, heartbeat, static.</li>
-              <li><span class="mark">▸</span> EXIT MEANS EXIT — the main-menu EXIT now actually quits. ESC still resists.</li>
+              <li><span class="mark">▸</span> MULTIPLAYER ALPHA — the game joins a live room. Everyone else running the remastered edition right now shows up on the ONLINE screen, and the session stops being only yours.</li>
+              <li><span class="mark">▸</span> THE PUBLISHED BUILD IS THE PLAYING HALF — the other half belongs to the operator. It is not published, not linked, and not downloadable.</li>
+              <li><span class="mark">▸</span> IT NO LONGER HIDES ON WAYLAND — the window used to come up black on GNOME/Wayland while running fine on X11. Fixed: the picture reaches the screen on both.</li>
+              <li><span class="mark">▸</span> STILL THE MACHINE YOU KNOW — the written opening, the AI that improvises through it, the scares and the three-run escalation are all still here.</li>
               <li><span class="mark">▸</span> NO SETUP, NO KEY — a fresh download plays immediately. The AI runs through a relay; nothing secret ships in the build.</li>
               <li><span class="mark">▸</span> YOUR CHOICE — Settings ▸ AI Source switches between the relay, a local model, or fully offline.</li>
+              <li><span class="mark">▸</span> DESKTOP FIRST — Windows, macOS and Linux. Android is not part of this alpha.</li>
             </ul>
           </div>
 
@@ -1003,6 +1011,7 @@
             <li><span class="mark">▸</span> Atmospheric procedural audio</li>
             <li><span class="mark">▸</span> VHS / static visual treatment</li>
             <li><span class="mark">▸</span> It remembers what you tell it</li>
+            <li><span class="mark">▸</span> Multiplayer alpha — a live room with other players (desktop builds)</li>
             <li><span class="mark">▸</span> Android support paused — APK crashes on launch (fix in progress)</li>
             <li><span class="mark">▸</span> The game sends nothing from your machine</li>
           </ul>
@@ -1027,7 +1036,7 @@
 
   <footer>
     <div class="footer-line"></div>
-    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v4.0.0</p>
+    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v5.0.0</p>
     <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
     <button class="discord-copy footer-discord" type="button" title="Copy Discord handle">[ DISCORD: neptunetheii — CLICK TO COPY ]</button>
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>

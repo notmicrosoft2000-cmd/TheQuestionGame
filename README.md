@@ -2,6 +2,11 @@
 
 Three desktop games plus the website, in one repo.
 
+> **Working on this repo? Read [`docs/AI_HANDBOOK.md`](docs/AI_HANDBOOK.md) first.**
+> It covers the editions, the multiplayer sender/receiver split, the relay, the
+> build/release flow, the tests, and the traps (the Wayland alpha bug in
+> particular) that have already cost us hours.
+
 ## Layout
 
 ```

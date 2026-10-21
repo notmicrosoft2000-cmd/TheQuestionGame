@@ -3,7 +3,11 @@ import platform
 import sys
 
 APP_NAME = "The Question Game Remastered"
-VERSION = "4.0.0"
+# v5.0.0 is the multiplayer alpha. This build is the *receiver* half: it joins
+# the room, plays the questions the operator sends, and reports its answers
+# back. Writing questions lives in the operator's separate sender app
+# (tools/sender) and is deliberately not part of this build.
+VERSION = "5.0.0"
 
 # --- Platform ---------------------------------------------------------------
 # python-for-android reports sys.platform == "android"; platform.system() is
