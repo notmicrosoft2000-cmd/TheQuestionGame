@@ -119,6 +119,58 @@ check("the frame always matches the window it is drawn on",
       game.screen.get_size() == game._display_surface().get_size(),
       str((game.screen.get_size(), game._display_surface().get_size())))
 
+# --- Window opacity (the Wayland black-window regression) -------------------
+# Under Wayland the window surface is 32-bit ARGB (it has an alpha byte per
+# pixel); under X11 it is 24-bit, with no alpha at all. The drawing frame used
+# to be built in the window's own format, so the alpha overlays the game
+# paints every frame (VHS scanlines, vignette, CRT mask, snow) zeroed the
+# frame's alpha bytes -- and the final copy onto the window multiplies the
+# picture by that alpha. Result: a black window on Wayland, while the game
+# itself ran perfectly. The frame must therefore have no alpha channel, and
+# the copy onto an ARGB window must carry the picture over untouched.
+check("the drawing frame carries no alpha channel",
+      game.screen.get_masks()[3] == 0, str(game.screen.get_masks()))
+
+
+def _wayland_window(size):
+    """A stand-in for the Wayland window surface: 32-bit ARGB, alpha cleared."""
+    win = pygame.Surface(size, pygame.SRCALPHA)
+    win.fill((0, 0, 0, 255))
+    return win
+
+
+win = _wayland_window(game.screen.get_size())
+win.blit(game.screen, (0, 0))
+check("the window surface stays opaque after the copy",
+      win.get_at((0, 0))[3] == 255, str(win.get_at((0, 0))))
+
+_diff = 0
+_bright = 0
+for _x in range(0, win.get_width(), 7):
+    for _y in range(0, win.get_height(), 7):
+        _src = game.screen.get_at((_x, _y))
+        _dst = win.get_at((_x, _y))
+        if _src[:3] != _dst[:3]:
+            _diff += 1
+        if sum(_src[:3]) > 60:
+            _bright += 1
+check("the picture survives the copy onto an ARGB window",
+      _diff == 0, "%d sampled pixels differ" % _diff)
+check("the frame is not empty", _bright > 0, "%d bright sampled pixels" % _bright)
+
+# The window has to be painted opaque: SDL hands the Wayland window over with
+# its alpha bytes cleared, which is a transparent window.
+_probe = pygame.Surface((8, 8), pygame.SRCALPHA)
+game._opaque_surface = None
+game._make_window_opaque(_probe)
+check("the window is painted opaque", _probe.get_at((0, 0))[3] == 255,
+      str(_probe.get_at((0, 0))))
+
+# Scaling the frame (the resize path) must not reintroduce an alpha channel.
+_scaled = pygame.transform.smoothscale(game.screen, (64, 48))
+check("scaling keeps the frame alpha-free",
+      _scaled.get_masks()[3] == 0, str(_scaled.get_masks()))
+
 # --- PLAYING frame budget (the CI FPS assert) -------------------------------
 game.state = "PLAYING"
 game._on_state_enter()

@@ -126,6 +126,8 @@ class Game:
         # Everything from here on draws into this surface; _draw() copies it
         # onto the window. See the `screen` property above for why.
         self._frame = self._new_frame(self._display.get_size())
+        # The window surface we last painted opaque (see _make_window_opaque).
+        self._opaque_surface = None
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -264,18 +266,46 @@ class Game:
         return surf
 
     def _new_frame(self, size):
-        """A drawing surface the size of the window, in the window's format.
+        """A drawing surface the size of the window — deliberately *without* an
+        alpha channel.
 
-        `.convert()` matches the display's pixel format, so the final copy
-        onto the window is an exact, fast blit with no per-pixel conversion.
+        The window surface is 32-bit ARGB under Wayland (24-bit under X11), so
+        a frame built with the default format — or `.convert()`ed to the
+        display format, as this used to be — carries alpha bytes. Every
+        alpha-overlay the game draws (scanlines, vignette, CRT mask, snow)
+        then writes those bytes, and pygame's blit of such a frame onto the
+        window multiplies the frame's RGB by its alpha. A frame whose alpha
+        was wiped by an overlay therefore renders as a *black window* on
+        Wayland, while looking perfectly fine on X11, where the window has no
+        alpha channel at all.
+
+        A 24-bit frame has no alpha bytes to wipe: the overlays still blend
+        their RGB exactly as before, but nothing can make the frame
+        transparent, and the copy onto the window is a straight RGB copy.
         """
         size = (max(1, int(size[0])), max(1, int(size[1])))
-        frame = pygame.Surface(size)
         try:
-            frame = frame.convert()
+            return pygame.Surface(size, 0, 24)
+        except Exception:
+            return pygame.Surface(size)
+
+    def _make_window_opaque(self, disp):
+        """Make sure the window surface is opaque, not transparent.
+
+        Under Wayland the window surface is 32-bit ARGB and SDL hands it over
+        with the alpha bytes cleared, i.e. a *transparent* window: a
+        compositor that honours the window's alpha shows nothing at all. So the
+        window is painted opaque once per surface — pygame only hands out a
+        new surface object when the window is resized, and the frame copy
+        that follows is a plain RGB copy that leaves the alpha alone.
+        """
+        if disp is self._opaque_surface:
+            return
+        try:
+            disp.fill((0, 0, 0, 255))
         except Exception:
             pass
-        return frame
+        self._opaque_surface = disp
 
     def _set_frame_size(self, size):
         """Resize the drawing frame (and everything that is baked to its size)."""
@@ -1459,10 +1489,16 @@ class Game:
         # window manager resizes the window.
         disp = self._display_surface()
         if disp is not None:
+            self._make_window_opaque(disp)
             if disp.get_size() == self._frame.get_size():
                 disp.blit(self._frame, (0, 0))
             else:
-                pygame.transform.smoothscale(self._frame, disp.get_size(), disp)
+                # Scale into a surface with the frame's own (alpha-free)
+                # format and copy that over: scaling straight into the
+                # window surface would hand it a fresh, transparent alpha
+                # channel and the window would go invisible again.
+                scaled = pygame.transform.smoothscale(self._frame, disp.get_size())
+                disp.blit(scaled, (0, 0))
         pygame.display.flip()
 
     def _draw_loading(self, w, h):
