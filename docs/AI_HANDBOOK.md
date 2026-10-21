@@ -454,6 +454,20 @@ build", and the window-opacity rules from §8. If you change rendering or the
 frame/display split, add an assertion there — that is how the black window
 stays fixed.
 
+Two things to know about it:
+
+- it must not touch the network. The default AI provider is the relay, so the
+  test points that provider at a dead local port; otherwise every run fired a
+  real question at the live relay in a background thread, competing with the
+  frame measurement.
+- the frame budget is **relative**, not absolute: the playing screen has to
+  stay within 1.5× of the menu screen measured on the same machine in the
+  same run. A shared CI runner's speed swings several times between runs on
+  identical code (2ms and 17ms were measured on the same commit an hour
+  apart), so an absolute millisecond ceiling passes or fails with the
+  weather. An absolute floor (40ms) is kept as well, for regressions that hit
+  both screens.
+
 ---
 
 ## 11. Working rules for agents
