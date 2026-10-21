@@ -48,6 +48,26 @@ IS_ANDROID = sys.platform == "android" or platform.system() == "Android"
 RELAY_URL = os.environ.get("TQG_RELAY_URL", "https://wikipedia.tail06361a.ts.net/ai/v1/chat/completions")
 RELAY_TOKEN = os.environ.get("TQG_RELAY_TOKEN", "")
 
+# --- Online players + hand-written questions ---------------------------------
+# Same server as the relay (the /ai funnel prefix), different endpoints:
+#   POST {SOCIAL_URL}/v1/presence        heartbeat -> who is online, inbox, results
+#   POST {SOCIAL_URL}/v1/send-question   deliver a question to a player or "all"
+#   POST {SOCIAL_URL}/v1/answer          report an answer back to its author
+# The whole feature is optional and fails soft: if the relay is unreachable the
+# game just shows OFFLINE and keeps playing. See social.py.
+_RELAY_ROOT = RELAY_URL.split("/v1/")[0].rstrip("/")
+SOCIAL_URL = os.environ.get("TQG_SOCIAL_URL", _RELAY_ROOT).rstrip("/")
+SOCIAL_ENABLED = os.environ.get("TQG_SOCIAL", "1").strip().lower() not in (
+    "0", "false", "no", "off")
+SOCIAL_POLL_SECS = float(os.environ.get("TQG_SOCIAL_POLL", "4"))
+SOCIAL_TIMEOUT = float(os.environ.get("TQG_SOCIAL_TIMEOUT", "6"))
+# Limits mirror server/relay.py; the server enforces them again.
+SOCIAL_NAME_MAX = 20
+SOCIAL_Q_MAX = 200
+SOCIAL_OPT_MAX = 60
+SOCIAL_OPTS_MAX = 4
+SOCIAL_INBOX_MAX = 8
+
 AI_PROVIDER = os.environ.get("TQG_AI_PROVIDER", "relay")
 
 AI_PROVIDERS = {

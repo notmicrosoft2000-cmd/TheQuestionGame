@@ -26,6 +26,17 @@ Configuration is read from the environment (see relay.env.example):
 Endpoints:
   GET  /health                  -> {"ok": true}
   POST /v1/chat/completions     -> OpenAI-compatible pass-through, sanitised
+  POST /v1/presence             -> heartbeat: returns who is online, plus any
+                                   questions and answer-results for this peer
+  POST /v1/send-question        -> deliver a hand-written question to one peer
+                                   (or "all" of them)
+  POST /v1/answer               -> report a recipient's answer back to the
+                                   player who wrote the question
+
+The social endpoints are deliberately open (the game ships with no token, and
+the whole point is that any copy of the game can see the others). They are
+rate-limited per IP and every string is capped, so they can only move small
+question-sized payloads. State is in memory: a restart forgets everyone.
 """
 
 import json
@@ -34,6 +45,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -94,6 +106,181 @@ def _rate_ok(ip):
         bucket.append(now)
         _hits[ip] = bucket
         return True
+
+
+# --- social: presence + hand-written questions -------------------------------
+# In-memory only. A restart empties the room, which is fine: presence is
+# re-established on every poll, and a question that was never delivered is
+# better dropped than replayed a day later.
+PEER_TTL = float(os.environ.get("RELAY_PEER_TTL", "20"))
+QUESTION_TTL = float(os.environ.get("RELAY_QUESTION_TTL", "900"))
+INBOX_MAX = int(os.environ.get("RELAY_INBOX_MAX", "12"))
+RESULT_MAX = int(os.environ.get("RELAY_RESULT_MAX", "12"))
+SOCIAL_NAME_MAX = 24
+SOCIAL_Q_MAX = 240
+SOCIAL_OPT_MAX = 80
+SOCIAL_OPTS_MAX = 4
+SOCIAL_RATE = int(os.environ.get("RELAY_SOCIAL_RATE", "120"))
+SOCIAL_BURST = int(os.environ.get("RELAY_SOCIAL_BURST", "40"))
+
+_peers = {}          # peer id -> {"id", "name", "platform", "last"}
+_inboxes = {}        # peer id -> [question]
+_results = {}        # sender id -> [answer result]
+_social_lock = threading.Lock()
+_social_hits = {}    # ip -> [timestamp]; separate from the AI limiter
+_social_hits_lock = threading.Lock()
+
+
+def _social_rate_ok(ip):
+    """Presence polls are cheap but frequent; give them their own bucket."""
+    now = time.time()
+    with _social_hits_lock:
+        bucket = [t for t in _social_hits.get(ip, []) if now - t < 60.0]
+        recent = [t for t in bucket if now - t < 3.0]
+        if len(recent) >= SOCIAL_BURST or len(bucket) >= SOCIAL_RATE:
+            _social_hits[ip] = bucket
+            return False
+        bucket.append(now)
+        _social_hits[ip] = bucket
+        # Keep the table from growing without bound on a busy relay.
+        if len(_social_hits) > 4096:
+            for stale in [k for k, v in _social_hits.items() if not v]:
+                _social_hits.pop(stale, None)
+        return True
+
+
+def _clean_social_text(value, limit):
+    """Trim to a single line and a hard length. Control chars out."""
+    if not isinstance(value, str):
+        return ""
+    value = "".join(ch for ch in value if ch >= " " and ch != "\x7f")
+    return value.strip()[:limit]
+
+
+def _valid_peer_id(value):
+    if not isinstance(value, str) or not (8 <= len(value) <= 64):
+        return False
+    return all(ch.isalnum() or ch in "-_" for ch in value)
+
+
+def _purge_locked(now):
+    """Drop peers that stopped polling and questions nobody picked up.
+
+    Must be called with _social_lock held.
+    """
+    for pid in [p for p, v in _peers.items() if now - v["last"] > PEER_TTL]:
+        _peers.pop(pid, None)
+    for table in (_inboxes, _results):
+        for pid in list(table):
+            fresh = [item for item in table[pid]
+                     if now - item.get("ts", now) < QUESTION_TTL]
+            if fresh:
+                table[pid] = fresh
+            else:
+                table.pop(pid, None)
+
+
+def _handle_presence(body):
+    pid = body.get("id")
+    name = _clean_social_text(body.get("name"), SOCIAL_NAME_MAX)
+    platform = _clean_social_text(body.get("platform"), 16)
+    if not _valid_peer_id(pid) or not name:
+        return 400, {"error": "id and name required"}
+    now = time.time()
+    with _social_lock:
+        _purge_locked(now)
+        _peers[pid] = {"id": pid, "name": name, "platform": platform, "last": now}
+        online = [{"id": p["id"], "name": p["name"], "platform": p["platform"]}
+                  for p in _peers.values()]
+        # Delivered once: pop, don't peek. A client that dies before showing
+        # an item loses it, which beats replaying old questions forever.
+        inbox = _inboxes.pop(pid, [])
+        results = _results.pop(pid, [])
+    online.sort(key=lambda p: p["name"].lower())
+    return 200, {"ok": True, "online": online, "inbox": inbox, "results": results}
+
+
+def _handle_send(body):
+    from_id = body.get("from")
+    to = body.get("to")
+    q = _clean_social_text(body.get("q"), SOCIAL_Q_MAX)
+    if not _valid_peer_id(from_id):
+        return 400, {"error": "bad sender id"}
+    if not q:
+        return 400, {"error": "empty question"}
+    raw_opts = body.get("opts")
+    if not isinstance(raw_opts, list):
+        return 400, {"error": "opts must be a list"}
+    opts = []
+    for raw in raw_opts[:SOCIAL_OPTS_MAX]:
+        text = _clean_social_text(raw, SOCIAL_OPT_MAX)
+        if text:
+            opts.append(text)
+    if len(opts) < 2:
+        return 400, {"error": "need at least two options"}
+    correct = body.get("correct")
+    if isinstance(correct, bool) or not isinstance(correct, int) \
+            or not (0 <= correct < len(opts)):
+        correct = None
+
+    now = time.time()
+    delivered = []
+    with _social_lock:
+        _purge_locked(now)
+        sender = _peers.get(from_id)
+        if not sender:
+            # Requiring presence keeps anonymous one-shot senders out and
+            # guarantees the recipient sees a real, current name.
+            return 403, {"error": "join presence first"}
+        if to == "all":
+            targets = [pid for pid in _peers if pid != from_id]
+        elif isinstance(to, str) and to in _peers and to != from_id:
+            targets = [to]
+        else:
+            targets = []
+        if not targets:
+            return 404, {"error": "nobody to send to"}
+        qid = uuid.uuid4().hex[:12]
+        item = {
+            "id": qid,
+            "from": from_id,
+            "from_name": sender["name"],
+            "q": q,
+            "opts": opts,
+            "correct": correct,
+            "ts": now,
+        }
+        for target in targets[:20]:
+            box = _inboxes.setdefault(target, [])
+            box.append(dict(item))
+            del box[:-INBOX_MAX]
+            delivered.append(target)
+    return 200, {"ok": True, "id": qid, "delivered": delivered}
+
+
+def _handle_answer(body):
+    sender = body.get("sender")
+    qid = body.get("qid")
+    by = _clean_social_text(body.get("by"), SOCIAL_NAME_MAX)
+    choice = _clean_social_text(body.get("choice"), SOCIAL_OPT_MAX)
+    correct = body.get("correct")
+    if not _valid_peer_id(sender) or not isinstance(qid, str) or not qid:
+        return 400, {"error": "sender and qid required"}
+    if not isinstance(correct, bool):
+        correct = None
+    now = time.time()
+    with _social_lock:
+        _purge_locked(now)
+        box = _results.setdefault(sender, [])
+        box.append({
+            "qid": qid,
+            "by": by or "someone",
+            "choice": choice,
+            "correct": correct,
+            "ts": now,
+        })
+        del box[:-RESULT_MAX]
+    return 200, {"ok": True}
 
 
 def _sanitise(body):
@@ -165,6 +352,29 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
+        # Social traffic is its own surface: open (no app token — the game
+        # ships without one), rate-limited separately, and it never touches
+        # the AI upstream.
+        if path in ("/v1/presence", "/v1/send-question", "/v1/answer"):
+            if not _social_rate_ok(self._client_ip()):
+                self._send(429, {"error": "slow down"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length) if length else b"{}"
+                body = json.loads(raw or b"{}")
+            except Exception:
+                self._send(400, {"error": "bad json"})
+                return
+            if path == "/v1/presence":
+                code, obj = _handle_presence(body)
+            elif path == "/v1/send-question":
+                code, obj = _handle_send(body)
+            else:
+                code, obj = _handle_answer(body)
+            self._send(code, obj)
+            return
+
         if path not in ("/v1/chat/completions", "/"):
             self._send(404, {"error": "not found"})
             return

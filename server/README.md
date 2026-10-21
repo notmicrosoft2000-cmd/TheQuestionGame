@@ -63,3 +63,38 @@ If you set `RELAY_APP_TOKEN`, the shipped game's `TQG_RELAY_TOKEN` / config
 still apply). Setting it is recommended if the URL is shared publicly, but the
 token is extractable from the build — treat it as a speed bump, not a secret.
 The real protections are the model lock, the token cap, and the rate limit.
+
+## Online players + hand-written questions (social)
+
+The same service also runs the small "who is online" room behind the game's
+**ONLINE** screen, so the `/ai` funnel path exposes it with no extra setup.
+Everything is in memory: a restart empties the room, and presence is rebuilt by
+the next poll.
+
+| endpoint | what it does |
+|---|---|
+| `POST /v1/presence` | heartbeat. Returns the current online list, plus any questions addressed to you and results for questions you sent |
+| `POST /v1/send-question` | deliver a hand-written question to one peer, or `"all"` |
+| `POST /v1/answer` | report a recipient's answer back to the question's author |
+
+Delivery is **one-shot**: the server clears an item as it hands it over, so a
+question is never replayed. Items expire after `RELAY_QUESTION_TTL` (900s) and a
+peer is dropped from the room after `RELAY_PEER_TTL` (20s) without a poll.
+
+These endpoints are deliberately **open** — the game ships with no token, and
+the whole point is that any copy can see the others. They are rate-limited
+separately (`RELAY_SOCIAL_RATE`/min, `RELAY_SOCIAL_BURST`) and every string is
+capped, so all they can move is a question-sized payload. They never touch the
+Groq upstream or the API key.
+
+Knobs (all optional, in `relay.env`):
+
+| var | default | meaning |
+|---|---|---|
+| `RELAY_PEER_TTL` | `20` | seconds without a poll before a peer leaves the list |
+| `RELAY_QUESTION_TTL` | `900` | seconds a question/result may sit undelivered |
+| `RELAY_INBOX_MAX` | `12` | queued questions kept per player |
+| `RELAY_RESULT_MAX` | `12` | answer results kept per sender |
+| `RELAY_SOCIAL_RATE` | `120` | social requests per minute per IP |
+| `RELAY_SOCIAL_BURST` | `40` | social requests per 3s per IP |
+

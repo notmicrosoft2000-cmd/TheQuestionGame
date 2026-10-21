@@ -144,6 +144,112 @@ try:
 finally:
     srv.shutdown()
 
+print("== social: presence + hand-written questions ==")
+mod = load_relay({"RELAY_KEY": "", "RELAY_PORT": "8097", "RELAY_APP_TOKEN": "",
+                  "RELAY_RATE": "100", "RELAY_BURST": "50"})
+srv = mod.ThreadingHTTPServer(("127.0.0.1", 8097), mod.Handler)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+time.sleep(0.3)
+
+
+def post(path, body):
+    req = urllib.request.Request(
+        "http://127.0.0.1:8097" + path,
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except Exception:
+            return e.code, {}
+
+
+try:
+    code, a = post("/v1/presence", {"id": "aaaaaaaaaa", "name": "alice", "platform": "linux"})
+    check("presence accepts a peer", code == 200 and a.get("ok") is True, (code, a))
+
+    code, b = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    names = {p["name"] for p in b.get("online", [])}
+    check("presence lists every peer", {"alice", "bob"} <= names, b.get("online"))
+
+    code, c = post("/v1/presence", {"id": "bad id!", "name": "x"})
+    check("bad peer id rejected", code == 400, (code, c))
+    code, d = post("/v1/presence", {"id": "cccccccccc", "name": "   "})
+    check("blank name rejected", code == 400, (code, d))
+
+    code, e = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb",
+        "q": "cake or death?", "opts": ["cake", "death"], "correct": 0,
+    })
+    check("question accepted", code == 200 and e.get("delivered") == ["bbbbbbbbbb"], (code, e))
+    qid = e.get("id")
+
+    code, f = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    box = f.get("inbox") or []
+    check("question delivered to recipient", len(box) == 1 and box[0]["q"] == "cake or death?", box)
+    check("sender name travels with it", box and box[0]["from_name"] == "alice", box[:1])
+    check("correct index travels with it", box and box[0]["correct"] == 0, box[:1])
+
+    code, g = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    check("inbox is cleared after delivery", g.get("inbox") == [], g.get("inbox"))
+
+    code, h = post("/v1/answer", {"sender": "aaaaaaaaaa", "qid": qid, "by": "bob",
+                                  "choice": "death", "correct": False})
+    check("answer accepted", code == 200, (code, h))
+    code, i = post("/v1/presence", {"id": "aaaaaaaaaa", "name": "alice"})
+    results = i.get("results") or []
+    check("result reaches the sender",
+          len(results) == 1 and results[0]["by"] == "bob" and results[0]["correct"] is False,
+          results)
+    code, j = post("/v1/presence", {"id": "aaaaaaaaaa", "name": "alice"})
+    check("results are cleared after delivery", j.get("results") == [], j.get("results"))
+
+    code, k = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "doesnotexist", "q": "hi", "opts": ["a", "b"]})
+    check("send to an unknown peer 404s", code == 404, (code, k))
+    code, l = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "hi", "opts": ["only"]})
+    check("single-option question rejected", code == 400, (code, l))
+    code, m = post("/v1/send-question", {
+        "from": "zzzzzzzzzz", "to": "bbbbbbbbbb", "q": "hi", "opts": ["a", "b"]})
+    check("send without presence 403s", code == 403, (code, m))
+
+    code, n = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "all", "q": "to everyone", "opts": ["a", "b"]})
+    check("broadcast reaches everyone else",
+          code == 200 and "bbbbbbbbbb" in (n.get("delivered") or []), (code, n))
+
+    code, o = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb",
+        "q": "x" * 1000, "opts": ["a" * 300, "b" * 300], "correct": 99})
+    check("oversized question accepted", code == 200, (code, o))
+    code, p = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    long_items = [q for q in (p.get("inbox") or []) if q["q"].startswith("xxx")]
+    check("question text capped on the wire",
+          bool(long_items) and len(long_items[0]["q"]) <= mod.SOCIAL_Q_MAX,
+          long_items[:1])
+    check("option text capped on the wire",
+          bool(long_items) and all(len(o2) <= mod.SOCIAL_OPT_MAX for o2 in long_items[0]["opts"]),
+          long_items[:1])
+    check("out-of-range correct index dropped",
+          bool(long_items) and long_items[0]["correct"] is None,
+          long_items[:1])
+
+    code, q = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb",
+        "q": "pick", "opts": ["a", "b"], "correct": True})
+    code, r = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    bool_items = [x for x in (r.get("inbox") or []) if x["q"] == "pick"]
+    check("bool correct index dropped",
+          bool(bool_items) and bool_items[0]["correct"] is None, bool_items[:1])
+finally:
+    srv.shutdown()
+
 print()
 if FAILS:
     print("RELAY_FAIL: " + ", ".join(FAILS))

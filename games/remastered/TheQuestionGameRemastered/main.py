@@ -6,6 +6,7 @@ import math
 import random
 import threading
 import time
+import uuid
 
 import pygame
 
@@ -17,6 +18,7 @@ from . import os_layer
 from . import persistence
 from . import scares
 from . import script
+from . import social
 from . import ui
 
 # Touch/fullscreen platform switch (see config.IS_ANDROID). Kept as a module
@@ -159,7 +161,7 @@ class Game:
         self._black_overlay_cache = None
         self._black_overlay_key = None
 
-        self.menu_options = ["PLAY", "SETTINGS", "HELP", "ABOUT", "EXIT"]
+        self.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
         # If LOGS was unlocked in a previous session, keep it on the menu.
         if self.game_state.get("logs_unlocked") and "LOGS" not in self.menu_options:
             self.menu_options.insert(len(self.menu_options) - 1, "LOGS")
@@ -169,6 +171,19 @@ class Game:
         self.settings_idx = self._load_settings_idx()
         self.about_selected = 0
         self.credits_scroll_y = 0
+
+        # --- online (presence + hand-written questions) ---------------------
+        # The client is optional and degrades to OFFLINE; nothing below assumes
+        # it exists. Composing needs a keyboard, so it is desktop-only for now.
+        self.social = None
+        self.online_selected = 0
+        self.social_notes = []          # [{text, at, tone}] transient notices
+        self.name_edit = None           # buffer while renaming, or None
+        self.compose = None             # composer state, or None
+        self._social_poll_at = 0.0
+        self._social_answer_at = 0.0
+        self._social_pending_cache = None
+        self._init_social()
 
         self.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25, "alpha": 255, "target": None}
 
@@ -530,6 +545,322 @@ class Game:
         except Exception:
             self.ai = None
 
+    # --- social (online players + hand-written questions) -------------------
+    def _init_social(self):
+        """Create the presence client; never fatal, never blocks."""
+        if not config.SOCIAL_ENABLED:
+            return
+        try:
+            player_id = self.game_state.get("player_id")
+            if not player_id:
+                player_id = uuid.uuid4().hex
+                self.game_state["player_id"] = player_id
+            name = self.game_state.get("player_name")
+            if not name:
+                name = "guest-%04d" % random.randint(0, 9999)
+                self.game_state["player_name"] = name
+            persistence.save_game_state(self.game_state)
+            self.social = social.SocialClient(player_id, name)
+        except Exception:
+            self.social = None
+
+    def _social_name(self):
+        if self.social is not None:
+            try:
+                return self.social.name
+            except Exception:
+                pass
+        return self.game_state.get("player_name", "guest")
+
+    def _note(self, text, tone="info", seconds=6.0):
+        """Queue a transient notice; drawn as a toast by _draw."""
+        self.social_notes.append({"text": text, "at": self.now, "tone": tone,
+                                  "_ttl": seconds})
+        del self.social_notes[:-6]
+
+    def _poll_social(self):
+        """Harvest results from the worker thread (cheap, once a second)."""
+        if self.social is None or self.now - self._social_poll_at < 1.0:
+            return
+        self._social_poll_at = self.now
+        try:
+            for res in self.social.take_results():
+                if res.get("local"):
+                    self._note("COULD NOT DELIVER — " + str(res.get("error", "offline")).upper(),
+                               "bad", 6.0)
+                    continue
+                who = res.get("by") or "someone"
+                choice = res.get("choice") or ""
+                correct = res.get("correct")
+                if correct is True:
+                    self._note("%s ANSWERED YOUR QUESTION: RIGHT" % who.upper(), "good", 8.0)
+                elif correct is False:
+                    self._note("%s ANSWERED YOUR QUESTION: WRONG (%s)" % (who.upper(), choice.upper()),
+                               "bad", 8.0)
+                else:
+                    self._note("%s ANSWERED YOUR QUESTION: %s" % (who.upper(), choice.upper()),
+                               "info", 8.0)
+        except Exception:
+            pass
+        # Tell the player as soon as something lands, even if it will not be
+        # shown until the next question slot.
+        try:
+            pending = self.social.pending_questions()
+        except Exception:
+            pending = 0
+        if pending > (self._social_pending_cache or 0):
+            self._note("SOMEONE SENT YOU A QUESTION — IT COMES NEXT", "info", 6.0)
+        self._social_pending_cache = pending
+
+    def _social_step_from(self, item):
+        """Convert a relay question into a playable script step."""
+        opts = list(item.get("opts") or [])
+        if len(opts) < 2:
+            opts = ["...", "..."]
+        return {
+            "type": "choice",
+            "q": item.get("q") or "...",
+            "opts": opts,
+            "_id": "social_" + str(item.get("id") or "q"),
+            "_social": item,
+            "_from_social": True,
+            "_injected": True,
+        }
+
+    def _queue_social_question(self):
+        """If the relay gave us a question, make it the next thing shown."""
+        if self.social is None:
+            return False
+        try:
+            item = self.social.take_question()
+        except Exception:
+            item = None
+        if not item:
+            return False
+        self.active_script.insert(self.current_step, self._social_step_from(item))
+        self._prefetch_question(self.current_step)
+        return True
+
+    def _start_compose(self, recipient):
+        if self.social is None:
+            self._note("RELAY OFFLINE — CAN'T SEND", "bad")
+            return
+        if IS_ANDROID:
+            self._note("WRITING QUESTIONS NEEDS A KEYBOARD (DESKTOP)", "bad")
+            return
+        self.compose = {
+            "to": recipient,           # {"id":..., "name":...} or {"id":"all",...}
+            "focus": 0,
+            "editing": False,
+            "buf": "",
+            "correct": 0,
+            "rows": [
+                {"key": "q", "label": "QUESTION", "value": "",
+                 "max": config.SOCIAL_Q_MAX, "kind": "text"},
+                {"key": "o0", "label": "OPTION 1", "value": "",
+                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
+                {"key": "o1", "label": "OPTION 2", "value": "",
+                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
+                {"key": "o2", "label": "OPTION 3 (OPTIONAL)", "value": "",
+                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
+                {"key": "o3", "label": "OPTION 4 (OPTIONAL)", "value": "",
+                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
+                {"key": "correct", "label": "CORRECT ANSWER", "value": "",
+                 "kind": "correct"},
+                {"key": "send", "label": "SEND", "value": "", "kind": "send"},
+                {"key": "back", "label": "BACK", "value": "", "kind": "back"},
+            ],
+        }
+        self.start_fade("COMPOSE")
+
+    def _compose_options(self):
+        comp = self.compose or {}
+        return [r["value"] for r in comp.get("rows", [])
+                if r["key"].startswith("o") and r.get("value")]
+
+    def _compose_send(self):
+        comp = self.compose or {}
+        rows = comp.get("rows", [])
+        question = rows[0]["value"] if rows else ""
+        opts = self._compose_options()
+        if not question.strip():
+            self._note("THE QUESTION IS EMPTY", "bad")
+            return
+        if len(opts) < 2:
+            self._note("NEEDS AT LEAST TWO OPTIONS", "bad")
+            return
+        correct = comp.get("correct", 0)
+        if correct >= len(opts):
+            correct = 0
+        to = comp.get("to") or {"id": "all", "name": "EVERYONE"}
+        ok = False
+        if self.social is not None:
+            try:
+                ok = self.social.send_question(to.get("id", "all"), question,
+                                               opts, correct)
+            except Exception:
+                ok = False
+        if ok:
+            self._note("SENT TO " + str(to.get("name", "EVERYONE")).upper(), "good", 6.0)
+            self.compose = None
+            self.start_fade("ONLINE")
+        else:
+            self._note("SEND FAILED — RELAY OFFLINE", "bad")
+
+    def _begin_name_edit(self):
+        if IS_ANDROID:
+            self._note("RENAME ON DESKTOP", "bad")
+            return
+        self.name_edit = self._social_name()
+
+    def _commit_name_edit(self):
+        if self.name_edit is None:
+            return
+        name = self.name_edit.strip()
+        self.name_edit = None
+        if not name:
+            return
+        self.game_state["player_name"] = name[:config.SOCIAL_NAME_MAX]
+        persistence.save_game_state(self.game_state)
+        if self.social is not None:
+            try:
+                self.social.set_name(self.game_state["player_name"])
+            except Exception:
+                pass
+        self._note("YOU ARE NOW " + self.game_state["player_name"].upper(), "good")
+
+    # --- online screen ------------------------------------------------------
+    def _online_rows(self):
+        """Rows on the ONLINE screen: everyone we can send to, plus rename."""
+        rows = [{"kind": "all", "id": "all", "name": "EVERYONE"}]
+        if self.social is not None:
+            try:
+                for peer in self.social.others():
+                    rows.append({"kind": "peer", "id": peer.get("id", ""),
+                                 "name": str(peer.get("name", "?")).upper()})
+            except Exception:
+                pass
+        if not IS_ANDROID:
+            rows.append({"kind": "rename", "id": "", "name": "SET MY NAME"})
+        return rows
+
+    def _online_key(self, key):
+        if self.name_edit is not None:
+            self._online_name_key(key, "")
+            return
+        rows = self._online_rows()
+        if key in (pygame.K_TAB, pygame.K_DOWN):
+            self.online_selected = (self.online_selected + 1) % len(rows)
+            audio.play_ui_nav_sound()
+        elif key == pygame.K_UP:
+            self.online_selected = (self.online_selected - 1) % len(rows)
+            audio.play_ui_nav_sound()
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            audio.play_ui_select_sound()
+            row = rows[min(self.online_selected, len(rows) - 1)]
+            if row["kind"] == "rename":
+                self._begin_name_edit()
+            else:
+                self._start_compose({"id": row["id"], "name": row["name"]})
+        elif key == pygame.K_ESCAPE:
+            audio.play_ui_select_sound()
+            self.start_fade("TITLE")
+
+    def _online_name_key(self, key, unicode):
+        """Text entry for the rename buffer (main._handle_key hands us both)."""
+        if self.name_edit is None:
+            return False
+        if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self._commit_name_edit()
+        elif key == pygame.K_ESCAPE:
+            self.name_edit = None
+        elif key == pygame.K_BACKSPACE:
+            self.name_edit = self.name_edit[:-1]
+        elif unicode and len(self.name_edit) < config.SOCIAL_NAME_MAX:
+            if unicode.isprintable() and unicode not in "\t\r\n":
+                self.name_edit += unicode
+        return True
+
+    # --- composer -----------------------------------------------------------
+    def _compose_key(self, key, unicode=""):
+        comp = self.compose
+        if not comp:
+            self.start_fade("ONLINE")
+            return
+        rows = comp["rows"]
+        focus = comp["focus"]
+        if comp["editing"]:
+            if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
+                rows[focus]["value"] = comp["buf"][:rows[focus]["max"]]
+                comp["editing"] = False
+                pygame.key.set_repeat(0)
+            elif key == pygame.K_ESCAPE:
+                comp["editing"] = False
+                pygame.key.set_repeat(0)
+            elif key == pygame.K_BACKSPACE:
+                comp["buf"] = comp["buf"][:-1]
+            elif unicode and unicode.isprintable() and unicode not in "\t\r\n":
+                if len(comp["buf"]) < rows[focus]["max"]:
+                    comp["buf"] += unicode
+            return
+
+        if key in (pygame.K_TAB, pygame.K_DOWN):
+            comp["focus"] = (focus + 1) % len(rows)
+            audio.play_ui_nav_sound()
+        elif key == pygame.K_UP:
+            comp["focus"] = (focus - 1) % len(rows)
+            audio.play_ui_nav_sound()
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            audio.play_ui_select_sound()
+            row = rows[focus]
+            if row["kind"] == "text":
+                comp["editing"] = True
+                comp["buf"] = row["value"]
+                pygame.key.set_repeat(400, 40)
+            elif row["kind"] == "correct":
+                count = max(2, len(self._compose_options()))
+                comp["correct"] = (comp["correct"] + 1) % count
+            elif row["kind"] == "send":
+                self._compose_send()
+            elif row["kind"] == "back":
+                pygame.key.set_repeat(0)
+                self.compose = None
+                self.start_fade("ONLINE")
+        elif key == pygame.K_ESCAPE:
+            pygame.key.set_repeat(0)
+            self.compose = None
+            self.start_fade("ONLINE")
+
+    def _report_social_answer(self, item, answer):
+        """Tell the author what we picked, and react to it ourselves."""
+        opts = list(item.get("opts") or [])
+        correct = item.get("correct")
+        right = None
+        if isinstance(correct, int) and not isinstance(correct, bool) \
+                and 0 <= correct < len(opts):
+            right = (opts[correct] == answer)
+        if self.social is not None:
+            try:
+                self.social.send_answer(item, answer, right)
+            except Exception:
+                pass
+        who = str(item.get("from_name") or "someone").upper()
+        if right is True:
+            self._note("ANSWERED %s: RIGHT" % who, "good", 5.0)
+        elif right is False:
+            self._note("ANSWERED %s: WRONG" % who, "bad", 5.0)
+        else:
+            self._note("ANSWER SENT BACK TO %s" % who, "info", 5.0)
+        if self.fx.get("whisper_until", 0.0) <= self.now:
+            if right is True:
+                whisper = "%s KNOWS YOU WERE RIGHT" % who
+            elif right is False:
+                whisper = "%s KNOWS YOU WERE WRONG" % who
+            else:
+                whisper = "ANSWER SENT TO %s" % who
+            self.fx["whisper_text"] = whisper
+            self.fx["whisper_until"] = self.now + 4.0
+
     # --- fade ----------------------------------------------------------------
     def start_fade(self, target):
         self.fade = {"active": True, "dir": "out", "start": self.now, "dur": 0.25, "alpha": 255, "target": target}
@@ -554,6 +885,14 @@ class Game:
     def _on_state_enter(self):
         if self.state == "PLAYING":
             self._begin_session()
+        if self.state != "ONLINE":
+            self.name_edit = None
+        if self.state != "COMPOSE":
+            self.compose = None
+            try:
+                pygame.key.set_repeat(0)
+            except Exception:
+                pass
         self._apply_stage_music()
 
     def _apply_stage_music(self):
@@ -564,7 +903,7 @@ class Game:
         """
         if not config.MUSIC_ENABLED:
             return
-        menu_states = ("SETTINGS", "ABOUT", "HELP", "LOGS")
+        menu_states = ("SETTINGS", "ABOUT", "HELP", "LOGS", "ONLINE", "COMPOSE")
         if not config.MUSIC_MENUS_ONLY:
             menu_states = menu_states + ("TITLE", "PLAYING")
         audio.set_sfx_duck(1.0)
@@ -652,6 +991,10 @@ class Game:
         self.session_history.append({"q": step["q"], "a": answer})
         persistence.save_answer(self.game_state, step["_id"], answer, elapsed)
         self._note_answer_meta(step, answer, elapsed)
+        # A hand-written question gets its answer reported back to its author.
+        social_item = step.get("_social")
+        if social_item:
+            self._report_social_answer(social_item, answer)
         result = self.handle_step_action(step.get("action"), step)
         scare = step.get("scare")
         if scare:
@@ -672,7 +1015,9 @@ class Game:
             self.active_script.insert(self.current_step + 1 + offset, extra)
         self.current_step += 1
         self._skip_inactive()
-        self._prefetch_question(self.current_step)
+        # A question someone sent us takes the next slot, ahead of the model.
+        if not self._queue_social_question():
+            self._prefetch_question(self.current_step)
         self._reset_question_state()
         if self.fx["whisper_until"] <= self.now:
             self._maybe_false_memory()
@@ -691,13 +1036,20 @@ class Game:
                 persistence.record_lie(self.game_state, step["_id"])
 
     # --- input ---------------------------------------------------------------
-    def _handle_key(self, key):
+    def _handle_key(self, key, unicode=""):
         # Android's system Back key/gesture arrives as K_AC_BACK — map it to
         # ESC so every "leave this screen" path works on a phone.
         if key == getattr(pygame, "K_AC_BACK", None):
             key = pygame.K_ESCAPE
         if self.state == "TITLE":
             self._title_key(key)
+        elif self.state == "ONLINE":
+            if self.name_edit is not None:
+                self._online_name_key(key, unicode)
+            else:
+                self._online_key(key)
+        elif self.state == "COMPOSE":
+            self._compose_key(key, unicode)
         elif self.state == "SETTINGS":
             self._settings_key(key)
         elif self.state == "ABOUT":
@@ -733,6 +1085,9 @@ class Game:
                 self.start_fade("SETTINGS")
             elif option == "HELP":
                 self.start_fade("HELP")
+            elif option == "ONLINE":
+                self.online_selected = 0
+                self.start_fade("ONLINE")
             elif option == "ABOUT":
                 self.about_selected = 0
                 self.start_fade("ABOUT")
@@ -871,6 +1226,20 @@ class Game:
             self._handle_key(pygame.K_RETURN)
         elif kind == "back":
             self._handle_key(pygame.K_ESCAPE)
+        elif kind == "online":
+            if self.name_edit is not None:
+                self._commit_name_edit()
+                return
+            rows = self._online_rows()
+            if 0 <= idx < len(rows):
+                self.online_selected = idx
+                self._handle_key(pygame.K_RETURN)
+        elif kind == "compose":
+            comp = self.compose or {}
+            rows = comp.get("rows", [])
+            if 0 <= idx < len(rows):
+                comp["focus"] = idx
+                self._handle_key(pygame.K_RETURN)
 
     # --- update ---------------------------------------------------------------
     def _update(self):
@@ -878,6 +1247,7 @@ class Game:
         self._update_fade()
         self._update_idle()
         self._update_process_awareness()
+        self._poll_social()
         if self.state in ("PLAYING", "EXITFADE") and not self.pending_exit:
             self._update_playing()
             self._maybe_comment_on_apps()
@@ -1102,6 +1472,10 @@ class Game:
             self._draw_loading(w, h)
         elif self.state == "TITLE":
             self._draw_title(w, h)
+        elif self.state == "ONLINE":
+            self._draw_online(w, h)
+        elif self.state == "COMPOSE":
+            self._draw_compose(w, h)
         elif self.state == "SETTINGS":
             self._draw_settings(w, h)
         elif self.state == "ABOUT":
@@ -1125,6 +1499,8 @@ class Game:
                                         self._fonts()[1], self._fonts()[2], self.now)
             if not still:
                 self.badge_toast_id = None
+
+        self._draw_social_notes(w, h)
 
         # Foreground CRT finish, applied over every state: VHS scanlines, then
         # the full stack (tracking, static, tube curvature, phosphor mask).
@@ -1217,6 +1593,134 @@ class Game:
 
         ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
         self.screen.blit(ver, (w - ver.get_width() - 12, h - ver.get_height() - 8))
+
+    # --- online screens -----------------------------------------------------
+    def _draw_notes_toast(self, w, h, font_med, font_small, limit=2):
+        """The most recent notices, stacked above the badge toast slot."""
+        live = [n for n in self.social_notes
+                if self.now - n["at"] < n.get("_ttl", 6.0)]
+        if not live:
+            return
+        for i, note in enumerate(live[-limit:]):
+            ui.draw_social_toast(self.screen, w, h, note["text"], note["at"],
+                                 font_med, font_small, self.now,
+                                 tone=note.get("tone", "info"), slot=i)
+
+    def _draw_social_notes(self, w, h):
+        if not self.social_notes:
+            return
+        font_med, font_small = self._fonts()[1], self._fonts()[2]
+        self._draw_notes_toast(w, h, font_med, font_small)
+        # Retire anything long past its life so the list cannot grow.
+        self.social_notes = [n for n in self.social_notes
+                             if self.now - n["at"] < n.get("_ttl", 6.0) + 2.0]
+
+    def _draw_online(self, w, h):
+        font_large, font_med, font_small = self._fonts()
+        self._draw_heading("ONLINE", w, h, font_large)
+        status = "disabled"
+        if self.social is not None:
+            try:
+                status = self.social.status()
+            except Exception:
+                status = "offline"
+        rows = self._online_rows()
+        peers = [r for r in rows if r["kind"] == "peer"]
+
+        if status == "online":
+            line = "RELAY: ONLINE — %d PLAYER%s HERE" % (len(rows), "" if len(rows) == 1 else "S")
+            color = (90, 200, 90)
+        elif status == "connecting":
+            line, color = "RELAY: CONNECTING...", (200, 180, 90)
+        else:
+            line, color = "RELAY: OFFLINE — NOBODY CAN REACH YOU", (200, 80, 80)
+        self.screen.blit(font_med.render(line, True, color), (int(w * 0.08), int(h * 0.20)))
+
+        you = "YOU: %s" % self._social_name().upper()
+        if self.name_edit is not None:
+            you = "YOU: %s_" % self.name_edit.upper()
+        self.screen.blit(font_small.render(you, True, config.COLOR_WHITE),
+                         (int(w * 0.08), int(h * 0.26)))
+
+        waiting = 0
+        if self.social is not None:
+            try:
+                waiting = self.social.pending_questions()
+            except Exception:
+                waiting = 0
+        if waiting:
+            self.screen.blit(font_small.render(
+                "%d QUESTION%s WAITING FOR YOUR NEXT TURN" % (waiting, "" if waiting == 1 else "S"),
+                True, (200, 180, 90)), (int(w * 0.08), int(h * 0.30)))
+
+        start_y = int(h * 0.36)
+        pitch = font_med.get_linesize() + 10
+        for i, row in enumerate(rows):
+            sel = (i == min(self.online_selected, len(rows) - 1))
+            color = config.COLOR_WHITE if sel else (110, 110, 110)
+            prefix = "> " if sel else "  "
+            label = row["name"]
+            if row["kind"] == "peer":
+                label = "SEND TO  " + label
+            elif row["kind"] == "all":
+                label = "SEND TO  " + label
+            elif row["kind"] == "rename":
+                label = "SET MY NAME"
+            surf = font_med.render(prefix + label, True, color)
+            y = start_y + i * pitch
+            self.screen.blit(surf, (int(w * 0.08), y))
+            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.7) + 16, pitch - 2, "online", i)
+
+        if not peers and status == "online":
+            self.screen.blit(font_small.render(
+                "NOBODY ELSE YET — SEND A QUESTION AND WAIT.",
+                True, (110, 110, 110)), (int(w * 0.08), start_y + len(rows) * pitch + 12))
+
+        hint = "TAP A PLAYER TO SEND" if IS_ANDROID else \
+            "[ENTER] CHOOSE    [TAB] MOVE    [ESC] BACK"
+        self.screen.blit(font_small.render(hint, True, (80, 80, 80)), (int(w * 0.08), h - 50))
+
+    def _draw_compose(self, w, h):
+        font_large, font_med, font_small = self._fonts()
+        comp = self.compose or {}
+        to = (comp.get("to") or {}).get("name", "EVERYONE")
+        self._draw_heading("SEND A QUESTION", w, h, font_large)
+        self.screen.blit(font_med.render("TO: " + str(to).upper(), True, config.COLOR_WHITE),
+                         (int(w * 0.08), int(h * 0.19)))
+
+        rows = comp.get("rows", [])
+        opts = [r["value"] for r in rows if r["key"].startswith("o") and r.get("value")]
+        correct = comp.get("correct", 0)
+        if correct >= max(1, len(opts)):
+            correct = 0
+
+        start_y = int(h * 0.26)
+        pitch = font_small.get_linesize() + 8
+        for i, row in enumerate(rows):
+            sel = (i == comp.get("focus", 0))
+            color = config.COLOR_WHITE if sel else (110, 110, 110)
+            prefix = "> " if sel else "  "
+            if row["kind"] == "text":
+                value = comp["buf"] if (comp.get("editing") and sel) else row["value"]
+                if comp.get("editing") and sel:
+                    value += "_"
+                if not value:
+                    value = "..."
+                label = "%s%s: %s" % (prefix, row["label"], value)
+            elif row["kind"] == "correct":
+                marker = ""
+                if 0 <= correct < len(opts):
+                    marker = "  (%s)" % opts[correct]
+                label = "%s%s: OPTION %d%s" % (prefix, row["label"], correct + 1, marker)
+            else:
+                label = prefix + row["label"]
+            surf = font_small.render(label, True, color)
+            y = start_y + i * pitch
+            self.screen.blit(surf, (int(w * 0.08), y))
+            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.75) + 16, pitch - 2, "compose", i)
+
+        hint = "[ENTER] EDIT/CHOOSE   [TAB] NEXT   [ESC] BACK"
+        self.screen.blit(font_small.render(hint, True, (80, 80, 80)), (int(w * 0.08), h - 50))
 
     def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
         """Section titles get the website's glow + red/cyan glitch split."""
@@ -1333,6 +1837,12 @@ class Game:
                          base_x, h - int(h * 0.18))
         else:
             text = step["q"] or ""
+            # A hand-written question is signed by whoever sent it.
+            social_item = step.get("_social")
+            if social_item:
+                who = str(social_item.get("from_name") or "someone").upper()
+                ui.draw_text(self.screen, "QUESTION FROM " + who, font_small,
+                             config.COLOR_DIM_RED, base_x, base_y - 30)
             t_color = config.COLOR_RED if ("afraid" in text.lower() or self.run_count >= 3) else config.COLOR_WHITE
             if self.typing_state == "THINKING":
                 dots = ["...", "....", ".....", "......"][int(self.now * 2) % 4]
@@ -1518,7 +2028,8 @@ class Game:
                         else:
                             self.running = False
                     else:
-                        self._handle_key(event.key)
+                        self._handle_key(event.key,
+                                         getattr(event, "unicode", "") or "")
                 elif event.type == pygame.VIDEORESIZE and not config.WINDOW_LOCKED:
                     self._on_resize(event.w, event.h)
                 elif event.type == pygame.MOUSEMOTION:

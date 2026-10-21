@@ -116,10 +116,15 @@ for cls in ("mask-rgb", "tracking", "dropout", "edge-bend"):
     check("index.html has the %s layer" % cls, ('class="%s"' % cls) in index)
     check("style.css defines .crt .%s" % cls, (".crt .%s" % cls) in css)
 check("index.html has the VHS deck chrome", 'class="vhs-chrome"' in index)
-check("tilt styles exist in css", ".tilt-card" in css)
-check("tilt driver exists in main.js", "tiltCards" in mainjs)
-check("tilt respects the perf switch", "PERF.low" in mainjs and "tiltCards" in mainjs)
-check("tilt respects reduced motion", "!reduceMotion" in mainjs)
+# The 3D card tilt was removed on purpose: it tilted the cards under the
+# cursor, so clicks landed beside the buttons. Guard against it creeping back.
+check("no tilt driver in main.js", "tiltCards" not in mainjs)
+# A leftover comment naming the old class is fine; a rule is not. Only count
+# ".tilt-card" when it is followed by a declaration block.
+check("no tilt rules survive in css",
+      not any(".tilt-card" in line and "{" in line for line in css.splitlines()))
+check("no tilt transforms survive in css", "perspective(" not in css)
+check("main.js records why the tilt went", "card tilt" in mainjs.lower())
 check("new layers are behind the no-fx switch",
       "body.no-fx .crt .tracking" in css and "body.no-fx .vhs-chrome" in css)
 

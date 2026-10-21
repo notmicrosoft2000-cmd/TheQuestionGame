@@ -1090,6 +1090,41 @@ def draw_badge_toast(surface, w, h, badge_id, shown_at, font_medium, font_small,
     return True
 
 
+def draw_social_toast(surface, w, h, text, shown_at, font_medium, font_small, now,
+                      tone="info", slot=0, life=6.0):
+    """A one-line notice (someone answered your question, a send failed...).
+
+    Mirrors draw_badge_toast so the two never fight: the badge toast owns the
+    bottom slot, these stack just above it.
+    """
+    age = now - shown_at
+    if age > life:
+        return False
+    fade = max(0.0, min(1.0, life - age))
+    alpha = int(255 * min(1.0, fade * 2.0))
+    if tone == "good":
+        border, head = (40, 110, 40), (90, 200, 90)
+    elif tone == "bad":
+        border, head = (120, 20, 20), (200, 70, 70)
+    else:
+        border, head = (70, 60, 20), (200, 180, 90)
+
+    label = text if len(text) <= 96 else text[:93] + "..."
+    body = font_small.render(label, True, (210, 210, 210))
+    box_w = max(220, min(int(w * 0.7), body.get_width() + 32))
+    box = pygame.Surface((box_w, 44), pygame.SRCALPHA)
+    box.fill((10, 0, 0, 200))
+    pygame.draw.rect(box, border + (255,), box.get_rect(), 2)
+    tag = font_small.render("TRANSMISSION", True, head)
+    box.blit(tag, (16, 5))
+    box.blit(body, (16, 22))
+    box.set_alpha(alpha)
+    bx = int(w * 0.5 - box.get_width() / 2)
+    by = int(h * 0.78) - 52 - slot * 50
+    surface.blit(box, (bx, by))
+    return True
+
+
 # --- Webcam (cv2 worker thread) ----------------------------------------------
 camera = None
 webcam_surface = None

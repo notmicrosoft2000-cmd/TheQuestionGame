@@ -61,6 +61,23 @@ NOTES:
 - A webcam scare may briefly request your camera. Deny it and the game skips
   it without asking again.
 
+ONLINE (who is playing + questions you write yourself):
+- The title menu has an ONLINE entry. It shows everyone else running the game
+  right now (names only) and whether the relay is reachable.
+- From there you can write your own question for one player or for EVERYONE:
+  a question, up to four options, and which option is the right answer.
+- It reaches them as their next question, signed with your name. When they
+  answer, the game tells you whether they got it right — and it tells them that
+  you will know.
+- Names are whatever you set them to; set yours from ONLINE > SET MY NAME.
+  Questions are held for a quarter of an hour if nobody is playing yet.
+- Writing questions needs a keyboard, so the composer is desktop-only for now.
+  On Android you still see who is online, receive questions, and answer them.
+- Nothing here is required: if the relay is down the screen says OFFLINE and the
+  rest of the game is unaffected.
+- Turn the whole thing off with TQG_SOCIAL=0, or point it at your own relay with
+  TQG_SOCIAL_URL (defaults to the same host as TQG_RELAY_URL).
+
 AI PROVIDERS (advanced):
 - The game ships with NO API key. It asks Neptune's relay, which holds the key
   and forwards the request to Groq (model openai/gpt-oss-120b). Nothing secret is

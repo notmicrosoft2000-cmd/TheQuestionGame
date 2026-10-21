@@ -17,6 +17,9 @@ import time
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
 os.environ["TQG_DATA_DIR"] = tempfile.mkdtemp(prefix="tqg_smoke_")
+# Tests never touch the network: the presence client is disabled and the new
+# online/compose screens are exercised against a fake, offline state.
+os.environ["TQG_SOCIAL"] = "0"
 
 # Make the package importable when run from anywhere.
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -323,7 +326,8 @@ def _tap(kind, idx=0):
 
 
 check("tapping a title row activates it",
-      _tap("title", 1) and game.fade.get("target") == "SETTINGS", str(game.fade))
+      _tap("title", game.menu_options.index("SETTINGS"))
+      and game.fade.get("target") == "SETTINGS", str(game.fade))
 time.sleep(0.3)
 game._update()
 time.sleep(0.3)
@@ -408,6 +412,173 @@ try:
 finally:
     config.IS_ANDROID = False
 
+# --- Online / composer screens ------------------------------------------------
+# Social is off in this environment, so these exercise the offline UI contract:
+# the menu entry exists, both screens draw, and the composer refuses to send.
+game.state = "TITLE"
+game.selected_option = game.menu_options.index("ONLINE")
+check("title menu offers ONLINE", "ONLINE" in game.menu_options, game.menu_options)
+
+game.state = "ONLINE"
+game.online_selected = 0
+try:
+    game._draw()
+    check("ONLINE screen draws while offline", True)
+except Exception as exc:
+    check("ONLINE screen draws while offline", False, repr(exc))
+
+try:
+    rows = game._online_rows()
+    check("offline online list still offers EVERYONE + rename",
+          rows and rows[0]["kind"] == "all" and any(r["kind"] == "rename" for r in rows),
+          rows)
+    game._online_key(pygame.K_DOWN)
+    game._online_key(pygame.K_UP)
+    check("ONLINE list navigates", game.online_selected == 0, game.online_selected)
+except Exception as exc:
+    check("ONLINE list navigates", False, repr(exc))
+
+# Rename is a text buffer on this screen; it must commit to the save file.
+before = game.game_state.get("player_name")
+game._begin_name_edit()
+game.name_edit = "probe-name"
+game._commit_name_edit()
+check("rename commits to the save", game.game_state.get("player_name") == "probe-name",
+      game.game_state.get("player_name"))
+game.game_state["player_name"] = before
+persistence.save_game_state(game.game_state)
+
+# The composer builds from the ONLINE rows and validates before sending.
+# Social is off in this environment, so give the game a stub client: this tests
+# the composer + send path without touching the network.
+class _StubSocial:
+    def __init__(self):
+        self.player_id = "probe"
+        self.name = "probe"
+        self.sent = []
+
+    def status(self):
+        return "online"
+
+    def others(self):
+        return [{"id": "peer000001", "name": "friend"}]
+
+    def online(self):
+        return [{"id": "probe", "name": "probe"}, {"id": "peer000001", "name": "friend"}]
+
+    def pending_questions(self):
+        return 2
+
+    def take_question(self):
+        return None
+
+    def take_results(self):
+        return []
+
+    def set_name(self, name):
+        self.name = name
+        return True
+
+    def send_question(self, to_id, question, options, correct=None):
+        self.sent.append((to_id, question, list(options), correct))
+        return True
+
+    def send_answer(self, item, choice, correct):
+        return True
+
+    def stop(self):
+        pass
+
+
+game.social = _StubSocial()
+game._start_compose({"id": "all", "name": "EVERYONE"})
+if game.compose:
+    game.compose["rows"][0]["value"] = "is this a test?"
+    game.compose["rows"][1]["value"] = "yes"
+    game.compose["rows"][2]["value"] = "no"
+    game.compose["correct"] = 1
+    game.state = "COMPOSE"
+    try:
+        game._draw()
+        check("COMPOSE screen draws", True)
+    except Exception as exc:
+        check("COMPOSE screen draws", False, repr(exc))
+    check("composer collects its options", game._compose_options() == ["yes", "no"],
+          game._compose_options())
+    game._compose_send()
+    check("composer sends question + correct index",
+          game.social.sent == [("all", "is this a test?", ["yes", "no"], 1)],
+          game.social.sent)
+    check("composer clears after a successful send", game.compose is None, game.compose)
+else:
+    check("COMPOSE screen draws", False, "compose state not created")
+
+# An empty question must be refused rather than sent.
+game._start_compose({"id": "all", "name": "EVERYONE"})
+game.compose["rows"][1]["value"] = "yes"
+game.compose["rows"][2]["value"] = "no"
+game._compose_send()
+check("composer refuses an empty question",
+      game.compose is not None and game.social.sent == [("all", "is this a test?", ["yes", "no"], 1)],
+      game.social.sent)
+
+# Incoming questions become the next step, and answering reports back.
+stub_item = {"id": "q1", "from": "peer000001", "from_name": "friend",
+             "q": "hand-written?", "opts": ["yes", "no"], "correct": 0}
+step = game._social_step_from(stub_item)
+check("social question becomes a playable step",
+      step["type"] == "choice" and step["opts"] == ["yes", "no"] and step["_social"] is stub_item,
+      step)
+
+# Full flow: a queued question is injected as the very next step...
+answers = []
+class _AnswerStub(_StubSocial):
+    def send_answer(self, item, choice, correct):
+        answers.append((item.get("id"), choice, correct))
+        return True
+
+game.social = _AnswerStub()
+game.social.take_question = lambda: dict(stub_item)
+game.state = "PLAYING"
+game.active_script = [
+    {"_id": "before", "q": "warm up", "opts": ["a", "b"], "type": "choice"},
+    {"_id": "after", "q": "next one", "opts": ["a", "b"], "type": "choice"},
+]
+game.current_step = 1     # as after _confirm_answer advanced past "before"
+game.selected_answer = 0
+check("queued question is injected at the next slot",
+      game._queue_social_question() is True
+      and game.active_script[0]["_id"] == "before"
+      and game.active_script[1]["_id"] == "social_q1",
+      [s["_id"] for s in game.active_script])
+
+# Answering it reports to the author with a correctness verdict.
+game.current_step = 1
+game.selected_answer = 0          # "yes" == the correct option
+game.question_start_time = time.time()
+captured = {}
+
+def _capture_note(text, tone="info", seconds=6.0):
+    captured["text"] = text
+
+_orig_note = game._note
+game._note = _capture_note
+try:
+    game._confirm_answer()
+finally:
+    game._note = _orig_note
+check("answering a social question reports to its author",
+      answers == [("q1", "yes", True)], answers)
+check("a correct answer is acknowledged to the player",
+      "RIGHT" in (captured.get("text") or ""), captured)
+
+_orig_report = game._report_social_answer
+game.social = None
+game.compose = None
+game.name_edit = None
+game.social_notes = []
+
+game.state = "TITLE"
 game.running = False
 pygame.quit()
 
