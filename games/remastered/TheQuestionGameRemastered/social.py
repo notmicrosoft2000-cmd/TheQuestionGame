@@ -62,6 +62,7 @@ class SocialClient:
         self._online = []
         self._inbox = []
         self._results = []
+        self._send_outcomes = []      # what the relay said about a queued send
         self._status = "connecting"
         self._last_ok = 0.0
         self._last_error = ""
@@ -87,6 +88,17 @@ class SocialClient:
 
     def can_send(self):
         """True when this client holds a send token (i.e. an operator build)."""
+        return bool(self._send_token)
+
+    def set_send_token(self, token):
+        """Give this client the right to write questions (operator app only).
+
+        The shipped game never calls this: it has no token and no code path
+        that could obtain one. The operator's sender app calls it once the
+        token has been typed in and checked against the relay.
+        """
+        with self._lock:
+            self._send_token = (token or "").strip()
         return bool(self._send_token)
 
     def status(self):
@@ -121,6 +133,19 @@ class SocialClient:
         with self._lock:
             out = self._results
             self._results = []
+            return out
+
+    def take_send_outcomes(self):
+        """Pop what the relay said about the questions we queued.
+
+        Queueing is not delivery: the relay can still refuse ("sending is
+        restricted", "nobody to send to", "join presence first") or be down.
+        The operator UI shows these, so a failed send never looks like a
+        successful one.
+        """
+        with self._lock:
+            out = self._send_outcomes
+            self._send_outcomes = []
             return out
 
     def sent_count(self):
@@ -228,18 +253,19 @@ class SocialClient:
                 kind, payload = self._outbox.pop(0)
             path = "/v1/send-question" if kind == "send" else "/v1/answer"
             ok, data = self._post(path, payload)
-            if not ok and kind == "send":
-                # Tell the player their question did not go out. Result notes
-                # are rendered as a toast, so this lands like any other reply.
+            if kind == "send":
+                # Record what the relay actually said. The UI must not claim a
+                # question was sent just because it was queued.
+                outcome = {
+                    "ok": ok,
+                    "to": payload.get("to", "all"),
+                    "q": payload.get("q", ""),
+                    "qid": data.get("id") or "",
+                    "delivered": data.get("delivered") or [],
+                    "error": "" if ok else (data.get("_error") or "offline"),
+                }
                 with self._lock:
-                    self._results.append({
-                        "by": "relay",
-                        "choice": "",
-                        "correct": None,
-                        "error": data.get("_error") or "offline",
-                        "local": True,
-                        "ts": time.time(),
-                    })
+                    self._send_outcomes.append(outcome)
 
     def _run(self):
         while not self._stop.is_set():

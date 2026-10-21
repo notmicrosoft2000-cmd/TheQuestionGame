@@ -76,15 +76,41 @@ app.fields["o1"] = "b"
 app.fire()
 check("fire() without a token warns instead of sending",
       app.toast is not None and "TOKEN" in app.toast["text"], app.toast)
+check("fire() without a token queues nothing",
+      app.sent_log == [], app.sent_log)
 
 # Compose text is tracked and cleared by fire().
 app.draw()
 check("compose text is tracked", app.fields["q"] == "will not send")
 app.fields["q"] = ""
 app.fields["o0"] = ""
-app.fields["o1"] = ""
 app.social.stop()
 pygame.quit()
+
+print("== sender: the token gate ==")
+# A token that does not match the relay must be refused, and it must be
+# refused *by the relay*, not by a guess.
+mod = load_relay()
+mod.RELAY_KEY = ""
+mod.RELAY_APP_TOKEN = ""
+mod.SEND_TOKEN = "operator-secret"
+srv = mod.ThreadingHTTPServer(("127.0.0.1", 8108), mod.Handler)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+time.sleep(0.2)
+config.SOCIAL_URL = "http://127.0.0.1:8108"
+
+state, detail = sender_mod.probe_token("operator-secret")
+check("the relay accepts the right token", state == "ok", (state, detail))
+state, detail = sender_mod.probe_token("wrong-token")
+check("the relay refuses a wrong token", state == "bad", (state, detail))
+check("the refusal explains itself", "restricted" in (detail or ""), detail)
+
+config.SOCIAL_URL = "http://127.0.0.1:9"      # nothing listening
+state, detail = sender_mod.probe_token("operator-secret")
+check("an unreachable relay is reported as offline", state == "offline", (state, detail))
+
+config.SOCIAL_URL = "http://127.0.0.1:8108"
+srv.shutdown()
 
 print("== sender: end to end through a real relay ==")
 os.environ["TQG_SEND_TOKEN"] = "operator-secret"
@@ -119,6 +145,8 @@ try:
           wait_until(lambda: any(p["id"] == "receiver0001" for p in app._others()), 5),
           app._others())
     check("sender holds the token", app._can_send_now() is True)
+    check("the relay confirms the token",
+          wait_until(lambda: app.token_state == "ok", 5), app.token_state)
 
     app.recipient = {"id": "receiver0001", "name": "RECEIVER"}
     app.fields["q"] = "what colour is the sky?"
@@ -126,9 +154,6 @@ try:
     app.fields["o1"] = "green"
     app.fields["correct"] = 0
     app.fire()
-    check("sender reports a successful send",
-          app.toast is not None and app.toast["tone"] == "good", app.toast)
-    check("sender clears the form after a send", app.fields["q"] == "", app.fields)
 
     got = {}
     def _take():
@@ -142,6 +167,17 @@ try:
           got.get("q") == "what colour is the sky?" and got.get("opts") == ["blue", "green"],
           got)
     check("the correct index survived", got.get("correct") == 0, got)
+
+    # The send is only reported as delivered once the relay says so.
+    check("the delivery log records it as delivered",
+          wait_until(lambda: (app._harvest(),
+                               app.sent_log and app.sent_log[0].get("state") == "DELIVERED")[1], 6),
+          app.sent_log)
+    check("the toast says it was delivered",
+          wait_until(lambda: (app._harvest(),
+                               app.toast and app.toast.get("tone") == "good")[1], 6),
+          app.toast)
+    check("the form was cleared after a send", app.fields["q"] == "", app.fields)
 
     check("receiver answers without any token", player.send_answer(got, "blue", True) is True)
     check("verdict reaches the sender",
