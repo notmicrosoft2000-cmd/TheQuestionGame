@@ -81,11 +81,14 @@ class Game:
     # Drawing target vs. the real window.
     #
     # `screen` is what the whole game draws into, and it is deliberately a plain
-    # off-screen surface. The actual SDL window (`_display`) is only touched at
-    # startup and by the drag-to-resize handler, and every frame is scaled onto
-    # it at the end of _draw(). Keeping the two apart is what makes resizing
-    # sane: the old code called set_mode() mid-drag to follow the window, which
-    # re-created the window and fought the cursor.
+    # off-screen surface. The window surface is *never cached*: pygame hands out
+    # a brand new Surface object every time the window manager resizes the
+    # window, so a saved copy ends up pointing at an SDL surface that has
+    # already been freed. Drawing into that is a use-after-free, and the window
+    # keeps showing the fresh (black) surface pygame handed out instead — that
+    # was the black screen with no menu.
+    #
+    # `_display_surface()` asks pygame who the window is, every time.
     @property
     def screen(self):
         return self._frame
@@ -120,9 +123,9 @@ class Game:
                     self._apply_resize_limits()
                 except Exception:
                     pass
-        # Everything from here on draws into this surface; _draw() scales it
+        # Everything from here on draws into this surface; _draw() copies it
         # onto the window. See the `screen` property above for why.
-        self._frame = pygame.Surface(self._display.get_size())
+        self._frame = self._new_frame(self._display.get_size())
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -239,13 +242,78 @@ class Game:
         self._startup_badges()
         self._begin_session()
 
+    # --- the window surface ---------------------------------------------------
+    def _display_surface(self):
+        """The live window surface — fetched fresh, never cached.
+
+        pygame replaces the Surface *object* whenever the window manager
+        resizes the window (the old one points at an SDL surface that SDL has
+        already freed). A cached copy is therefore a use-after-free waiting to
+        happen: the game draws into freed memory while the window shows the
+        fresh, empty surface pygame handed out. That is exactly the "black
+        screen, no menu" report.
+
+        Always ask pygame who the window is.
+        """
+        try:
+            surf = pygame.display.get_surface()
+        except Exception:
+            surf = None
+        if surf is None:
+            surf = getattr(self, "_display", None)
+        return surf
+
+    def _new_frame(self, size):
+        """A drawing surface the size of the window, in the window's format.
+
+        `.convert()` matches the display's pixel format, so the final copy
+        onto the window is an exact, fast blit with no per-pixel conversion.
+        """
+        size = (max(1, int(size[0])), max(1, int(size[1])))
+        frame = pygame.Surface(size)
+        try:
+            frame = frame.convert()
+        except Exception:
+            pass
+        return frame
+
+    def _set_frame_size(self, size):
+        """Resize the drawing frame (and everything that is baked to its size)."""
+        size = (max(1, int(size[0])), max(1, int(size[1])))
+        if size == self._frame.get_size():
+            return
+        self._frame = self._new_frame(size)
+        # Fonts are sized from the frame, so the cache has to go.
+        self._font_cache_key = None
+        # The starfield is baked to a fixed size, so rebuild it for the new
+        # frame or the dressing would only cover part of the screen.
+        if getattr(self, "starfield", None) is not None:
+            self.starfield = ui.build_starfield(size[0], size[1])
+
+    def _sync_frame(self):
+        """Keep the drawing frame the same size as the window.
+
+        Cheap insurance, run once per frame: a window manager can resize the
+        window without the VIDEORESIZE event reaching us (or before it does),
+        and pygame hands out a new Surface object when it does. A frame that no
+        longer matches the window is how the screen goes black.
+        """
+        disp = self._display_surface()
+        if disp is None:
+            return
+        size = disp.get_size()
+        if size != self._frame.get_size():
+            self._set_frame_size(size)
+
     def _apply_resize_limits(self):
         """Clamp the resizeable frame so it can never swallow the desktop.
 
         There is no fullscreen toggle in this build by design; the cheapest way
         to guarantee that is to cap the resizable window below the screen size.
-        SDL is asked to enforce the floor, and the ceiling is enforced by us in
-        `_on_resize` because SDL2 has no max-size hint.
+        The floor *and* the ceiling are handed to the window manager as size
+        hints, so the drag itself is clamped by the WM and the window follows
+        the cursor smoothly. (The old comment claimed SDL2 had no max-size
+        hint — it does: `set_window_maximum_size`.)
         """
         try:
             # Desktop resolution, NOT the current window. pygame's Info() reports
@@ -273,37 +341,40 @@ class Game:
                                                    config.WINDOW_MIN_H)
         except Exception:
             pass  # older SDL/pygame: the minimum is soft, the maximum still holds
+        try:
+            pygame.display.set_window_maximum_size(max_w, max_h)
+        except Exception:
+            pass  # some WMs ignore the ceiling; the frame clamp still holds
 
-    def _on_resize(self, w, h):
-        """Follow a drag-to-resize, clamped between the floor and the ceiling.
-
-        The window is the source of truth: SDL already resized it, so this only
-        has to match the drawing surface to it. Resizing the window itself here
-        (set_mode) is what used to break the drag — on some SDL builds it
-        re-creates the window mid-drag, fires another VIDEORESIZE, and the frame
-        ends up fighting the cursor, which reads as "it snaps back". So: if the
-        drag stayed inside the limits, just follow the window; if the user
-        dragged past a limit, ask for the clamped size exactly once.
-        """
+    def _clamped_size(self, w, h):
+        """The window size the game allows, between the floor and the ceiling."""
         max_w, max_h = getattr(self, "_max_window",
                                (config.WINDOW_MAX_W, config.WINDOW_MAX_H))
         cw = max(config.WINDOW_MIN_W, min(int(w), max_w))
         ch = max(config.WINDOW_MIN_H, min(int(h), max_h))
-        actual = self._display.get_size()
-        if (cw, ch) != actual:
-            # We were dragged out of bounds; pull the window back to the limit.
-            try:
-                flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
-                self._display = pygame.display.set_mode((cw, ch), flags)
-            except Exception:
-                pass
-            actual = self._display.get_size()
-        if actual == self._frame.get_size():
-            return
-        self._frame = pygame.Surface(actual)
-        # The starfield is baked to a fixed size, so rebuild it for the new
-        # frame or the dressing would only cover part of the screen.
-        self.starfield = ui.build_starfield(actual[0], actual[1])
+        return (cw, ch)
+
+    def _on_resize(self, w, h):
+        """Follow a drag-to-resize, clamped between the floor and the ceiling.
+
+        The window manager has already resized the window by the time this
+        runs, so the only job left is to match the drawing frame to it.
+
+        The old code called `pygame.display.set_mode()` to do that, and that is
+        what broke the drag: set_mode() re-shows the window and fills it with
+        black before the next frame is drawn, so the window blinked out and
+        back on every mouse move ("it disappears and reappears"), it reset the
+        size hints the WM uses to clamp the drag, and it re-fired VIDEORESIZE,
+        so the frame fought the cursor. Nothing here touches the window any
+        more — the WM owns the window, we own the frame.
+        """
+        size = self._clamped_size(w, h)
+        disp = self._display_surface()
+        if disp is not None and disp.get_size() == size:
+            # The window surface already followed the window — it is the
+            # authority (it knows about DPI scaling).
+            size = disp.get_size()
+        self._set_frame_size(size)
 
     # --- setup helpers -------------------------------------------------------
     def _load_settings_idx(self):
@@ -1308,6 +1379,11 @@ class Game:
         return self._black_overlay_cache
 
     def _draw(self):
+        # The window may have been resized since the last frame (the WM does
+        # not always wait for our event). Make sure the frame still matches it
+        # before anything is drawn, or the copy at the end lands on a surface
+        # of a different size and the window goes black.
+        self._sync_frame()
         self.screen.fill(config.COLOR_BLACK)
         w, h = self.screen.get_size()
         self._touch_zones = []   # rebuilt below; hit-tested by _handle_touch
@@ -1378,12 +1454,15 @@ class Game:
 
         # Present: the frame is the drawing target, the window is the real
         # surface. They are normally identical in size, so this is a straight
-        # copy; the scale path only runs if the two ever drift apart.
-        if self._display.get_size() == self._frame.get_size():
-            self._display.blit(self._frame, (0, 0))
-        else:
-            pygame.transform.smoothscale(self._frame, self._display.get_size(),
-                                         self._display)
+        # copy; the scale path only runs if the two ever drift apart. The
+        # window surface is fetched fresh — pygame swaps the object when the
+        # window manager resizes the window.
+        disp = self._display_surface()
+        if disp is not None:
+            if disp.get_size() == self._frame.get_size():
+                disp.blit(self._frame, (0, 0))
+            else:
+                pygame.transform.smoothscale(self._frame, disp.get_size(), disp)
         pygame.display.flip()
 
     def _draw_loading(self, w, h):

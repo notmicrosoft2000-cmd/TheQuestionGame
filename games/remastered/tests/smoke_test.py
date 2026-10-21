@@ -68,28 +68,56 @@ max_w, max_h = game._max_window
 check("resize ceiling above starting window",
       max_w >= config.WINDOW_W and max_h >= config.WINDOW_H,
       str((max_w, max_h)))
-game._on_resize(config.WINDOW_W + 400, config.WINDOW_H + 300)
-grown = game.screen.get_size()
-check("upward resize actually grows the window",
-      grown[0] > config.WINDOW_W and grown[1] > config.WINDOW_H, str(grown))
-# The frame is only half the story — the real window must move too, or the game
-# would draw to an invisible surface (the frame-vs-display split).
-check("the real window grew with the frame",
-      game._display.get_size() == grown, str(game._display.get_size()))
-game._on_resize(10, 10)
-check("downward resize clamps to the floor",
-      game.screen.get_size() == (config.WINDOW_MIN_W, config.WINDOW_MIN_H),
-      str(game.screen.get_size()))
-# Dragging toward fullscreen must clamp at the ceiling, never exceed the desktop.
-_dw, _dh = pygame.display.get_desktop_sizes()[0]
-game._on_resize(_dw * 2, _dh * 2)
-_win = game._display.get_size()
-check("fullscreen-sized drag clamps to the ceiling, not the desktop",
-      _win[0] <= max_w and _win[1] <= max_h and _win[0] < _dw and _win[1] < _dh,
-      str((_win, max_w, max_h)))
-check("frame still matches the window after a clamped drag",
-      game.screen.get_size() == _win, str(game.screen.get_size()))
-game._on_resize(900, 700)  # leave a sane size for the rest of the run
+
+# Regression: the resize handler used to call pygame.display.set_mode() to
+# follow the window. set_mode() re-shows the window and fills it black before
+# the next frame, so the window blinked out and back on every mouse move
+# ("it disappears and reappears") and it fought the cursor. The window belongs
+# to the window manager now; the game only matches its frame to it.
+_set_mode_calls = []
+_orig_set_mode = pygame.display.set_mode
+
+
+def _tracking_set_mode(*a, **kw):
+    _set_mode_calls.append(a)
+    return _orig_set_mode(*a, **kw)
+
+
+pygame.display.set_mode = _tracking_set_mode
+try:
+    game._on_resize(config.WINDOW_W + 400, config.WINDOW_H + 300)
+    check("resizing never re-creates the window", not _set_mode_calls,
+          str(_set_mode_calls))
+    # Dragging toward fullscreen must clamp at the ceiling, never exceed the desktop.
+    _dw, _dh = pygame.display.get_desktop_sizes()[0]
+    game._on_resize(_dw * 2, _dh * 2)
+    check("no window re-creation during any resize", not _set_mode_calls,
+          str(_set_mode_calls))
+finally:
+    pygame.display.set_mode = _orig_set_mode
+
+# The size limits themselves: a drag is clamped to the floor and the ceiling.
+check("a drag below the floor clamps up to it",
+      game._clamped_size(10, 10) == (config.WINDOW_MIN_W, config.WINDOW_MIN_H),
+      str(game._clamped_size(10, 10)))
+check("a drag past the ceiling clamps down to it",
+      game._clamped_size(_dw * 2, _dh * 2) == (max_w, max_h),
+      str(game._clamped_size(_dw * 2, _dh * 2)))
+check("a normal drag passes through untouched",
+      game._clamped_size(1000, 700) == (1000, 700),
+      str(game._clamped_size(1000, 700)))
+
+# The window surface must never be cached: pygame swaps the Surface object
+# when the window manager resizes the window, and a cached copy points at
+# freed memory (the black screen with no menu).
+check("the window surface is fetched fresh, not cached",
+      game._display_surface() is pygame.display.get_surface())
+# Whatever the window does, the frame ends up the same size as the window.
+game._on_resize(900, 700)
+game._draw()
+check("the frame always matches the window it is drawn on",
+      game.screen.get_size() == game._display_surface().get_size(),
+      str((game.screen.get_size(), game._display_surface().get_size())))
 
 # --- PLAYING frame budget (the CI FPS assert) -------------------------------
 game.state = "PLAYING"
