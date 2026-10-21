@@ -64,8 +64,10 @@ NOTES:
 ONLINE (who is playing + questions you write yourself):
 - The title menu has an ONLINE entry. It shows everyone else running the game
   right now (names only) and whether the relay is reachable.
-- From there you can write your own question for one player or for EVERYONE:
-  a question, up to four options, and which option is the right answer.
+- On the operator's build you can also write your own question for one player
+  or for EVERYONE: a question, up to four options, and which option is the
+  right answer. Everyone else can join the room, receive and answer — but only
+  a build holding the send token can write.
 - It reaches them as their next question, signed with your name. When they
   answer, the game tells you whether they got it right — and it tells them that
   you will know.
@@ -77,6 +79,8 @@ ONLINE (who is playing + questions you write yourself):
   rest of the game is unaffected.
 - Turn the whole thing off with TQG_SOCIAL=0, or point it at your own relay with
   TQG_SOCIAL_URL (defaults to the same host as TQG_RELAY_URL).
+- The right to write is granted by TQG_SEND_TOKEN, which must match the server's
+  RELAY_SEND_TOKEN. Without it the composer is not offered at all.
 
 AI PROVIDERS (advanced):
 - The game ships with NO API key. It asks Neptune's relay, which holds the key

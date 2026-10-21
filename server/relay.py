@@ -33,10 +33,13 @@ Endpoints:
   POST /v1/answer               -> report a recipient's answer back to the
                                    player who wrote the question
 
-The social endpoints are deliberately open (the game ships with no token, and
-the whole point is that any copy of the game can see the others). They are
-rate-limited per IP and every string is capped, so they can only move small
-question-sized payloads. State is in memory: a restart forgets everyone.
+Presence and answering are open — any copy of the game may join the room, be
+seen, and answer. *Sending* is not: /v1/send-question requires RELAY_SEND_TOKEN,
+so only the operator's build can write questions. Everyone else stays a player.
+
+The social endpoints are rate-limited per IP and every string is capped, so all
+they can move is a question-sized payload. State is in memory: a restart forgets
+everyone.
 """
 
 import json
@@ -52,6 +55,10 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 RELAY_KEY = os.environ.get("RELAY_KEY", "").strip()
 APP_TOKEN = os.environ.get("RELAY_APP_TOKEN", "").strip()
+# Gates /v1/send-question only. Unset = anyone can write questions (the old
+# behaviour); set = only a build that knows this secret may send. Presence and
+# answering stay open, so other players never need it.
+SEND_TOKEN = os.environ.get("RELAY_SEND_TOKEN", "").strip()
 PORT = int(os.environ.get("RELAY_PORT", "8090"))
 MODEL = os.environ.get("RELAY_MODEL", "openai/gpt-oss-120b")
 MAX_TOKENS = int(os.environ.get("RELAY_MAX_TOKENS", "320"))
@@ -369,6 +376,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/v1/presence":
                 code, obj = _handle_presence(body)
             elif path == "/v1/send-question":
+                # Writing questions is the operator's privilege. Answered before
+                # the body is even looked at, so an unauthorised caller cannot
+                # probe validation behaviour either.
+                if SEND_TOKEN and self.headers.get("X-Send-Token", "") != SEND_TOKEN:
+                    self._send(403, {"error": "sending is restricted"})
+                    return
                 code, obj = _handle_send(body)
             else:
                 code, obj = _handle_answer(body)
@@ -451,8 +464,9 @@ def main():
     if not RELAY_KEY:
         print("[!] RELAY_KEY is not set — the relay will refuse every request.")
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print("[*] TQG relay on http://127.0.0.1:%d  model=%s  app_token=%s"
-          % (PORT, MODEL, "set" if APP_TOKEN else "off"))
+    print("[*] TQG relay on http://127.0.0.1:%d  model=%s  app_token=%s  send_token=%s"
+          % (PORT, MODEL, "set" if APP_TOKEN else "off",
+             "set" if SEND_TOKEN else "off"))
     srv.serve_forever()
 
 

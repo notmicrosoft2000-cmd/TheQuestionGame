@@ -641,12 +641,29 @@ class Game:
         self._prefetch_question(self.current_step)
         return True
 
+    def _can_compose(self):
+        """Writing questions needs a keyboard AND the operator send token.
+
+        The public build has no token, so it is a player only: it joins the
+        room, receives and answers. Showing a composer that the relay would
+        refuse would just be a lie.
+        """
+        if IS_ANDROID or self.social is None:
+            return False
+        try:
+            return self.social.can_send()
+        except Exception:
+            return False
+
     def _start_compose(self, recipient):
         if self.social is None:
             self._note("RELAY OFFLINE — CAN'T SEND", "bad")
             return
         if IS_ANDROID:
             self._note("WRITING QUESTIONS NEEDS A KEYBOARD (DESKTOP)", "bad")
+            return
+        if not self._can_compose():
+            self._note("THIS BUILD CANNOT WRITE QUESTIONS", "bad")
             return
         self.compose = {
             "to": recipient,           # {"id":..., "name":...} or {"id":"all",...}
@@ -680,6 +697,9 @@ class Game:
 
     def _compose_send(self):
         comp = self.compose or {}
+        if not self._can_compose():
+            self._note("THIS BUILD CANNOT WRITE QUESTIONS", "bad")
+            return
         rows = comp.get("rows", [])
         question = rows[0]["value"] if rows else ""
         opts = self._compose_options()
@@ -731,9 +751,14 @@ class Game:
 
     # --- online screen ------------------------------------------------------
     def _online_rows(self):
-        """Rows on the ONLINE screen: everyone we can send to, plus rename."""
-        rows = [{"kind": "all", "id": "all", "name": "EVERYONE"}]
-        if self.social is not None:
+        """Rows on the ONLINE screen.
+
+        An operator build can pick a recipient (and rename itself); a plain
+        player build just shows the room — there is nothing to choose.
+        """
+        rows = []
+        if self._can_compose() and self.social is not None:
+            rows.append({"kind": "all", "id": "all", "name": "EVERYONE"})
             try:
                 for peer in self.social.others():
                     rows.append({"kind": "peer", "id": peer.get("id", ""),
@@ -749,6 +774,11 @@ class Game:
             self._online_name_key(key, "")
             return
         rows = self._online_rows()
+        if not rows:
+            if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                audio.play_ui_select_sound()
+                self.start_fade("TITLE")
+            return
         if key in (pygame.K_TAB, pygame.K_DOWN):
             self.online_selected = (self.online_selected + 1) % len(rows)
             audio.play_ui_nav_sound()
@@ -1624,23 +1654,33 @@ class Game:
                 status = self.social.status()
             except Exception:
                 status = "offline"
-        rows = self._online_rows()
-        peers = [r for r in rows if r["kind"] == "peer"]
+
+        # Everyone in the room, us included — that is the "who is online" list,
+        # and it is shown whatever this build is allowed to do.
+        everyone = []
+        if self.social is not None:
+            try:
+                everyone = self.social.online()
+            except Exception:
+                everyone = []
+        others = [p for p in everyone if p.get("id") != getattr(self.social, "player_id", None)]
 
         if status == "online":
-            line = "RELAY: ONLINE — %d PLAYER%s HERE" % (len(rows), "" if len(rows) == 1 else "S")
+            count = len(everyone)
+            line = "RELAY: ONLINE — %d PLAYER%s HERE" % (
+                count, "" if count == 1 else "S")
             color = (90, 200, 90)
         elif status == "connecting":
             line, color = "RELAY: CONNECTING...", (200, 180, 90)
         else:
             line, color = "RELAY: OFFLINE — NOBODY CAN REACH YOU", (200, 80, 80)
-        self.screen.blit(font_med.render(line, True, color), (int(w * 0.08), int(h * 0.20)))
+        self.screen.blit(font_med.render(line, True, color), (int(w * 0.08), int(h * 0.18)))
 
         you = "YOU: %s" % self._social_name().upper()
         if self.name_edit is not None:
             you = "YOU: %s_" % self.name_edit.upper()
         self.screen.blit(font_small.render(you, True, config.COLOR_WHITE),
-                         (int(w * 0.08), int(h * 0.26)))
+                         (int(w * 0.08), int(h * 0.24)))
 
         waiting = 0
         if self.social is not None:
@@ -1648,37 +1688,59 @@ class Game:
                 waiting = self.social.pending_questions()
             except Exception:
                 waiting = 0
-        if waiting:
-            self.screen.blit(font_small.render(
-                "%d QUESTION%s WAITING FOR YOUR NEXT TURN" % (waiting, "" if waiting == 1 else "S"),
-                True, (200, 180, 90)), (int(w * 0.08), int(h * 0.30)))
 
-        start_y = int(h * 0.36)
+        # Who is here. Names only — presence never carries anything else.
+        list_y = int(h * 0.29)
+        self.screen.blit(font_small.render("IN THE ROOM", True, config.COLOR_DIM_RED),
+                         (int(w * 0.08), list_y))
+        list_y += font_small.get_linesize() + 4
+        if others:
+            for peer in others:
+                self.screen.blit(font_small.render(
+                    "  " + str(peer.get("name", "?")).upper(), True, (150, 150, 150)),
+                    (int(w * 0.08), list_y))
+                list_y += font_small.get_linesize()
+        else:
+            self.screen.blit(font_small.render("  NOBODY ELSE YET", True, (110, 110, 110)),
+                             (int(w * 0.08), list_y))
+            list_y += font_small.get_linesize()
+        if waiting:
+            list_y += 4
+            self.screen.blit(font_small.render(
+                "%d QUESTION%s WAITING FOR YOUR NEXT TURN" % (
+                    waiting, "" if waiting == 1 else "S"),
+                True, (200, 180, 90)), (int(w * 0.08), list_y))
+            list_y += font_small.get_linesize()
+
+        rows = self._online_rows()
+        # A player build has nothing to choose, so only the room + rename show.
+        can_compose = self._can_compose()
+        start_y = max(int(h * 0.52), list_y + 16)
+        if can_compose:
+            self.screen.blit(font_small.render("SEND A QUESTION TO", True, config.COLOR_DIM_RED),
+                             (int(w * 0.08), start_y - font_small.get_linesize() - 4))
+
         pitch = font_med.get_linesize() + 10
         for i, row in enumerate(rows):
             sel = (i == min(self.online_selected, len(rows) - 1))
             color = config.COLOR_WHITE if sel else (110, 110, 110)
             prefix = "> " if sel else "  "
             label = row["name"]
-            if row["kind"] == "peer":
+            if row["kind"] in ("peer", "all"):
                 label = "SEND TO  " + label
-            elif row["kind"] == "all":
-                label = "SEND TO  " + label
-            elif row["kind"] == "rename":
-                label = "SET MY NAME"
             surf = font_med.render(prefix + label, True, color)
             y = start_y + i * pitch
             self.screen.blit(surf, (int(w * 0.08), y))
             self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.7) + 16, pitch - 2, "online", i)
 
-        if not peers and status == "online":
+        if status == "online" and not can_compose:
             self.screen.blit(font_small.render(
-                "NOBODY ELSE YET — SEND A QUESTION AND WAIT.",
-                True, (110, 110, 110)), (int(w * 0.08), start_y + len(rows) * pitch + 12))
+                "THIS BUILD CANNOT WRITE QUESTIONS — YOU PLAY THEM.",
+                True, (110, 110, 110)), (int(w * 0.08), h - 72))
 
-        hint = "TAP A PLAYER TO SEND" if IS_ANDROID else \
-            "[ENTER] CHOOSE    [TAB] MOVE    [ESC] BACK"
+        hint = "[ENTER] CHOOSE    [TAB] MOVE    [ESC] BACK" if can_compose else "[ESC] BACK"
         self.screen.blit(font_small.render(hint, True, (80, 80, 80)), (int(w * 0.08), h - 50))
+
 
     def _draw_compose(self, w, h):
         font_large, font_med, font_small = self._fonts()

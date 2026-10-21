@@ -74,23 +74,38 @@ the next poll.
 | endpoint | what it does |
 |---|---|
 | `POST /v1/presence` | heartbeat. Returns the current online list, plus any questions addressed to you and results for questions you sent |
-| `POST /v1/send-question` | deliver a hand-written question to one peer, or `"all"` |
+| `POST /v1/send-question` | deliver a hand-written question to one peer, or `"all"` — **requires the send token** |
 | `POST /v1/answer` | report a recipient's answer back to the question's author |
 
 Delivery is **one-shot**: the server clears an item as it hands it over, so a
 question is never replayed. Items expire after `RELAY_QUESTION_TTL` (900s) and a
 peer is dropped from the room after `RELAY_PEER_TTL` (20s) without a poll.
 
-These endpoints are deliberately **open** — the game ships with no token, and
-the whole point is that any copy can see the others. They are rate-limited
-separately (`RELAY_SOCIAL_RATE`/min, `RELAY_SOCIAL_BURST`) and every string is
-capped, so all they can move is a question-sized payload. They never touch the
-Groq upstream or the API key.
+### Who may write questions
+
+Presence and answering are **open**: any copy of the game may join the room, be
+seen, and answer. *Writing* is not. Set `RELAY_SEND_TOKEN` and
+`/v1/send-question` refuses any caller that does not send that value as
+`X-Send-Token` — so only a build that knows the secret can write questions.
+
+This is what keeps the room from turning into a megaphone: everyone else is a
+player, not a broadcaster. To use it, set the same value in your own build
+(`TQG_SEND_TOKEN`) and leave it **unset** in anything you publish.
+
+Unset `RELAY_SEND_TOKEN` and anyone may send (the original behaviour). Note the
+token is only as secret as your build — treat it as a lock on the door, not a
+vault. It is a separate secret from `RELAY_APP_TOKEN`, which gates the AI
+endpoint, so you can rotate either one alone.
+
+These endpoints never touch the Groq upstream or the API key. They are
+rate-limited separately (`RELAY_SOCIAL_RATE`/min, `RELAY_SOCIAL_BURST`) and
+every string is capped, so all they can move is a question-sized payload.
 
 Knobs (all optional, in `relay.env`):
 
 | var | default | meaning |
 |---|---|---|
+| `RELAY_SEND_TOKEN` | *(empty)* | secret required to write questions; empty = anyone may |
 | `RELAY_PEER_TTL` | `20` | seconds without a poll before a peer leaves the list |
 | `RELAY_QUESTION_TTL` | `900` | seconds a question/result may sit undelivered |
 | `RELAY_INBOX_MAX` | `12` | queued questions kept per player |

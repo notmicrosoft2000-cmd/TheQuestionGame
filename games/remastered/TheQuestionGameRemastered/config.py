@@ -67,6 +67,12 @@ SOCIAL_Q_MAX = 200
 SOCIAL_OPT_MAX = 60
 SOCIAL_OPTS_MAX = 4
 SOCIAL_INBOX_MAX = 8
+# Writing questions is meant to be the operator's privilege. The relay refuses
+# /v1/send-question unless this matches its RELAY_SEND_TOKEN. The public build
+# leaves it empty ON PURPOSE: everyone else can join the room, receive and
+# answer, but only an operator build can write. Never bake the real token into
+# a public release.
+SOCIAL_SEND_TOKEN = os.environ.get("TQG_SEND_TOKEN", "").strip()
 
 AI_PROVIDER = os.environ.get("TQG_AI_PROVIDER", "relay")
 

@@ -429,14 +429,19 @@ except Exception as exc:
 
 try:
     rows = game._online_rows()
-    check("offline online list still offers EVERYONE + rename",
-          rows and rows[0]["kind"] == "all" and any(r["kind"] == "rename" for r in rows),
+    check("offline player build still offers rename",
+          any(r["kind"] == "rename" for r in rows)
+          and not any(r["kind"] in ("all", "peer") for r in rows),
           rows)
     game._online_key(pygame.K_DOWN)
     game._online_key(pygame.K_UP)
     check("ONLINE list navigates", game.online_selected == 0, game.online_selected)
 except Exception as exc:
     check("ONLINE list navigates", False, repr(exc))
+
+# A build with no send token is a player: joining, receiving and answering
+# work, but there is no composer and the relay would refuse a send anyway.
+# (Checked below, once the stub client exists.)
 
 # Rename is a text buffer on this screen; it must commit to the save file.
 before = game.game_state.get("player_name")
@@ -450,12 +455,17 @@ persistence.save_game_state(game.game_state)
 
 # The composer builds from the ONLINE rows and validates before sending.
 # Social is off in this environment, so give the game a stub client: this tests
-# the composer + send path without touching the network.
+# the composer + send path without touching the network. A send token is what
+# grants an operator build the right to write questions, so set one here.
 class _StubSocial:
-    def __init__(self):
+    def __init__(self, send_token="smoke-operator-token"):
         self.player_id = "probe"
         self.name = "probe"
         self.sent = []
+        self._token = send_token
+
+    def can_send(self):
+        return bool(self._token)
 
     def status(self):
         return "online"
@@ -490,7 +500,23 @@ class _StubSocial:
         pass
 
 
+game.social = _StubSocial(send_token="")
+check("build without a send token cannot compose", game._can_compose() is False)
+check("player build has no recipient rows",
+      not any(r["kind"] in ("all", "peer") for r in game._online_rows()),
+      game._online_rows())
+game._start_compose({"id": "all", "name": "EVERYONE"})
+check("composer refuses to open without a send token", game.compose is None, game.compose)
+game.state = "ONLINE"
+try:
+    game._draw()
+    check("ONLINE screen draws as a player", True)
+except Exception as exc:
+    check("ONLINE screen draws as a player", False, repr(exc))
+
 game.social = _StubSocial()
+# Operator mode: holding a send token is what unlocks writing questions.
+check("operator build may compose", game._can_compose() is True)
 game._start_compose({"id": "all", "name": "EVERYONE"})
 if game.compose:
     game.compose["rows"][0]["value"] = "is this a test?"

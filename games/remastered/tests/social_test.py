@@ -156,6 +156,62 @@ finally:
     except Exception:
         pass
 
+print("== the send gate: only an operator build may write questions ==")
+# Same relay, but with RELAY_SEND_TOKEN set. Presence and answering stay open;
+# only /v1/send-question needs the secret, and the game carries it per client.
+mod2 = load_relay()
+mod2.RELAY_KEY = ""
+mod2.RELAY_APP_TOKEN = ""
+mod2.SEND_TOKEN = "test-send-token"
+srv2 = mod2.ThreadingHTTPServer(("127.0.0.1", 8094), mod2.Handler)
+threading.Thread(target=srv2.serve_forever, daemon=True).start()
+time.sleep(0.2)
+base2 = "http://127.0.0.1:8094"
+
+operator = social.SocialClient("operator0001", "operator", base_url=base2,
+                               poll_secs=0.2, timeout=2, enabled=True,
+                               send_token="test-send-token")
+player = social.SocialClient("player000001", "player", base_url=base2,
+                             poll_secs=0.2, timeout=2, enabled=True,
+                             send_token="")
+try:
+    check("operator joins the room", wait_until(lambda: operator.status() == "online", 5),
+          operator.status())
+    check("player joins the same room", wait_until(lambda: player.status() == "online", 5),
+          player.status())
+    check("player is visible to the operator",
+          wait_until(lambda: any(p["name"] == "player" for p in operator.others()), 5),
+          operator.others())
+    check("an operator client can send", operator.can_send() is True)
+    check("a public build cannot claim to send", player.can_send() is False)
+
+    check("operator question queues",
+          operator.send_question("player000001", "from the operator", ["a", "b"], 1) is True)
+
+    got2 = {}
+    def _take_op():
+        item = player.take_question()
+        if item:
+            got2.update(item)
+            return True
+        return False
+    check("player receives it", wait_until(_take_op, 6), got2)
+    check("player answers without any token",
+          player.send_answer(got2, "b", True) is True)
+    check("answer reaches the operator",
+          wait_until(lambda: any(r.get("by") == "player" for r in operator.take_results()), 6))
+
+    # The public build tries to write a question: refused, and it is told so
+    # rather than left believing it worked.
+    player.send_question("operator0001", "i should not be able to send", ["a", "b"], 0)
+    check("a public build's send is refused",
+          wait_until(lambda: any(r.get("local") for r in player.take_results()), 6),
+          player.take_results())
+finally:
+    operator.stop()
+    player.stop()
+    srv2.shutdown()
+
 print()
 if FAILS:
     print("SOCIAL_FAIL: " + ", ".join(FAILS))

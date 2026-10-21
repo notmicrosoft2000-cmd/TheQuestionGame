@@ -250,6 +250,70 @@ try:
 finally:
     srv.shutdown()
 
+print("== social: sending can be restricted to the operator ==")
+# A relay with RELAY_SEND_TOKEN set: everyone may join and answer, but only a
+# caller holding the token may write questions.
+for k in ("RELAY_SEND_TOKEN",):
+    mod = load_relay({"RELAY_KEY": "", "RELAY_PORT": "8099", "RELAY_APP_TOKEN": "",
+                      "RELAY_RATE": "100", "RELAY_BURST": "50",
+                      "RELAY_SEND_TOKEN": "operator-secret"})
+srv2 = mod.ThreadingHTTPServer(("127.0.0.1", 8099), mod.Handler)
+threading.Thread(target=srv2.serve_forever, daemon=True).start()
+time.sleep(0.3)
+
+
+def post2(path, body, headers=None):
+    h = {"Content-Type": "application/json"}
+    h.update(headers or {})
+    req = urllib.request.Request("http://127.0.0.1:8099" + path,
+                                 data=json.dumps(body).encode(), headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except Exception:
+            return e.code, {}
+
+
+try:
+    code, a = post2("/v1/presence", {"id": "op0000000001", "name": "operator"})
+    check("presence stays open with a send token set", code == 200 and a.get("ok"), (code, a))
+    code, b = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    check("a plain player may still join the room", code == 200 and b.get("ok"), (code, b))
+
+    code, c = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001",
+        "q": "no token", "opts": ["a", "b"]})
+    check("send without the token is refused", code == 403, (code, c))
+
+    code, d = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001",
+        "q": "wrong token", "opts": ["a", "b"]}, {"X-Send-Token": "guess"})
+    check("send with a wrong token is refused", code == 403, (code, d))
+
+    code, e = post2("/v1/send-question", {
+        "from": "player000001", "to": "op0000000001",
+        "q": "players cannot write", "opts": ["a", "b"]},
+        {"X-Send-Token": "operator-secret"})
+    check("the token itself is what grants sending, not the peer id",
+          code == 200 and e.get("delivered") == ["op0000000001"], (code, e))
+
+    # The recipient answers with no token at all — that path must stay open.
+    code, f = post2("/v1/presence", {"id": "op0000000001", "name": "operator"})
+    box = f.get("inbox") or []
+    check("the operator receives it", len(box) == 1 and box[0]["q"] == "players cannot write", box)
+    qid = box[0]["id"] if box else ""
+    code, g = post2("/v1/answer", {"sender": "player000001", "qid": qid, "by": "operator",
+                                   "choice": "a", "correct": True})
+    check("answering needs no token", code == 200 and g.get("ok"), (code, g))
+    code, h = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    check("the result reaches the sender without a token",
+          len(h.get("results") or []) == 1, h.get("results"))
+finally:
+    srv2.shutdown()
+
 print()
 if FAILS:
     print("RELAY_FAIL: " + ", ".join(FAILS))

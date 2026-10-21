@@ -43,12 +43,16 @@ class SocialClient:
     """Threaded presence + question mailbox. Safe to call from the main thread."""
 
     def __init__(self, player_id, name, base_url=None, enabled=None,
-                 poll_secs=None, timeout=None):
+                 poll_secs=None, timeout=None, send_token=None):
         self.player_id = player_id
         self._name = _clean(name, config.SOCIAL_NAME_MAX) or "guest"
         self._base = (base_url or config.SOCIAL_URL).rstrip("/")
         self._poll_secs = float(poll_secs or config.SOCIAL_POLL_SECS)
         self._timeout = float(timeout or config.SOCIAL_TIMEOUT)
+        # Captured at construction: the right to write questions belongs to the
+        # build, not to whoever reads config last.
+        self._send_token = (config.SOCIAL_SEND_TOKEN if send_token is None
+                            else send_token)
         if enabled is None:
             enabled = config.SOCIAL_ENABLED
 
@@ -78,6 +82,10 @@ class SocialClient:
     def name(self):
         with self._lock:
             return self._name
+
+    def can_send(self):
+        """True when this client holds a send token (i.e. an operator build)."""
+        return bool(self._send_token)
 
     def status(self):
         """'online' / 'offline' / 'connecting' / 'disabled'."""
@@ -184,6 +192,10 @@ class SocialClient:
         headers = {"Content-Type": "application/json", "User-Agent": "TQG/1.0"}
         if config.RELAY_TOKEN:
             headers["X-App-Token"] = config.RELAY_TOKEN
+        # Sending questions is gated separately; this build usually has no token
+        # and simply never sends one (see config.SOCIAL_SEND_TOKEN).
+        if path == "/v1/send-question" and self._send_token:
+            headers["X-Send-Token"] = self._send_token
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
