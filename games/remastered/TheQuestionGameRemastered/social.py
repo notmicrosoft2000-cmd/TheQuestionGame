@@ -51,8 +51,10 @@ class SocialClient:
         self._timeout = float(timeout or config.SOCIAL_TIMEOUT)
         # Captured at construction: the right to write questions belongs to the
         # build, not to whoever reads config last.
-        self._send_token = (config.SOCIAL_SEND_TOKEN if send_token is None
-                            else send_token)
+        tok = send_token
+        if tok is None:
+            tok = getattr(config, "SOCIAL_SEND_TOKEN", "") or ""
+        self._send_token = tok
         if enabled is None:
             enabled = config.SOCIAL_ENABLED
 

@@ -78,6 +78,18 @@ _ANGRY_CLOSE_LINES = [
 
 
 class Game:
+    # Drawing target vs. the real window.
+    #
+    # `screen` is what the whole game draws into, and it is deliberately a plain
+    # off-screen surface. The actual SDL window (`_display`) is only touched at
+    # startup and by the drag-to-resize handler, and every frame is scaled onto
+    # it at the end of _draw(). Keeping the two apart is what makes resizing
+    # sane: the old code called set_mode() mid-drag to follow the window, which
+    # re-created the window and fought the cursor.
+    @property
+    def screen(self):
+        return self._frame
+
     def __init__(self):
         pygame.init()
         pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
@@ -93,18 +105,24 @@ class Game:
         try:
             if IS_ANDROID:
                 info = pygame.display.Info()
-                self.screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+                self._display = pygame.display.set_mode(
+                    (info.current_w, info.current_h), pygame.FULLSCREEN)
             else:
-                self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+                self._display = pygame.display.set_mode(
+                    (config.WINDOW_W, config.WINDOW_H), flags)
                 if not config.WINDOW_LOCKED:
                     self._apply_resize_limits()
         except Exception:
-            self.screen = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+            self._display = pygame.display.set_mode(
+                (config.WINDOW_W, config.WINDOW_H), flags)
             if not config.WINDOW_LOCKED:
                 try:
                     self._apply_resize_limits()
                 except Exception:
                     pass
+        # Everything from here on draws into this surface; _draw() scales it
+        # onto the window. See the `screen` property above for why.
+        self._frame = pygame.Surface(self._display.get_size())
         try:
             icon = pygame.image.load(config.asset_path("windowq.png")).convert_alpha()
             pygame.display.set_icon(icon)
@@ -173,15 +191,16 @@ class Game:
         self.credits_scroll_y = 0
 
         # --- online (presence + hand-written questions) ---------------------
+        # The receiver half only: the game joins the room, questions addressed
+        # to it arrive between questions, and the answers are reported back.
+        # *Writing* questions is not part of this build at all — that is the
+        # operator's separate sender app, and the relay enforces the split.
         # The client is optional and degrades to OFFLINE; nothing below assumes
-        # it exists. Composing needs a keyboard, so it is desktop-only for now.
+        # it exists.
         self.social = None
-        self.online_selected = 0
         self.social_notes = []          # [{text, at, tone}] transient notices
-        self.name_edit = None           # buffer while renaming, or None
-        self.compose = None             # composer state, or None
+        self.compat_check = None        # ONLINE compatibility probe, or None
         self._social_poll_at = 0.0
-        self._social_answer_at = 0.0
         self._social_pending_cache = None
         self._init_social()
 
@@ -241,8 +260,13 @@ class Game:
                 desktop_w, desktop_h = info.current_w, info.current_h
             except Exception:
                 desktop_w, desktop_h = config.WINDOW_MAX_W, config.WINDOW_MAX_H
-        max_w = min(config.WINDOW_MAX_W, max(config.WINDOW_MIN_W, desktop_w - 80))
-        max_h = min(config.WINDOW_MAX_H, max(config.WINDOW_MIN_H, desktop_h - 120))
+        # Leave only a sliver so the window never covers the whole desktop (the
+        # "no fullscreen" rule) while still letting the player use their screen.
+        # The old 80/120px margin was brutal on small displays: a 1024x768
+        # desktop capped at 944x648, barely above the 800x600 start, so an
+        # upward drag clamped straight back and felt like it "didn't work".
+        max_w = min(config.WINDOW_MAX_W, max(config.WINDOW_MIN_W, desktop_w - 16))
+        max_h = min(config.WINDOW_MAX_H, max(config.WINDOW_MIN_H, desktop_h - 16))
         self._max_window = (max_w, max_h)
         try:
             pygame.display.set_window_minimum_size(config.WINDOW_MIN_W,
@@ -251,15 +275,35 @@ class Game:
             pass  # older SDL/pygame: the minimum is soft, the maximum still holds
 
     def _on_resize(self, w, h):
-        """Accept a drag-to-resize, clamped between the floor and the ceiling."""
+        """Follow a drag-to-resize, clamped between the floor and the ceiling.
+
+        The window is the source of truth: SDL already resized it, so this only
+        has to match the drawing surface to it. Resizing the window itself here
+        (set_mode) is what used to break the drag — on some SDL builds it
+        re-creates the window mid-drag, fires another VIDEORESIZE, and the frame
+        ends up fighting the cursor, which reads as "it snaps back". So: if the
+        drag stayed inside the limits, just follow the window; if the user
+        dragged past a limit, ask for the clamped size exactly once.
+        """
         max_w, max_h = getattr(self, "_max_window",
                                (config.WINDOW_MAX_W, config.WINDOW_MAX_H))
-        w = max(config.WINDOW_MIN_W, min(int(w), max_w))
-        h = max(config.WINDOW_MIN_H, min(int(h), max_h))
-        self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
+        cw = max(config.WINDOW_MIN_W, min(int(w), max_w))
+        ch = max(config.WINDOW_MIN_H, min(int(h), max_h))
+        actual = self._display.get_size()
+        if (cw, ch) != actual:
+            # We were dragged out of bounds; pull the window back to the limit.
+            try:
+                flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
+                self._display = pygame.display.set_mode((cw, ch), flags)
+            except Exception:
+                pass
+            actual = self._display.get_size()
+        if actual == self._frame.get_size():
+            return
+        self._frame = pygame.Surface(actual)
         # The starfield is baked to a fixed size, so rebuild it for the new
         # frame or the dressing would only cover part of the screen.
-        self.starfield = ui.build_starfield(w, h)
+        self.starfield = ui.build_starfield(actual[0], actual[1])
 
     # --- setup helpers -------------------------------------------------------
     def _load_settings_idx(self):
@@ -547,16 +591,24 @@ class Game:
 
     # --- social (online players + hand-written questions) -------------------
     def _init_social(self):
-        """Create the presence client; never fatal, never blocks."""
+        """Create the presence client; never fatal, never blocks.
+
+        The peer id is generated **per run**, not per save file. Two windows on
+        one machine share a save (and therefore a player name), and they must
+        still be two distinct people in the room — persisting the id made each
+        copy filter the other out as "itself", so a room full of players looked
+        empty. The display name stays persisted; only the session id is fresh.
+        """
         if not config.SOCIAL_ENABLED:
             return
         try:
-            player_id = self.game_state.get("player_id")
-            if not player_id:
-                player_id = uuid.uuid4().hex
-                self.game_state["player_id"] = player_id
+            player_id = uuid.uuid4().hex
             name = self.game_state.get("player_name")
-            if not name:
+            # A name the player chose is theirs and is kept. The auto-generated
+            # guest name is NOT reused across runs: two windows on one machine
+            # would then both appear as "guest-1234", which is indistinguishable
+            # in the room and looks like a duplicate/bug.
+            if not name or str(name).startswith("guest-"):
                 name = "guest-%04d" % random.randint(0, 9999)
                 self.game_state["player_name"] = name
             persistence.save_game_state(self.game_state)
@@ -641,225 +693,32 @@ class Game:
         self._prefetch_question(self.current_step)
         return True
 
-    def _can_compose(self):
-        """Writing questions needs a keyboard AND the operator send token.
+    # --- online screen (receiver-side) --------------------------------------
+    # This build does not write questions; that is the operator's sender app.
+    # What remains here is the *player* half: the ONLINE entry is present in the
+    # menu, but entering it runs a short compatibility check and then explains
+    # that multiplayer is not part of this release yet. Questions from the
+    # operator still arrive during play (see _queue_social_question).
 
-        The public build has no token, so it is a player only: it joins the
-        room, receives and answers. Showing a composer that the relay would
-        refuse would just be a lie.
-        """
-        if IS_ANDROID or self.social is None:
-            return False
-        try:
-            return self.social.can_send()
-        except Exception:
-            return False
+    def _begin_compat_check(self):
+        """Start the fake multiplayer compatibility probe shown by ONLINE."""
+        self.compat_check = {"start": self.now, "took": random.uniform(2.2, 3.4)}
 
-    def _start_compose(self, recipient):
-        if self.social is None:
-            self._note("RELAY OFFLINE — CAN'T SEND", "bad")
-            return
-        if IS_ANDROID:
-            self._note("WRITING QUESTIONS NEEDS A KEYBOARD (DESKTOP)", "bad")
-            return
-        if not self._can_compose():
-            self._note("THIS BUILD CANNOT WRITE QUESTIONS", "bad")
-            return
-        self.compose = {
-            "to": recipient,           # {"id":..., "name":...} or {"id":"all",...}
-            "focus": 0,
-            "editing": False,
-            "buf": "",
-            "correct": 0,
-            "rows": [
-                {"key": "q", "label": "QUESTION", "value": "",
-                 "max": config.SOCIAL_Q_MAX, "kind": "text"},
-                {"key": "o0", "label": "OPTION 1", "value": "",
-                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
-                {"key": "o1", "label": "OPTION 2", "value": "",
-                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
-                {"key": "o2", "label": "OPTION 3 (OPTIONAL)", "value": "",
-                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
-                {"key": "o3", "label": "OPTION 4 (OPTIONAL)", "value": "",
-                 "max": config.SOCIAL_OPT_MAX, "kind": "text"},
-                {"key": "correct", "label": "CORRECT ANSWER", "value": "",
-                 "kind": "correct"},
-                {"key": "send", "label": "SEND", "value": "", "kind": "send"},
-                {"key": "back", "label": "BACK", "value": "", "kind": "back"},
-            ],
-        }
-        self.start_fade("COMPOSE")
-
-    def _compose_options(self):
-        comp = self.compose or {}
-        return [r["value"] for r in comp.get("rows", [])
-                if r["key"].startswith("o") and r.get("value")]
-
-    def _compose_send(self):
-        comp = self.compose or {}
-        if not self._can_compose():
-            self._note("THIS BUILD CANNOT WRITE QUESTIONS", "bad")
-            return
-        rows = comp.get("rows", [])
-        question = rows[0]["value"] if rows else ""
-        opts = self._compose_options()
-        if not question.strip():
-            self._note("THE QUESTION IS EMPTY", "bad")
-            return
-        if len(opts) < 2:
-            self._note("NEEDS AT LEAST TWO OPTIONS", "bad")
-            return
-        correct = comp.get("correct", 0)
-        if correct >= len(opts):
-            correct = 0
-        to = comp.get("to") or {"id": "all", "name": "EVERYONE"}
-        ok = False
-        if self.social is not None:
-            try:
-                ok = self.social.send_question(to.get("id", "all"), question,
-                                               opts, correct)
-            except Exception:
-                ok = False
-        if ok:
-            self._note("SENT TO " + str(to.get("name", "EVERYONE")).upper(), "good", 6.0)
-            self.compose = None
-            self.start_fade("ONLINE")
-        else:
-            self._note("SEND FAILED — RELAY OFFLINE", "bad")
-
-    def _begin_name_edit(self):
-        if IS_ANDROID:
-            self._note("RENAME ON DESKTOP", "bad")
-            return
-        self.name_edit = self._social_name()
-
-    def _commit_name_edit(self):
-        if self.name_edit is None:
-            return
-        name = self.name_edit.strip()
-        self.name_edit = None
-        if not name:
-            return
-        self.game_state["player_name"] = name[:config.SOCIAL_NAME_MAX]
-        persistence.save_game_state(self.game_state)
-        if self.social is not None:
-            try:
-                self.social.set_name(self.game_state["player_name"])
-            except Exception:
-                pass
-        self._note("YOU ARE NOW " + self.game_state["player_name"].upper(), "good")
-
-    # --- online screen ------------------------------------------------------
-    def _online_rows(self):
-        """Rows on the ONLINE screen.
-
-        An operator build can pick a recipient (and rename itself); a plain
-        player build just shows the room — there is nothing to choose.
-        """
-        rows = []
-        if self._can_compose() and self.social is not None:
-            rows.append({"kind": "all", "id": "all", "name": "EVERYONE"})
-            try:
-                for peer in self.social.others():
-                    rows.append({"kind": "peer", "id": peer.get("id", ""),
-                                 "name": str(peer.get("name", "?")).upper()})
-            except Exception:
-                pass
-        if not IS_ANDROID:
-            rows.append({"kind": "rename", "id": "", "name": "SET MY NAME"})
-        return rows
+    def _compat_phase(self):
+        """Which beat of the check we are on: 'checking' or 'unsupported'."""
+        cc = getattr(self, "compat_check", None)
+        if not cc:
+            return "unsupported"
+        if self.now - cc["start"] < cc.get("took", 2.5):
+            return "checking"
+        return "unsupported"
 
     def _online_key(self, key):
-        if self.name_edit is not None:
-            self._online_name_key(key, "")
-            return
-        rows = self._online_rows()
-        if not rows:
-            if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER):
-                audio.play_ui_select_sound()
-                self.start_fade("TITLE")
-            return
-        if key in (pygame.K_TAB, pygame.K_DOWN):
-            self.online_selected = (self.online_selected + 1) % len(rows)
-            audio.play_ui_nav_sound()
-        elif key == pygame.K_UP:
-            self.online_selected = (self.online_selected - 1) % len(rows)
-            audio.play_ui_nav_sound()
-        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            audio.play_ui_select_sound()
-            row = rows[min(self.online_selected, len(rows) - 1)]
-            if row["kind"] == "rename":
-                self._begin_name_edit()
-            else:
-                self._start_compose({"id": row["id"], "name": row["name"]})
-        elif key == pygame.K_ESCAPE:
+        """ONLINE is a dead end in this build: any exit key backs out."""
+        if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
+                   pygame.K_BACKSPACE):
             audio.play_ui_select_sound()
             self.start_fade("TITLE")
-
-    def _online_name_key(self, key, unicode):
-        """Text entry for the rename buffer (main._handle_key hands us both)."""
-        if self.name_edit is None:
-            return False
-        if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            self._commit_name_edit()
-        elif key == pygame.K_ESCAPE:
-            self.name_edit = None
-        elif key == pygame.K_BACKSPACE:
-            self.name_edit = self.name_edit[:-1]
-        elif unicode and len(self.name_edit) < config.SOCIAL_NAME_MAX:
-            if unicode.isprintable() and unicode not in "\t\r\n":
-                self.name_edit += unicode
-        return True
-
-    # --- composer -----------------------------------------------------------
-    def _compose_key(self, key, unicode=""):
-        comp = self.compose
-        if not comp:
-            self.start_fade("ONLINE")
-            return
-        rows = comp["rows"]
-        focus = comp["focus"]
-        if comp["editing"]:
-            if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
-                rows[focus]["value"] = comp["buf"][:rows[focus]["max"]]
-                comp["editing"] = False
-                pygame.key.set_repeat(0)
-            elif key == pygame.K_ESCAPE:
-                comp["editing"] = False
-                pygame.key.set_repeat(0)
-            elif key == pygame.K_BACKSPACE:
-                comp["buf"] = comp["buf"][:-1]
-            elif unicode and unicode.isprintable() and unicode not in "\t\r\n":
-                if len(comp["buf"]) < rows[focus]["max"]:
-                    comp["buf"] += unicode
-            return
-
-        if key in (pygame.K_TAB, pygame.K_DOWN):
-            comp["focus"] = (focus + 1) % len(rows)
-            audio.play_ui_nav_sound()
-        elif key == pygame.K_UP:
-            comp["focus"] = (focus - 1) % len(rows)
-            audio.play_ui_nav_sound()
-        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-            audio.play_ui_select_sound()
-            row = rows[focus]
-            if row["kind"] == "text":
-                comp["editing"] = True
-                comp["buf"] = row["value"]
-                pygame.key.set_repeat(400, 40)
-            elif row["kind"] == "correct":
-                count = max(2, len(self._compose_options()))
-                comp["correct"] = (comp["correct"] + 1) % count
-            elif row["kind"] == "send":
-                self._compose_send()
-            elif row["kind"] == "back":
-                pygame.key.set_repeat(0)
-                self.compose = None
-                self.start_fade("ONLINE")
-        elif key == pygame.K_ESCAPE:
-            pygame.key.set_repeat(0)
-            self.compose = None
-            self.start_fade("ONLINE")
 
     def _report_social_answer(self, item, answer):
         """Tell the author what we picked, and react to it ourselves."""
@@ -915,14 +774,9 @@ class Game:
     def _on_state_enter(self):
         if self.state == "PLAYING":
             self._begin_session()
-        if self.state != "ONLINE":
-            self.name_edit = None
-        if self.state != "COMPOSE":
-            self.compose = None
-            try:
-                pygame.key.set_repeat(0)
-            except Exception:
-                pass
+        if self.state == "ONLINE":
+            # Every visit re-runs the compatibility check from the top.
+            self._begin_compat_check()
         self._apply_stage_music()
 
     def _apply_stage_music(self):
@@ -933,7 +787,7 @@ class Game:
         """
         if not config.MUSIC_ENABLED:
             return
-        menu_states = ("SETTINGS", "ABOUT", "HELP", "LOGS", "ONLINE", "COMPOSE")
+        menu_states = ("SETTINGS", "ABOUT", "HELP", "LOGS", "ONLINE")
         if not config.MUSIC_MENUS_ONLY:
             menu_states = menu_states + ("TITLE", "PLAYING")
         audio.set_sfx_duck(1.0)
@@ -1074,12 +928,7 @@ class Game:
         if self.state == "TITLE":
             self._title_key(key)
         elif self.state == "ONLINE":
-            if self.name_edit is not None:
-                self._online_name_key(key, unicode)
-            else:
-                self._online_key(key)
-        elif self.state == "COMPOSE":
-            self._compose_key(key, unicode)
+            self._online_key(key)
         elif self.state == "SETTINGS":
             self._settings_key(key)
         elif self.state == "ABOUT":
@@ -1116,7 +965,6 @@ class Game:
             elif option == "HELP":
                 self.start_fade("HELP")
             elif option == "ONLINE":
-                self.online_selected = 0
                 self.start_fade("ONLINE")
             elif option == "ABOUT":
                 self.about_selected = 0
@@ -1257,19 +1105,10 @@ class Game:
         elif kind == "back":
             self._handle_key(pygame.K_ESCAPE)
         elif kind == "online":
-            if self.name_edit is not None:
-                self._commit_name_edit()
-                return
-            rows = self._online_rows()
-            if 0 <= idx < len(rows):
-                self.online_selected = idx
-                self._handle_key(pygame.K_RETURN)
-        elif kind == "compose":
-            comp = self.compose or {}
-            rows = comp.get("rows", [])
-            if 0 <= idx < len(rows):
-                comp["focus"] = idx
-                self._handle_key(pygame.K_RETURN)
+            # The compat screen has nothing to select; a tap just backs out
+            # once the check has finished telling you it is unsupported.
+            if self._compat_phase() == "unsupported":
+                self._handle_key(pygame.K_ESCAPE)
 
     # --- update ---------------------------------------------------------------
     def _update(self):
@@ -1504,8 +1343,6 @@ class Game:
             self._draw_title(w, h)
         elif self.state == "ONLINE":
             self._draw_online(w, h)
-        elif self.state == "COMPOSE":
-            self._draw_compose(w, h)
         elif self.state == "SETTINGS":
             self._draw_settings(w, h)
         elif self.state == "ABOUT":
@@ -1539,6 +1376,14 @@ class Game:
         if config.CRT_ENABLED and vhs > 0:
             ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs)
 
+        # Present: the frame is the drawing target, the window is the real
+        # surface. They are normally identical in size, so this is a straight
+        # copy; the scale path only runs if the two ever drift apart.
+        if self._display.get_size() == self._frame.get_size():
+            self._display.blit(self._frame, (0, 0))
+        else:
+            pygame.transform.smoothscale(self._frame, self._display.get_size(),
+                                         self._display)
         pygame.display.flip()
 
     def _draw_loading(self, w, h):
@@ -1646,143 +1491,72 @@ class Game:
                              if self.now - n["at"] < n.get("_ttl", 6.0) + 2.0]
 
     def _draw_online(self, w, h):
+        """The ONLINE entry: a compatibility check that ends in "not yet".
+
+        This release is single-player plus questions *received* from the
+        operator — writing them lives in a separate sender app. Rather than
+        show a room this build cannot take part in, ONLINE runs a short check
+        and says so plainly, with a hint that multiplayer is coming.
+        """
         font_large, font_med, font_small = self._fonts()
         self._draw_heading("ONLINE", w, h, font_large)
-        status = "disabled"
-        if self.social is not None:
-            try:
-                status = self.social.status()
-            except Exception:
-                status = "offline"
+        phase = self._compat_phase()
+        cx = int(w * 0.08)
+        base = int(h * 0.34)
 
-        # Everyone in the room, us included — that is the "who is online" list,
-        # and it is shown whatever this build is allowed to do.
-        everyone = []
-        if self.social is not None:
-            try:
-                everyone = self.social.online()
-            except Exception:
-                everyone = []
-        others = [p for p in everyone if p.get("id") != getattr(self.social, "player_id", None)]
+        if phase == "checking":
+            t = self.now - (self.compat_check or {}).get("start", self.now)
+            dots = "." * (1 + int(t * 3) % 3)
+            line = "CHECKING MULTIPLAYER COMPATIBILITY" + dots
+            self.screen.blit(font_med.render(line, True, (200, 180, 90)), (cx, base))
+            self._draw_compat_spinner(w, h, t)
+            self.screen.blit(font_small.render(
+                "PLEASE WAIT", True, (120, 120, 120)), (cx, base + font_med.get_linesize() + 12))
+            # Taps are inert while the check runs.
+            self._touch_zone(0, int(h * 0.2), w, int(h * 0.7), "online", 0)
+            return
 
-        if status == "online":
-            count = len(everyone)
-            line = "RELAY: ONLINE — %d PLAYER%s HERE" % (
-                count, "" if count == 1 else "S")
-            color = (90, 200, 90)
-        elif status == "connecting":
-            line, color = "RELAY: CONNECTING...", (200, 180, 90)
-        else:
-            line, color = "RELAY: OFFLINE — NOBODY CAN REACH YOU", (200, 80, 80)
-        self.screen.blit(font_med.render(line, True, color), (int(w * 0.08), int(h * 0.18)))
+        self.screen.blit(font_med.render(
+            "MULTIPLAYER IS NOT SUPPORTED", True, (200, 80, 80)), (cx, base))
+        self.screen.blit(font_small.render(
+            "THIS DEVICE / VERSION CANNOT JOIN A ROOM.", True, (170, 170, 170)),
+            (cx, base + font_med.get_linesize() + 10))
+        self.screen.blit(font_small.render(
+            "IT MIGHT BE A FEATURE SOON.", True, (170, 170, 170)),
+            (cx, base + font_med.get_linesize() + 10 + font_small.get_linesize()))
 
-        you = "YOU: %s" % self._social_name().upper()
-        if self.name_edit is not None:
-            you = "YOU: %s_" % self.name_edit.upper()
-        self.screen.blit(font_small.render(you, True, config.COLOR_WHITE),
-                         (int(w * 0.08), int(h * 0.24)))
-
+        # It still tells you if a question is already waiting, so a player is
+        # not left thinking the whole thing is broken.
         waiting = 0
         if self.social is not None:
             try:
                 waiting = self.social.pending_questions()
             except Exception:
                 waiting = 0
-
-        # Who is here. Names only — presence never carries anything else.
-        list_y = int(h * 0.29)
-        self.screen.blit(font_small.render("IN THE ROOM", True, config.COLOR_DIM_RED),
-                         (int(w * 0.08), list_y))
-        list_y += font_small.get_linesize() + 4
-        if others:
-            for peer in others:
-                self.screen.blit(font_small.render(
-                    "  " + str(peer.get("name", "?")).upper(), True, (150, 150, 150)),
-                    (int(w * 0.08), list_y))
-                list_y += font_small.get_linesize()
-        else:
-            self.screen.blit(font_small.render("  NOBODY ELSE YET", True, (110, 110, 110)),
-                             (int(w * 0.08), list_y))
-            list_y += font_small.get_linesize()
         if waiting:
-            list_y += 4
+            y = base + font_med.get_linesize() + 10 + font_small.get_linesize() * 3
             self.screen.blit(font_small.render(
-                "%d QUESTION%s WAITING FOR YOUR NEXT TURN" % (
+                "%d QUESTION%s STILL REACH YOU DURING A RUN" % (
                     waiting, "" if waiting == 1 else "S"),
-                True, (200, 180, 90)), (int(w * 0.08), list_y))
-            list_y += font_small.get_linesize()
+                True, (90, 200, 90)), (cx, y))
 
-        rows = self._online_rows()
-        # A player build has nothing to choose, so only the room + rename show.
-        can_compose = self._can_compose()
-        start_y = max(int(h * 0.52), list_y + 16)
-        if can_compose:
-            self.screen.blit(font_small.render("SEND A QUESTION TO", True, config.COLOR_DIM_RED),
-                             (int(w * 0.08), start_y - font_small.get_linesize() - 4))
+        # One big back zone: there is nothing to choose here.
+        self._touch_zone(0, int(h * 0.2), w, int(h * 0.7), "online", 0)
+        self.screen.blit(font_small.render("[ESC] BACK", True, (80, 80, 80)),
+                         (cx, h - 50))
 
-        pitch = font_med.get_linesize() + 10
-        for i, row in enumerate(rows):
-            sel = (i == min(self.online_selected, len(rows) - 1))
-            color = config.COLOR_WHITE if sel else (110, 110, 110)
-            prefix = "> " if sel else "  "
-            label = row["name"]
-            if row["kind"] in ("peer", "all"):
-                label = "SEND TO  " + label
-            surf = font_med.render(prefix + label, True, color)
-            y = start_y + i * pitch
-            self.screen.blit(surf, (int(w * 0.08), y))
-            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.7) + 16, pitch - 2, "online", i)
+    def _draw_compat_spinner(self, w, h, t):
+        """A tiny rotating arc so the check looks like it is doing something."""
+        cx, cy = int(w * 0.5), int(h * 0.58)
+        r = 22
+        start = (t * 4.0) % (2 * math.pi)
+        try:
+            rect = pygame.Rect(cx - r, cy - r, r * 2, r * 2)
+            pygame.draw.arc(self.screen, (200, 180, 90), rect,
+                            start, start + 4.2, 3)
+        except Exception:
+            pass
 
-        if status == "online" and not can_compose:
-            self.screen.blit(font_small.render(
-                "THIS BUILD CANNOT WRITE QUESTIONS — YOU PLAY THEM.",
-                True, (110, 110, 110)), (int(w * 0.08), h - 72))
-
-        hint = "[ENTER] CHOOSE    [TAB] MOVE    [ESC] BACK" if can_compose else "[ESC] BACK"
-        self.screen.blit(font_small.render(hint, True, (80, 80, 80)), (int(w * 0.08), h - 50))
-
-
-    def _draw_compose(self, w, h):
-        font_large, font_med, font_small = self._fonts()
-        comp = self.compose or {}
-        to = (comp.get("to") or {}).get("name", "EVERYONE")
-        self._draw_heading("SEND A QUESTION", w, h, font_large)
-        self.screen.blit(font_med.render("TO: " + str(to).upper(), True, config.COLOR_WHITE),
-                         (int(w * 0.08), int(h * 0.19)))
-
-        rows = comp.get("rows", [])
-        opts = [r["value"] for r in rows if r["key"].startswith("o") and r.get("value")]
-        correct = comp.get("correct", 0)
-        if correct >= max(1, len(opts)):
-            correct = 0
-
-        start_y = int(h * 0.26)
-        pitch = font_small.get_linesize() + 8
-        for i, row in enumerate(rows):
-            sel = (i == comp.get("focus", 0))
-            color = config.COLOR_WHITE if sel else (110, 110, 110)
-            prefix = "> " if sel else "  "
-            if row["kind"] == "text":
-                value = comp["buf"] if (comp.get("editing") and sel) else row["value"]
-                if comp.get("editing") and sel:
-                    value += "_"
-                if not value:
-                    value = "..."
-                label = "%s%s: %s" % (prefix, row["label"], value)
-            elif row["kind"] == "correct":
-                marker = ""
-                if 0 <= correct < len(opts):
-                    marker = "  (%s)" % opts[correct]
-                label = "%s%s: OPTION %d%s" % (prefix, row["label"], correct + 1, marker)
-            else:
-                label = prefix + row["label"]
-            surf = font_small.render(label, True, color)
-            y = start_y + i * pitch
-            self.screen.blit(surf, (int(w * 0.08), y))
-            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.75) + 16, pitch - 2, "compose", i)
-
-        hint = "[ENTER] EDIT/CHOOSE   [TAB] NEXT   [ESC] BACK"
-        self.screen.blit(font_small.render(hint, True, (80, 80, 80)), (int(w * 0.08), h - 50))
 
     def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
         """Section titles get the website's glow + red/cyan glitch split."""

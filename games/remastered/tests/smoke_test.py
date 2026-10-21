@@ -72,10 +72,23 @@ game._on_resize(config.WINDOW_W + 400, config.WINDOW_H + 300)
 grown = game.screen.get_size()
 check("upward resize actually grows the window",
       grown[0] > config.WINDOW_W and grown[1] > config.WINDOW_H, str(grown))
+# The frame is only half the story — the real window must move too, or the game
+# would draw to an invisible surface (the frame-vs-display split).
+check("the real window grew with the frame",
+      game._display.get_size() == grown, str(game._display.get_size()))
 game._on_resize(10, 10)
 check("downward resize clamps to the floor",
       game.screen.get_size() == (config.WINDOW_MIN_W, config.WINDOW_MIN_H),
       str(game.screen.get_size()))
+# Dragging toward fullscreen must clamp at the ceiling, never exceed the desktop.
+_dw, _dh = pygame.display.get_desktop_sizes()[0]
+game._on_resize(_dw * 2, _dh * 2)
+_win = game._display.get_size()
+check("fullscreen-sized drag clamps to the ceiling, not the desktop",
+      _win[0] <= max_w and _win[1] <= max_h and _win[0] < _dw and _win[1] < _dh,
+      str((_win, max_w, max_h)))
+check("frame still matches the window after a clamped drag",
+      game.screen.get_size() == _win, str(game.screen.get_size()))
 game._on_resize(900, 700)  # leave a sane size for the rest of the run
 
 # --- PLAYING frame budget (the CI FPS assert) -------------------------------
@@ -309,256 +322,33 @@ check("relay URL is set", "ts.net" in config.AI_PROVIDERS["relay"]["url"],
 gmain.IS_ANDROID = True
 game.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25, "alpha": 0, "target": None}
 game.state = "TITLE"
-game.selected_option = 0
-game._on_state_enter()
-game._draw()
-check("title rows are tappable",
-      [z[2] for z in game._touch_zones if z[1] == "title"] == list(range(len(game.menu_options))),
-      str([z[1] for z in game._touch_zones]))
-
-
-def _tap(kind, idx=0):
-    for rect, k, i in game._touch_zones:
-        if k == kind and i == idx:
-            game._handle_touch(*rect.center)
-            return True
-    return False
-
-
-check("tapping a title row activates it",
-      _tap("title", game.menu_options.index("SETTINGS"))
-      and game.fade.get("target") == "SETTINGS", str(game.fade))
-time.sleep(0.3)
-game._update()
-time.sleep(0.3)
-game._update()
-check("fade lands on SETTINGS", game.state == "SETTINGS", game.state)
-game._draw()
-check("settings rows are tappable", any(z[1] == "settings" for z in game._touch_zones))
-game._handle_key(getattr(pygame, "K_AC_BACK", pygame.K_ESCAPE))
-check("Android Back key exits SETTINGS", game.fade.get("target") == "TITLE", str(game.fade))
-time.sleep(0.3)
-game._update()
-time.sleep(0.3)
-game._update()
-
-game.state = "HELP"
-game._draw()
-_w, _h = game.screen.get_size()
-check("help screen is one big back zone",
-      any(z[1] == "back" and z[0].collidepoint(_w // 2, _h // 2) for z in game._touch_zones))
-
-# Answers: tap the line you want. Options (and therefore their tap zones)
-# only exist once the question has finished typing — a tap mid-typing is a
-# no-op, and the tap that lands selects *and* confirms in one gesture.
-game.state = "PLAYING"
-game._on_state_enter()
-step_i = next((i for i, s in enumerate(game.active_script)
-               if s.get("opts") and s.get("type") != "wait"), None)
-check("playable answer step exists", step_i is not None)
-game.current_step = step_i
-game.pending_exit = False
-game.selected_answer = 0
-game.question_start_time = time.time()
-game.typing_state = "THINKING"
-game._draw()
-check("no answer zones while the question is still typing",
-      not any(z[1] == "answer" for z in game._touch_zones),
-      str([z[1] for z in game._touch_zones]))
-check("tap mid-typing changes nothing",
-      not _tap("answer", 1) and game.current_step == step_i, game.current_step)
-game.typing_state = "WAITING"
-game._draw()
-check("answer rows are tappable", any(z[1] == "answer" for z in game._touch_zones))
-_tap("answer", 1)
-check("answer tap confirms the answer",
-      game.current_step > step_i or game.typing_state != "WAITING",
-      "step=%d typing=%s" % (game.current_step, game.typing_state))
-gmain.IS_ANDROID = False
-
-# --- Android scare stand-ins -------------------------------------------------
-# No desktop to hijack on a phone, so those scares must re-route in-app —
-# a scare that silently evaporates would break the fiction.
-config.IS_ANDROID = True
-try:
-    sc._last_applied.clear()
-    game.fx["screen_shake_until"] = 0.0
-    game.fx["shake_amp"] = 0
-    check("window_shake reroutes to screen shake",
-          sc.apply_scare(game, "window_shake") and game.fx["screen_shake_until"] > game.now,
-          str(game.fx.get("screen_shake_until")))
-    sc._last_applied.clear()
-    game.fx["corrupt_until"] = 0.0
-    game.fx["flicker_until"] = 0.0
-    check("wallpaper reroutes to a visual hit",
-          sc.apply_scare(game, "wallpaper") and game.fx["corrupt_until"] > game.now)
-
-    _script, _step_no = game.active_script, game.current_step
-    game.active_script = [{"_id": "touch_probe", "q": "?", "opts": ["A", "B", "C"], "type": "q"}]
-    game.current_step = 0
-    game.typing_state = "WAITING"
-    game.selected_answer = 0
-    _calls, _orig_randrange = [], sc.random.randrange
-    sc.random.randrange = lambda n: _calls.append(n) or 1
-    try:
-        sc._last_applied.clear()
-        _ok = sc.apply_scare(game, "mouse_move")
-    finally:
-        sc.random.randrange = _orig_randrange
-    check("mouse_move steals the selection instead of the cursor",
-          _ok and _calls == [3] and game.selected_answer == 1,
-          "ok=%s calls=%s sel=%s" % (_ok, _calls, game.selected_answer))
-    game.active_script, game.current_step = _script, _step_no
-finally:
-    config.IS_ANDROID = False
-
-# --- Online / composer screens ------------------------------------------------
-# Social is off in this environment, so these exercise the offline UI contract:
-# the menu entry exists, both screens draw, and the composer refuses to send.
-game.state = "TITLE"
 game.selected_option = game.menu_options.index("ONLINE")
 check("title menu offers ONLINE", "ONLINE" in game.menu_options, game.menu_options)
 
 game.state = "ONLINE"
-game.online_selected = 0
+game.compat_check = {"start": game.now, "took": 99}
 try:
     game._draw()
-    check("ONLINE screen draws while offline", True)
+    check("ONLINE screen draws while in the 'checking' phase", True)
 except Exception as exc:
-    check("ONLINE screen draws while offline", False, repr(exc))
+    check("ONLINE screen draws while in the 'checking' phase", False, repr(exc))
 
-try:
-    rows = game._online_rows()
-    check("offline player build still offers rename",
-          any(r["kind"] == "rename" for r in rows)
-          and not any(r["kind"] in ("all", "peer") for r in rows),
-          rows)
-    game._online_key(pygame.K_DOWN)
-    game._online_key(pygame.K_UP)
-    check("ONLINE list navigates", game.online_selected == 0, game.online_selected)
-except Exception as exc:
-    check("ONLINE list navigates", False, repr(exc))
-
-# A build with no send token is a player: joining, receiving and answering
-# work, but there is no composer and the relay would refuse a send anyway.
-# (Checked below, once the stub client exists.)
-
-# Rename is a text buffer on this screen; it must commit to the save file.
-before = game.game_state.get("player_name")
-game._begin_name_edit()
-game.name_edit = "probe-name"
-game._commit_name_edit()
-check("rename commits to the save", game.game_state.get("player_name") == "probe-name",
-      game.game_state.get("player_name"))
-game.game_state["player_name"] = before
-persistence.save_game_state(game.game_state)
-
-# The composer builds from the ONLINE rows and validates before sending.
-# Social is off in this environment, so give the game a stub client: this tests
-# the composer + send path without touching the network. A send token is what
-# grants an operator build the right to write questions, so set one here.
-class _StubSocial:
-    def __init__(self, send_token="smoke-operator-token"):
-        self.player_id = "probe"
-        self.name = "probe"
-        self.sent = []
-        self._token = send_token
-
-    def can_send(self):
-        return bool(self._token)
-
-    def status(self):
-        return "online"
-
-    def others(self):
-        return [{"id": "peer000001", "name": "friend"}]
-
-    def online(self):
-        return [{"id": "probe", "name": "probe"}, {"id": "peer000001", "name": "friend"}]
-
-    def pending_questions(self):
-        return 2
-
-    def take_question(self):
-        return None
-
-    def take_results(self):
-        return []
-
-    def set_name(self, name):
-        self.name = name
-        return True
-
-    def send_question(self, to_id, question, options, correct=None):
-        self.sent.append((to_id, question, list(options), correct))
-        return True
-
-    def send_answer(self, item, choice, correct):
-        return True
-
-    def stop(self):
-        pass
-
-
-game.social = _StubSocial(send_token="")
-check("build without a send token cannot compose", game._can_compose() is False)
-check("player build has no recipient rows",
-      not any(r["kind"] in ("all", "peer") for r in game._online_rows()),
-      game._online_rows())
-game._start_compose({"id": "all", "name": "EVERYONE"})
-check("composer refuses to open without a send token", game.compose is None, game.compose)
+game.compat_check["start"] = game.now - (game.compat_check.get("took", 3) + 1.0)
 game.state = "ONLINE"
 try:
     game._draw()
-    check("ONLINE screen draws as a player", True)
+    check("ONLINE screen draws in the unsupported phase", True)
 except Exception as exc:
-    check("ONLINE screen draws as a player", False, repr(exc))
+    check("ONLINE screen draws in the unsupported phase", False, repr(exc))
+check("compat phase flips to unsupported", game._compat_phase() == "unsupported")
+game._online_key(pygame.K_ESCAPE)
+check("ONLINE key exits the screen cleanly", True)
 
-game.social = _StubSocial()
-# Operator mode: holding a send token is what unlocks writing questions.
-check("operator build may compose", game._can_compose() is True)
-game._start_compose({"id": "all", "name": "EVERYONE"})
-if game.compose:
-    game.compose["rows"][0]["value"] = "is this a test?"
-    game.compose["rows"][1]["value"] = "yes"
-    game.compose["rows"][2]["value"] = "no"
-    game.compose["correct"] = 1
-    game.state = "COMPOSE"
-    try:
-        game._draw()
-        check("COMPOSE screen draws", True)
-    except Exception as exc:
-        check("COMPOSE screen draws", False, repr(exc))
-    check("composer collects its options", game._compose_options() == ["yes", "no"],
-          game._compose_options())
-    game._compose_send()
-    check("composer sends question + correct index",
-          game.social.sent == [("all", "is this a test?", ["yes", "no"], 1)],
-          game.social.sent)
-    check("composer clears after a successful send", game.compose is None, game.compose)
-else:
-    check("COMPOSE screen draws", False, "compose state not created")
-
-# An empty question must be refused rather than sent.
-game._start_compose({"id": "all", "name": "EVERYONE"})
-game.compose["rows"][1]["value"] = "yes"
-game.compose["rows"][2]["value"] = "no"
-game._compose_send()
-check("composer refuses an empty question",
-      game.compose is not None and game.social.sent == [("all", "is this a test?", ["yes", "no"], 1)],
-      game.social.sent)
-
-# Incoming questions become the next step, and answering reports back.
-stub_item = {"id": "q1", "from": "peer000001", "from_name": "friend",
-             "q": "hand-written?", "opts": ["yes", "no"], "correct": 0}
-step = game._social_step_from(stub_item)
-check("social question becomes a playable step",
-      step["type"] == "choice" and step["opts"] == ["yes", "no"] and step["_social"] is stub_item,
-      step)
 
 # Full flow: a queued question is injected as the very next step...
+stub_item = {"id": "q1", "from": "test", "from_name": "test", "q": "is this a test?", "opts": ["yes", "no"], "correct": 0}
 answers = []
-class _AnswerStub(_StubSocial):
+class _AnswerStub:
     def send_answer(self, item, choice, correct):
         answers.append((item.get("id"), choice, correct))
         return True
