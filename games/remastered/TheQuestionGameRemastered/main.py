@@ -204,7 +204,7 @@ class Game:
         # it exists.
         self.social = None
         self.social_notes = []          # [{text, at, tone}] transient notices
-        self.compat_check = None        # ONLINE compatibility probe, or None
+        self.online_edit = None         # {"text": ...} while renaming yourself
         self._social_poll_at = 0.0
         self._social_pending_cache = None
         self._init_social()
@@ -796,30 +796,64 @@ class Game:
 
     # --- online screen (receiver-side) --------------------------------------
     # This build does not write questions; that is the operator's sender app.
-    # What remains here is the *player* half: the ONLINE entry is present in the
-    # menu, but entering it runs a short compatibility check and then explains
-    # that multiplayer is not part of this release yet. Questions from the
-    # operator still arrive during play (see _queue_social_question).
+    # What remains here is the *player* half: the ONLINE entry shows the room
+    # this session has joined — the relay's state, who else is playing, and
+    # the name the other players see. Questions from the operator still arrive
+    # during play (see _queue_social_question).
 
-    def _begin_compat_check(self):
-        """Start the fake multiplayer compatibility probe shown by ONLINE."""
-        self.compat_check = {"start": self.now, "took": random.uniform(2.2, 3.4)}
+    def _online_status(self):
+        """(status, others) from the presence client; never fatal."""
+        if self.social is None:
+            return "disabled", []
+        try:
+            status = self.social.status()
+        except Exception:
+            status = "offline"
+        try:
+            others = self.social.others()
+        except Exception:
+            others = []
+        return status, others
 
-    def _compat_phase(self):
-        """Which beat of the check we are on: 'checking' or 'unsupported'."""
-        cc = getattr(self, "compat_check", None)
-        if not cc:
-            return "unsupported"
-        if self.now - cc["start"] < cc.get("took", 2.5):
-            return "checking"
-        return "unsupported"
+    def _commit_online_name(self, text):
+        """Take a new display name into the room and into the save file."""
+        name = str(text or "").strip()[:config.SOCIAL_NAME_MAX]
+        if not name:
+            return
+        if self.social is not None:
+            try:
+                self.social.set_name(name)
+            except Exception:
+                pass
+        self.game_state["player_name"] = name
+        try:
+            persistence.save_game_state(self.game_state)
+        except Exception:
+            pass
+        self._note("THE ROOM NOW CALLS YOU " + name.upper(), "good", 6.0)
 
-    def _online_key(self, key):
-        """ONLINE is a dead end in this build: any exit key backs out."""
+    def _online_key(self, key, unicode=""):
+        """The ONLINE screen: the room, and your name in it."""
+        if self.online_edit is not None:
+            text = self.online_edit
+            if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self._commit_online_name(text["text"])
+                self.online_edit = None
+            elif key == pygame.K_ESCAPE:
+                self.online_edit = None
+            elif key == pygame.K_BACKSPACE:
+                text["text"] = text["text"][:-1]
+            elif unicode and unicode.isprintable() and unicode not in "\t\r\n":
+                if len(text["text"]) < config.SOCIAL_NAME_MAX:
+                    text["text"] += unicode
+            return
         if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
                    pygame.K_BACKSPACE):
             audio.play_ui_select_sound()
             self.start_fade("TITLE")
+        elif key in (pygame.K_n, pygame.K_N):
+            audio.play_ui_select_sound()
+            self.online_edit = {"text": self._social_name()}
 
     def _report_social_answer(self, item, answer):
         """Tell the author what we picked, and react to it ourselves."""
@@ -876,8 +910,9 @@ class Game:
         if self.state == "PLAYING":
             self._begin_session()
         if self.state == "ONLINE":
-            # Every visit re-runs the compatibility check from the top.
-            self._begin_compat_check()
+            # The room is joined by the presence client; there is no separate
+            # compatibility probe any more. Any half-finished rename is dropped.
+            self.online_edit = None
         self._apply_stage_music()
 
     def _apply_stage_music(self):
@@ -1029,7 +1064,7 @@ class Game:
         if self.state == "TITLE":
             self._title_key(key)
         elif self.state == "ONLINE":
-            self._online_key(key)
+            self._online_key(key, unicode)
         elif self.state == "SETTINGS":
             self._settings_key(key)
         elif self.state == "ABOUT":
@@ -1606,42 +1641,65 @@ class Game:
                              if self.now - n["at"] < n.get("_ttl", 6.0) + 2.0]
 
     def _draw_online(self, w, h):
-        """The ONLINE entry: a compatibility check that ends in "not yet".
+        """The ONLINE entry: the room this session has joined.
 
         This release is single-player plus questions *received* from the
-        operator — writing them lives in a separate sender app. Rather than
-        show a room this build cannot take part in, ONLINE runs a short check
-        and says so plainly, with a hint that multiplayer is coming.
+        operator — writing them lives in a separate sender app. So this screen
+        shows the room from the receiving side: the relay's state, who else is
+        playing, and the name the others see you under.
         """
         font_large, font_med, font_small = self._fonts()
         self._draw_heading("ONLINE", w, h, font_large)
-        phase = self._compat_phase()
         cx = int(w * 0.08)
-        base = int(h * 0.34)
+        y = int(h * 0.26)
 
-        if phase == "checking":
-            t = self.now - (self.compat_check or {}).get("start", self.now)
-            dots = "." * (1 + int(t * 3) % 3)
-            line = "CHECKING MULTIPLAYER COMPATIBILITY" + dots
-            self.screen.blit(font_med.render(line, True, (200, 180, 90)), (cx, base))
-            self._draw_compat_spinner(w, h, t)
+        status, others = self._online_status()
+        if status == "online":
+            relay_txt, relay_col = "RELAY: ONLINE", (90, 200, 90)
+        elif status == "connecting":
+            relay_txt, relay_col = "RELAY: CONNECTING...", (200, 180, 90)
+        elif status == "disabled":
+            relay_txt, relay_col = "MULTIPLAYER IS OFF", (170, 170, 170)
+        else:
+            relay_txt, relay_col = "RELAY: OFFLINE", (200, 80, 80)
+        self.screen.blit(font_med.render(relay_txt, True, relay_col), (cx, y))
+        y += font_med.get_linesize() + 14
+
+        # The name the room knows you by.
+        if self.online_edit is not None:
+            label = "YOUR NAME"
+            value = self.online_edit["text"] + "_"
+            hint = "[ENTER] SAVE   [ESC] CANCEL"
+        else:
+            label = "YOU"
+            value = str(self._social_name()).upper()
+            hint = "[N] RENAME"
+        self.screen.blit(font_small.render(label, True, (110, 110, 110)),
+                         (cx, y + 3))
+        self.screen.blit(font_med.render(value, True, (205, 205, 205)),
+                         (cx + 120, y))
+        self.screen.blit(font_small.render(hint, True, (80, 80, 80)),
+                         (cx + 120 + font_med.size(value)[0] + 18, y + 4))
+        y += font_med.get_linesize() + 16
+
+        # Who else is in the room.
+        self.screen.blit(font_small.render(
+            "IN THE ROOM NOW (%d)" % len(others), True, (100, 40, 40)), (cx, y))
+        y += font_small.get_linesize() + 6
+        if not others:
             self.screen.blit(font_small.render(
-                "PLEASE WAIT", True, (120, 120, 120)), (cx, base + font_med.get_linesize() + 12))
-            # Taps are inert while the check runs.
-            self._touch_zone(0, int(h * 0.2), w, int(h * 0.7), "online", 0)
-            return
+                "NOBODY ELSE IS PLAYING RIGHT NOW", True, (80, 80, 80)), (cx, y))
+            y += font_small.get_linesize() + 8
+        else:
+            for peer in others[:8]:
+                pname = str(peer.get("name", "?")).upper()
+                plat = str(peer.get("platform", "")).upper()
+                self.screen.blit(font_small.render(
+                    "%s   (%s)" % (pname, plat), True, (170, 170, 170)), (cx, y))
+                y += font_small.get_linesize() + 4
+            y += 6
 
-        self.screen.blit(font_med.render(
-            "MULTIPLAYER IS NOT SUPPORTED", True, (200, 80, 80)), (cx, base))
-        self.screen.blit(font_small.render(
-            "THIS DEVICE / VERSION CANNOT JOIN A ROOM.", True, (170, 170, 170)),
-            (cx, base + font_med.get_linesize() + 10))
-        self.screen.blit(font_small.render(
-            "IT MIGHT BE A FEATURE SOON.", True, (170, 170, 170)),
-            (cx, base + font_med.get_linesize() + 10 + font_small.get_linesize()))
-
-        # It still tells you if a question is already waiting, so a player is
-        # not left thinking the whole thing is broken.
+        # A question may already be waiting for this session.
         waiting = 0
         if self.social is not None:
             try:
@@ -1649,29 +1707,27 @@ class Game:
             except Exception:
                 waiting = 0
         if waiting:
-            y = base + font_med.get_linesize() + 10 + font_small.get_linesize() * 3
             self.screen.blit(font_small.render(
                 "%d QUESTION%s STILL REACH YOU DURING A RUN" % (
                     waiting, "" if waiting == 1 else "S"),
                 True, (90, 200, 90)), (cx, y))
+            y += font_small.get_linesize() + 8
+
+        # What this half of the feature is.
+        self.screen.blit(font_small.render(
+            "THE ROOM IS OPEN. YOU CAN SEE WHO IS IN IT,", True, (140, 140, 140)),
+            (cx, y))
+        self.screen.blit(font_small.render(
+            "AND YOU CAN BE FOUND IN IT. WRITING TO IT IS NOT", True, (140, 140, 140)),
+            (cx, y + font_small.get_linesize()))
+        self.screen.blit(font_small.render(
+            "YOURS TO DO — THAT IS THE OPERATOR'S HALF.", True, (140, 140, 140)),
+            (cx, y + font_small.get_linesize() * 2))
 
         # One big back zone: there is nothing to choose here.
         self._touch_zone(0, int(h * 0.2), w, int(h * 0.7), "online", 0)
         self.screen.blit(font_small.render("[ESC] BACK", True, (80, 80, 80)),
                          (cx, h - 50))
-
-    def _draw_compat_spinner(self, w, h, t):
-        """A tiny rotating arc so the check looks like it is doing something."""
-        cx, cy = int(w * 0.5), int(h * 0.58)
-        r = 22
-        start = (t * 4.0) % (2 * math.pi)
-        try:
-            rect = pygame.Rect(cx - r, cy - r, r * 2, r * 2)
-            pygame.draw.arc(self.screen, (200, 180, 90), rect,
-                            start, start + 4.2, 3)
-        except Exception:
-            pass
-
 
     def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
         """Section titles get the website's glow + red/cyan glitch split."""

@@ -61,26 +61,23 @@ NOTES:
 - A webcam scare may briefly request your camera. Deny it and the game skips
   it without asking again.
 
-ONLINE (who is playing + questions you write yourself):
+ONLINE (who is playing + questions from the operator):
+- This is the multiplayer alpha (v5.0.0), and this build is the RECEIVER half.
+  It joins the room, plays the questions the operator sends, and reports your
+  answers back. The half that writes questions is the operator's own program:
+  it is not part of this build, it is not published, and it cannot be
+  downloaded from the site.
 - The title menu has an ONLINE entry. It shows everyone else running the game
-  right now (names only) and whether the relay is reachable.
-- On the operator's build you can also write your own question for one player
-  or for EVERYONE: a question, up to four options, and which option is the
-  right answer. Everyone else can join the room, receive and answer — but only
-  a build holding the send token can write.
-- It reaches them as their next question, signed with your name. When they
-  answer, the game tells you whether they got it right — and it tells them that
-  you will know.
-- Names are whatever you set them to; set yours from ONLINE > SET MY NAME.
-  Questions are held for a quarter of an hour if nobody is playing yet.
-- Writing questions needs a keyboard, so the composer is desktop-only for now.
-  On Android you still see who is online, receive questions, and answer them.
+  right now (names only), whether the relay is reachable, and the name the
+  room knows you by.
+- Press N on that screen to set your own name. It is saved with your progress.
+- A question sent by the operator reaches you as your next question, signed
+  with their name. When you answer, they are told whether you got it right.
+- Questions are held for a quarter of an hour if nobody is playing yet.
 - Nothing here is required: if the relay is down the screen says OFFLINE and the
   rest of the game is unaffected.
 - Turn the whole thing off with TQG_SOCIAL=0, or point it at your own relay with
   TQG_SOCIAL_URL (defaults to the same host as TQG_RELAY_URL).
-- The right to write is granted by TQG_SEND_TOKEN, which must match the server's
-  RELAY_SEND_TOKEN. Without it the composer is not offered at all.
 
 AI PROVIDERS (advanced):
 - The game ships with NO API key. It asks Neptune's relay, which holds the key

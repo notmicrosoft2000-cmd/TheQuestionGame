@@ -406,21 +406,27 @@ game.selected_option = game.menu_options.index("ONLINE")
 check("title menu offers ONLINE", "ONLINE" in game.menu_options, game.menu_options)
 
 game.state = "ONLINE"
-game.compat_check = {"start": game.now, "took": 99}
+game.online_edit = None
 try:
     game._draw()
-    check("ONLINE screen draws while in the 'checking' phase", True)
+    check("ONLINE screen draws with the room", True)
 except Exception as exc:
-    check("ONLINE screen draws while in the 'checking' phase", False, repr(exc))
+    check("ONLINE screen draws with the room", False, repr(exc))
 
-game.compat_check["start"] = game.now - (game.compat_check.get("took", 3) + 1.0)
-game.state = "ONLINE"
+# The room is shown from the receiving side, and the player can rename.
+check("ONLINE reports the relay status",
+      game._online_status()[0] in ("online", "offline", "connecting", "disabled"),
+      game._online_status())
+game.online_edit = {"text": "OPERATOR"}
 try:
     game._draw()
-    check("ONLINE screen draws in the unsupported phase", True)
+    check("ONLINE draws while renaming", True)
 except Exception as exc:
-    check("ONLINE screen draws in the unsupported phase", False, repr(exc))
-check("compat phase flips to unsupported", game._compat_phase() == "unsupported")
+    check("ONLINE draws while renaming", False, repr(exc))
+game._commit_online_name("NEW NAME")
+check("a new name is taken into the room",
+      str(game._social_name()).upper() == "NEW NAME", game._social_name())
+game.online_edit = None
 game._online_key(pygame.K_ESCAPE)
 check("ONLINE key exits the screen cleanly", True)
 
