@@ -7,6 +7,14 @@ how to deploy the relay, and the traps that have already cost us hours.
 Read this before changing code. It is the shortest path to understanding the
 project; the source is the ground truth when the two disagree.
 
+Companion docs:
+
+- [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md) — the plain-language explanation of the
+  AI, the relay, the room and the home server, for a human reader. Point people
+  here when they ask "wait, which server is which?".
+- [`../CHANGELOG.md`](../CHANGELOG.md) — what changed and when. Add an entry
+  when you ship something a player or the operator would notice.
+
 ---
 
 ## 1. What this project is

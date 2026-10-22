@@ -38,3 +38,13 @@ server/*.env
 # The operator send token — NEVER commit it. It is in the public history of
 # this repo already (commit 375a038), so the live token has to be rotated.
 tqg-token.txt
+
+# Local tool downloads (buildozer's cmdtools, fetched by hand into tools/)
+tools/cmdtools.zip
+tools/cmdtools.done
+tools/*.zip
+
+# Operator's local sender state. The sender writes its token to the app-data
+# directory, but if anyone ever points it at the repo, this keeps it out.
+sender_token
+*.sender_token

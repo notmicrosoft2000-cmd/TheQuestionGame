@@ -6,6 +6,10 @@ Three desktop games plus the website, in one repo.
 > It covers the editions, the multiplayer sender/receiver split, the relay, the
 > build/release flow, the tests, and the traps (the Wayland alpha bug in
 > particular) that have already cost us hours.
+>
+> Want the plain-language version instead? [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md)
+> explains the AI, the relay and the room with no code. Changes are listed in
+> [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Layout
 
