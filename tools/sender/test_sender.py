@@ -84,6 +84,75 @@ app.draw()
 check("compose text is tracked", app.fields["q"] == "will not send")
 app.fields["q"] = ""
 app.fields["o0"] = ""
+
+# The token can come from <repo>/tqg-token.txt as well as the environment.
+_tok_file = sender_mod.REPO_TOKEN_FILE
+_keep = None
+try:
+    if os.path.exists(_tok_file):
+        with open(_tok_file, encoding="utf-8") as fh:
+            _keep = fh.read()
+    os.environ.pop("TQG_SEND_TOKEN", None)
+    with open(_tok_file, "w", encoding="utf-8") as fh:
+        fh.write("from-the-file-token\n")
+    _tok, _src = sender_mod.resolve_token()
+    check("a token is read from tqg-token.txt",
+          _tok == "from-the-file-token" and _src == "tqg-token.txt", (_tok, _src))
+    with open(_tok_file, "w", encoding="utf-8") as fh:
+        fh.write("RELAY_SEND_TOKEN=key-value-token\n")
+    _tok, _src = sender_mod.resolve_token()
+    check("a KEY=value token file is understood too",
+          _tok == "key-value-token", _tok)
+    os.environ["TQG_SEND_TOKEN"] = "from-the-env"
+    _tok, _src = sender_mod.resolve_token()
+    check("the environment still wins", _tok == "from-the-env", _tok)
+    os.environ["TQG_SEND_TOKEN"] = ""
+    _tok, _src = sender_mod.resolve_token()
+    check("an explicitly empty environment stops the search", _tok == "", _tok)
+finally:
+    os.environ.pop("TQG_SEND_TOKEN", None)
+    try:
+        if _keep is None:
+            os.remove(_tok_file)
+        else:
+            with open(_tok_file, "w", encoding="utf-8") as fh:
+                fh.write(_keep)
+    except OSError:
+        pass
+
+# The token screen draws, and the help screen fits inside the window.
+app.unlocking = True
+try:
+    app.draw()
+    check("the token screen draws", True)
+except Exception as exc:
+    check("the token screen draws", False, repr(exc))
+app.unlocking = False
+app.help = True
+try:
+    app.draw()
+    check("the help screen draws", True)
+except Exception as exc:
+    check("the help screen draws", False, repr(exc))
+app.help = False
+
+# A long question wraps instead of being cut off with an ellipsis: every word
+# of a 200-character question ends up on screen somewhere in the form.
+app.fields["q"] = ("What is the airspeed velocity of an unladen swallow, and "
+                   "does the answer change if the swallow is carrying a "
+                   "coconut?")
+app.fields["o0"] = "African or European?"
+app.fields["o1"] = "It depends entirely on the coconut"
+app.focus = 1
+app.draw()
+_wrapped = sender_mod._wrap(app.fields["q"], app.font_med,
+                            app.rect_comp.width - 30)
+check("a long question wraps over several lines", len(_wrapped[0]) >= 3, _wrapped)
+check("wrapping keeps every word",
+      " ".join(_wrapped[0]) == app.fields["q"], _wrapped)
+check("no ellipsis in the wrapped question",
+      "..." not in " ".join(_wrapped[0]), _wrapped)
+
 app.social.stop()
 pygame.quit()
 
@@ -183,6 +252,24 @@ try:
     check("verdict reaches the sender",
           wait_until(lambda: any(r.get("by") == "receiver" for r in app.social.take_results()), 6),
           app.results)
+
+    # The receiver's own connection test (the ONLINE screen's T option) hits
+    # the same relay and must report a real answer in milliseconds.
+    ok, detail, ms = player.test_connection()
+    check("the receiver's connection test reaches the relay", ok is True, detail)
+    check("the connection test reports a round trip", isinstance(ms, int) and ms >= 0,
+          (detail, ms))
+    check("the connection test keeps the room in sync",
+          wait_until(lambda: any(p["id"] == "receiver0001" for p in player.online()), 3),
+          player.online())
+
+    # And a dead relay is reported as a failure, not as a success.
+    import importlib as _il  # noqa: E402
+    _dead = social_mod.SocialClient("dead0001", "dead", base_url="http://127.0.0.1:9",
+                                    poll_secs=30, timeout=1, enabled=False)
+    _ok, _detail, _ms = _dead.test_connection(timeout=1)
+    check("a dead relay fails the connection test", _ok is False, _detail)
+    check("a dead relay is not reported as an empty room", _detail != "", _detail)
 finally:
     try:
         app.social.stop()

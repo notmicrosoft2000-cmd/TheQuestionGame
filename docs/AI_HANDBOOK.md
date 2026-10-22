@@ -168,16 +168,36 @@ starts (if a token is already known) and whenever one is typed in.
 
 #### The token is not only in the environment
 
-The app asks for the token if it does not have one:
+The app asks for the token if it does not have one, searching in order:
 
-- `TQG_SEND_TOKEN` in the environment wins. An **explicitly empty** env var
-  means "no token" — it does *not* fall back to the saved file (the tests rely
-  on this).
-- otherwise the token is read from `<appdata>/sender_token` (0600, written
-  atomically). On Linux that is `~/.tqgame_remastered/sender_token`.
-- otherwise the app shows the token screen and waits. Paste the token, press
-  ENTER: it is probed, and only kept if the relay accepts it.
-- `CTRL+X` clears the token (from memory and from disk).
+1. `TQG_SEND_TOKEN` in the environment. An **explicitly empty** env var means
+   "no token" — it does *not* fall back to anything else (the tests rely on
+   this).
+2. `<repo>/tqg-token.txt` — the plain hand-edited file the maintainer uses. It
+   is gitignored, and it **must stay gitignored**: it was committed once by
+   accident (see "the token leak" below). `_read_token_file()` also tolerates a
+   `RELAY_SEND_TOKEN=...` line.
+3. `<appdata>/sender_token` (0600, written atomically). On Linux that is
+   `~/.tqgame_remastered/sender_token`.
+4. Nothing — the app shows the token screen and waits. Paste the token, press
+   ENTER: it is probed, and only kept if the relay accepts it.
+5. `CTRL+X` clears the token (from memory, from the appdata copy and, from
+   v5.0.0 on, from `tqg-token.txt` too).
+
+#### The token leak (2026-10-22) — read this before touching tokens
+
+The live send token was committed to `tqg-token.txt` in `375a038` and pushed to
+the public `main`. Anything that reads the public history can send questions into
+the room. The remedies applied:
+
+- the file is untracked and listed in `.gitignore`;
+- the app no longer needs it in git at all — it reads the gitignored copy;
+- **the operator must rotate `RELAY_SEND_TOKEN` on the host** (edit
+  `/opt/tqg-relay/relay.env`, restart `tqg-relay`), because a secret that has
+  been public is a dead secret. Rotating is the fix; purging git history is
+  optional and would rewrite every commit after `375a038`.
+
+If you ever add a token to any file: check `git status` and `.gitignore` first.
 
 #### Delivery is reported honestly
 
@@ -214,7 +234,27 @@ Tunables on the server: `RELAY_SEND_TOKEN`, `RELAY_PEER_TTL`,
 The shipped game's `ONLINE` menu entry is the receiver's window onto the room.
 It shows the relay's state, the name the room knows the player by, and who
 else is playing. The player can rename themselves there (`N`), which is
-persisted in the save file and pushed into the room by the presence client.
+persisted in the save file and pushed into the room by the presence client, and
+can ping the relay with `T` / `TEST CONNECTION` (runs
+`SocialClient.test_connection()` in a worker thread — never on the frame).
+
+The whole screen is explained by `ONLINE_EXPLAINER` in `main.py` and by the
+fourth `HELP_VARIATIONS` entry: the heartbeat, the room living on the server,
+the hand-written questions joining the queue unannounced, and the fact that the
+player can be seen but cannot write. Keep those two in sync, and keep the host
+address **out** of the shipped build: the player-facing copy says "the server
+that runs the game", nothing more specific.
+
+The default display name is the account running the game (`_account_name()` →
+`getpass.getuser()`, falling back to `USER`/`USERNAME`/`LOGNAME` and then to
+`guest-NNNN`). A name the player typed is kept forever; the old `guest-NNNN`
+default is treated as "not chosen" and replaced once.
+
+**A received question is a secret.** Nothing in the shipped build announces one:
+there is no toast, and the ONLINE screen does not show a pending count. The
+question simply becomes the next thing in the queue and looks like every other
+question. Do not add a "someone sent you a question!" notice back; it is the
+single easiest way to break the feature.
 
 It used to be a fake compatibility check that ended in "MULTIPLAYER IS NOT
 SUPPORTED" — that was true for v4 and is false for v5.0.0, where this build
@@ -296,8 +336,9 @@ locally, through the funnel, and does a presence round-trip.
 | `TQG_SEND_TOKEN` | *(absent)* | **operator sender only.** Must never be set in a shipped build. |
 | `TQG_SENDER_NAME` | `OPERATOR` | the name the sender shows up under in the room |
 
-The sender also keeps its token in `<appdata>/sender_token` (0600). The
-environment wins over the file; an explicitly empty env var means "no token".
+The sender looks for the token in `TQG_SEND_TOKEN`, then `<repo>/tqg-token.txt`
+(gitignored, hand-edited), then `<appdata>/sender_token` (0600). An explicitly
+empty env var means "no token" and stops the search.
 
 ### The relay (`server/relay.env`)
 

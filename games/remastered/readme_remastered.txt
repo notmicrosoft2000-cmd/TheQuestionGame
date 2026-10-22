@@ -62,17 +62,29 @@ NOTES:
   it without asking again.
 
 ONLINE (who is playing + questions from the operator):
-- This is the multiplayer alpha (v5.0.0), and this build is the RECEIVER half.
-  It joins the room, plays the questions the operator sends, and reports your
-  answers back. The half that writes questions is the operator's own program:
-  it is not part of this build, it is not published, and it cannot be
-  downloaded from the site.
+- This is the multiplayer alpha (v5.0.0). Treat it as an alpha: it will break,
+  and it will break often. When it does, the rest of the game is unaffected.
+- This build is the RECEIVER half. It joins the room, plays the questions the
+  operator sends, and reports your answers back. The half that writes questions
+  is the operator's own program: it is not part of this build, it is not
+  published, and it cannot be downloaded from the site.
 - The title menu has an ONLINE entry. It shows everyone else running the game
   right now (names only), whether the relay is reachable, and the name the
   room knows you by.
-- Press N on that screen to set your own name. It is saved with your progress.
-- A question sent by the operator reaches you as your next question, signed
-  with their name. When you answer, they are told whether you got it right.
+- How it works, end to end: your game checks in with the room every few seconds
+  (that is why other players can see you), with the name you are playing under.
+  The room itself lives on the server that runs the game — the same one that
+  answers the AI questions. Nothing is installed on your machine and no file is
+  written there for it.
+- Questions written by hand by the operator can join the queue between the
+  ordinary generated ones. They look exactly the same and nothing announces
+  them — the whole point is that you cannot tell which questions were written
+  for you.
+- When you answer one, the operator is told whether you got it right, with the
+  name you are playing under.
+- Press N on the ONLINE screen to set your own name; press T to test the
+  connection to the room right there and then. Your default name is the name of
+  the account running the game.
 - Questions are held for a quarter of an hour if nobody is playing yet.
 - Nothing here is required: if the relay is down the screen says OFFLINE and the
   rest of the game is unaffected.

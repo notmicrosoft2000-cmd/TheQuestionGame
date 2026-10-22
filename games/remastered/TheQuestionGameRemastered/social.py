@@ -152,6 +152,50 @@ class SocialClient:
         with self._lock:
             return self._sent
 
+    def test_connection(self, timeout=None):
+        """Ping the relay right now and time the round trip.
+
+        Returns (ok, detail, ms). It blocks, so the caller must run it in a
+        worker thread — the ONLINE screen does exactly that.
+
+        This is the same `/v1/presence` call the background poll makes, so the
+        answer it hands back is handled exactly the same way: the room list is
+        refreshed and anything addressed to us is kept, never dropped.
+        """
+        limit = float(timeout or self._timeout)
+        url = self._base + "/v1/presence"
+        payload = {"id": self.player_id, "name": self._name,
+                   "platform": _platform_label()}
+        data = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json", "User-Agent": "TQG/1.0"}
+        if config.RELAY_TOKEN:
+            headers["X-App-Token"] = config.RELAY_TOKEN
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        start = time.time()
+        try:
+            with urllib.request.urlopen(req, timeout=limit) as resp:
+                body = resp.read(65536)
+            ms = int((time.time() - start) * 1000)
+            parsed = json.loads(body or b"{}")
+            if not isinstance(parsed, dict) or not parsed.get("ok"):
+                return False, "THE RELAY DID NOT CONFIRM", ms
+            with self._lock:
+                self._online = parsed.get("online") or []
+                self._inbox.extend(parsed.get("inbox") or [])
+                if len(self._inbox) > config.SOCIAL_INBOX_MAX:
+                    del self._inbox[:-config.SOCIAL_INBOX_MAX]
+                self._results.extend(parsed.get("results") or [])
+                self._status = "online"
+                self._last_ok = time.time()
+                self._last_error = ""
+            return True, "THE RELAY ANSWERED IN %d MS" % ms, ms
+        except urllib.error.HTTPError as exc:
+            ms = int((time.time() - start) * 1000)
+            return False, "THE RELAY ANSWERED WITH HTTP %d" % exc.code, ms
+        except Exception as exc:
+            ms = int((time.time() - start) * 1000)
+            return False, type(exc).__name__.upper(), ms
+
     def set_name(self, name):
         clean = _clean(name, config.SOCIAL_NAME_MAX)
         if not clean:

@@ -22,19 +22,19 @@ If you find yourself about to publish this, don't.
 python3 tools/sender/sender.py
 ```
 
-With no token in the environment the app asks for one: paste it and press
-ENTER. It is checked against the relay before it is accepted, then kept with
-`0600` permissions in the game's appdata folder
-(`~/.tqgame_remastered/sender_token` on Linux). `CTRL+X` clears it again.
+With no token anywhere the app asks for one: paste it and press ENTER. It is
+checked against the relay before it is accepted, then kept with `0600`
+permissions in the game's appdata folder (`~/.tqgame_remastered/sender_token` on
+Linux). `CTRL+X` clears it again.
 
-To skip the prompt:
+The token is looked for in this order:
 
-```sh
-TQG_SEND_TOKEN=... python3 tools/sender/sender.py
-```
+1. `TQG_SEND_TOKEN` in the environment;
+2. `tqg-token.txt` in the repository root (a plain file, hand-edited, gitignored);
+3. the saved copy in the appdata folder;
+4. nothing — the app asks.
 
-The environment wins over the saved file. An explicitly empty `TQG_SEND_TOKEN`
-means "no token" and does *not* fall back to the file.
+An explicitly empty `TQG_SEND_TOKEN` means "no token" and stops the search.
 
 `TQG_SENDER_NAME` sets the name the operator appears under in the room
 (default `OPERATOR`).
@@ -59,9 +59,21 @@ ssh nept@192.168.99.56 "sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env"
 | `F1` (or `H`) | the "how this works" screen |
 | `CTRL+X` | forget the token |
 | `ESC` | quit (or leave the field you are editing) |
+| mouse wheel | scroll the compose form |
 
-The room list is on the left, the compose form in the middle, and the delivery
-log plus the answers on the right.
+## Sections
+
+- **The room** on the left: `EVERYONE` plus every player whose game is polling
+  right now. `UP`/`DOWN` picks who gets the next question.
+- **Compose** on the right: the recipient, the question, up to four options, and
+  which of them is correct. Long questions wrap over as many lines as they need
+  and the form scrolls (mouse wheel) — nothing is ever truncated with `...`.
+- **Delivery** along the bottom: what the relay actually said about each send.
+  `QUEUED` is not `DELIVERED`.
+- **Replies** next to it: the answers that came back, with the question they
+  belong to.
+
+`F1` opens the full explanation, including where the relay physically lives.
 
 ## How a question travels
 
@@ -77,6 +89,16 @@ answers it              posts /v1/send-question        the item is cleared
                         polls /v1/presence      <-  the answer comes back
                          sees RIGHT / WRONG            on the next poll
 ```
+
+The relay is the maintainer's **home server** at `192.168.99.56`, published as a
+Tailscale Funnel. Locally it listens on `127.0.0.1:8090` only; the funnel
+forwards it to the internet. It is the same relay that answers the game's AI
+questions. The room is in-memory: no database, no accounts, no history — a
+restart empties it.
+
+The player-facing build deliberately does not know any of this. It gets the
+funnel URL and nothing else; the host, the ssh command and this program stay on
+the operator's side.
 
 Three relay behaviours to keep in mind:
 

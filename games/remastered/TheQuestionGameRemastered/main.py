@@ -2,7 +2,9 @@
 
 Run with:  python -m TheQuestionGameRemastered.main
 """
+import getpass
 import math
+import os
 import random
 import threading
 import time
@@ -35,6 +37,21 @@ HELP_VARIATIONS = [
     "CONTROLS & OPERATIONS\n\n[TAB]   — Cycle through menu/answer options\n[ENTER] — Confirm selection\n[ESC]   — Return from About/Help menus\n\nANSWER ALL QUESTIONS TRUTHFULLY.\nThe system detects inconsistencies.\n\nYour response time is monitored.\nPausing too long will be noted.",
     "HOW TO PLAY\n\n[TAB]   — Navigate options\n[ENTER] — Select\n\nThere is no skip. There is no fast forward.\nThere is only the next question.\n\nThe questions change every time you play.\nThey are written for you, in the moment.\n\nThe game remembers. Do you?",
     "SAFETY & OPERATIONS LOG\n\n[TAB]   — Move between choices\n[ENTER] — Confirm\n\nQ: Are local effects dangerous?\nA: No. Effects are cosmetic: flicker, sound, window movement.\n\nQ: Are answers transmitted?\nA: The questions are generated remotely. Your answers stay local.\n\nQ: What does it do with my answers?\nA: It remembers them.",
+    "THE ROOM\n\nONLINE IS AN ALPHA. IT WILL BREAK. A LOT.\n\nQ: What is the room?\nA: A list of who is playing. The game checks in with it every few seconds. The room lives on the server that runs the game. Nothing is installed on your machine.\n\nQ: Where do the questions come from?\nA: Most are written by the program. Some are written by hand, by someone else. Those join the queue between the others and look exactly the same.\n\nQ: Can I write to the room?\nA: No. You can see it and be seen in it. The writing half is not in this build.",
+]
+
+# The ONLINE screen explains the room in the game's own voice: what it is, what
+# travels over it, and what the player is not allowed to do with it. No host
+# address, no tool names — the mechanics, not the plumbing.
+ONLINE_EXPLAINER = [
+    "THE GAME CHECKS IN WITH THE ROOM EVERY FEW SECONDS — THAT",
+    "IS HOW YOU ARE FOUND BY THE OTHERS. THE ROOM LIVES ON THE",
+    "SERVER THAT RUNS THE GAME, NOT ON YOUR MACHINE.",
+    "QUESTIONS WRITTEN BY HAND BY SOMEONE ELSE CAN JOIN THE",
+    "QUEUE BETWEEN THE ORDINARY ONES. THEY LOOK THE SAME, AND",
+    "NOBODY ANNOUNCES THEM.",
+    "YOU CAN SEE THE ROOM AND BE SEEN IN IT. YOU CANNOT WRITE",
+    "TO IT — THAT HALF IS NOT IN THIS BUILD.",
 ]
 
 LOGS_ENTRIES = [
@@ -75,6 +92,27 @@ _ANGRY_CLOSE_LINES = [
     "You are only making it worse.",
     "Take your hand off the window.",
 ]
+
+
+def _account_name():
+    """The name of the account this copy of the game is running under.
+
+    That is what the room shows, unless the player picks a name of their own
+    with [N] on the ONLINE screen.
+    """
+    name = ""
+    try:
+        name = (getpass.getuser() or "").strip()
+    except Exception:
+        name = ""
+    if not name:
+        for var in ("USER", "USERNAME", "LOGNAME"):
+            name = (os.environ.get(var) or "").strip()
+            if name:
+                break
+    if not name:
+        name = "guest-%04d" % random.randint(0, 9999)
+    return name[:config.SOCIAL_NAME_MAX]
 
 
 class Game:
@@ -205,6 +243,9 @@ class Game:
         self.social = None
         self.social_notes = []          # [{text, at, tone}] transient notices
         self.online_edit = None         # {"text": ...} while renaming yourself
+        self.online_options = ["TEST CONNECTION", "BACK"]
+        self.online_selected = 0
+        self.online_test = {"state": "idle", "detail": "", "ms": 0}
         self._social_poll_at = 0.0
         self._social_pending_cache = None
         self._init_social()
@@ -708,9 +749,10 @@ class Game:
             # A name the player chose is theirs and is kept. The auto-generated
             # guest name is NOT reused across runs: two windows on one machine
             # would then both appear as "guest-1234", which is indistinguishable
-            # in the room and looks like a duplicate/bug.
+            # in the room and looks like a duplicate/bug. The default is the
+            # name of the account running this copy of the game.
             if not name or str(name).startswith("guest-"):
-                name = "guest-%04d" % random.randint(0, 9999)
+                name = _account_name()
                 self.game_state["player_name"] = name
             persistence.save_game_state(self.game_state)
             self.social = social.SocialClient(player_id, name)
@@ -755,14 +797,12 @@ class Game:
                                "info", 8.0)
         except Exception:
             pass
-        # Tell the player as soon as something lands, even if it will not be
-        # shown until the next question slot.
+        # A question that lands is a secret: nothing announces it. It simply
+        # joins the queue between the written ones and looks like the rest.
         try:
             pending = self.social.pending_questions()
         except Exception:
             pending = 0
-        if pending > (self._social_pending_cache or 0):
-            self._note("SOMEONE SENT YOU A QUESTION — IT COMES NEXT", "info", 6.0)
         self._social_pending_cache = pending
 
     def _social_step_from(self, item):
@@ -833,7 +873,7 @@ class Game:
         self._note("THE ROOM NOW CALLS YOU " + name.upper(), "good", 6.0)
 
     def _online_key(self, key, unicode=""):
-        """The ONLINE screen: the room, and your name in it."""
+        """The ONLINE screen: the room, your name in it, a connection test."""
         if self.online_edit is not None:
             text = self.online_edit
             if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
@@ -847,13 +887,55 @@ class Game:
                 if len(text["text"]) < config.SOCIAL_NAME_MAX:
                     text["text"] += unicode
             return
-        if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
-                   pygame.K_BACKSPACE):
+        if key == pygame.K_ESCAPE:
             audio.play_ui_select_sound()
             self.start_fade("TITLE")
-        elif key in (pygame.K_n, pygame.K_N):
+        elif key == pygame.K_BACKSPACE:
+            audio.play_ui_select_sound()
+            self.start_fade("TITLE")
+        elif key == pygame.K_n:
+            # pygame has no uppercase key constants: shift+n arrives as the
+            # same key code, and the character itself comes through as
+            # "N" in the unicode argument.
             audio.play_ui_select_sound()
             self.online_edit = {"text": self._social_name()}
+        elif key == pygame.K_t:
+            self._start_connection_test()
+        elif key in (pygame.K_UP, pygame.K_DOWN):
+            step = -1 if key == pygame.K_UP else 1
+            self.online_selected = (self.online_selected + step) % len(self.online_options)
+            audio.play_ui_select_sound()
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            self._online_activate(self.online_selected)
+
+    def _online_activate(self, idx):
+        """Run the option the player picked on the ONLINE screen."""
+        if idx == 0:
+            self._start_connection_test()
+        else:
+            audio.play_ui_select_sound()
+            self.start_fade("TITLE")
+
+    def _start_connection_test(self):
+        """Ping the relay in the background and let the screen report it."""
+        if self.social is None:
+            self.online_test = {"state": "fail",
+                                "detail": "MULTIPLAYER IS OFF IN THIS BUILD",
+                                "ms": 0}
+            return
+        if self.online_test.get("state") == "running":
+            return
+        self.online_test = {"state": "running", "detail": "TESTING...", "ms": 0}
+
+        def work():
+            try:
+                ok, detail, ms = self.social.test_connection()
+            except Exception as exc:
+                ok, detail, ms = False, type(exc).__name__.upper(), 0
+            self.online_test = {"state": "ok" if ok else "fail",
+                                "detail": detail, "ms": ms}
+
+        threading.Thread(target=work, daemon=True, name="tqg-conn-test").start()
 
     def _report_social_answer(self, item, answer):
         """Tell the author what we picked, and react to it ourselves."""
@@ -1241,10 +1323,9 @@ class Game:
         elif kind == "back":
             self._handle_key(pygame.K_ESCAPE)
         elif kind == "online":
-            # The compat screen has nothing to select; a tap just backs out
-            # once the check has finished telling you it is unsupported.
-            if self._compat_phase() == "unsupported":
-                self._handle_key(pygame.K_ESCAPE)
+            # The ONLINE screen has two real options now; a tap runs the
+            # one that was tapped, exactly like the key would.
+            self._online_activate(idx)
 
     # --- update ---------------------------------------------------------------
     def _update(self):
@@ -1646,12 +1727,28 @@ class Game:
         This release is single-player plus questions *received* from the
         operator — writing them lives in a separate sender app. So this screen
         shows the room from the receiving side: the relay's state, who else is
-        playing, and the name the others see you under.
+        playing, the name the others see you under, a connection test, and a
+        plain explanation of what the room actually is.
         """
         font_large, font_med, font_small = self._fonts()
+        font_tiny = ui.get_tiny_font(self.game_state, w, h)
         self._draw_heading("ONLINE", w, h, font_large)
         cx = int(w * 0.08)
-        y = int(h * 0.26)
+        hint_y = h - 42
+
+        # The explanation is anchored to the bottom, so the room list above it
+        # can grow into whatever space is left.
+        explain_lines = len(ONLINE_EXPLAINER) + 1
+        explain_top = hint_y - explain_lines * font_tiny.get_linesize() - 10
+
+        y = int(h * 0.20)
+
+        # This half of the game is brand new. Say so before anything else —
+        # next to the heading, so it costs no vertical space.
+        warn_x = cx + font_large.size("ONLINE")[0] + 34
+        self.screen.blit(font_small.render(
+            "AN ALPHA. IT WILL BREAK A LOT.",
+            True, (215, 160, 60)), (warn_x, int(h * 0.08) + font_large.get_height() // 2))
 
         status, others = self._online_status()
         if status == "online":
@@ -1663,71 +1760,90 @@ class Game:
         else:
             relay_txt, relay_col = "RELAY: OFFLINE", (200, 80, 80)
         self.screen.blit(font_med.render(relay_txt, True, relay_col), (cx, y))
-        y += font_med.get_linesize() + 14
 
-        # The name the room knows you by.
+        # The name the room knows you by, on the same line.
         if self.online_edit is not None:
-            label = "YOUR NAME"
             value = self.online_edit["text"] + "_"
-            hint = "[ENTER] SAVE   [ESC] CANCEL"
+            hint = "[ENTER] SAVE  [ESC] CANCEL"
         else:
-            label = "YOU"
             value = str(self._social_name()).upper()
             hint = "[N] RENAME"
-        self.screen.blit(font_small.render(label, True, (110, 110, 110)),
-                         (cx, y + 3))
+        name_x = cx + font_med.size(relay_txt)[0] + 26
+        self.screen.blit(font_small.render("YOU", True, (110, 110, 110)),
+                         (name_x, y + 10))
         self.screen.blit(font_med.render(value, True, (205, 205, 205)),
-                         (cx + 120, y))
+                         (name_x + 46, y))
         self.screen.blit(font_small.render(hint, True, (80, 80, 80)),
-                         (cx + 120 + font_med.size(value)[0] + 18, y + 4))
-        y += font_med.get_linesize() + 16
+                         (name_x + 46 + font_med.size(value)[0] + 14, y + 10))
+        y += font_med.get_linesize() + 8
 
         # Who else is in the room.
         self.screen.blit(font_small.render(
             "IN THE ROOM NOW (%d)" % len(others), True, (100, 40, 40)), (cx, y))
-        y += font_small.get_linesize() + 6
+        y += font_small.get_linesize() + 2
+
+        # Reserve the room for the options and the test result, so the peer
+        # list can never push into the explanation below it.
+        reserve = (len(self.online_options) + 1) * font_med.get_linesize()
+        peer_slots = int((explain_top - y - reserve) // font_small.get_linesize())
+        peer_slots = max(0, min(4, peer_slots))
         if not others:
             self.screen.blit(font_small.render(
                 "NOBODY ELSE IS PLAYING RIGHT NOW", True, (80, 80, 80)), (cx, y))
-            y += font_small.get_linesize() + 8
+            y += font_small.get_linesize() + 4
         else:
-            for peer in others[:8]:
+            for peer in others[:peer_slots]:
                 pname = str(peer.get("name", "?")).upper()
                 plat = str(peer.get("platform", "")).upper()
                 self.screen.blit(font_small.render(
                     "%s   (%s)" % (pname, plat), True, (170, 170, 170)), (cx, y))
-                y += font_small.get_linesize() + 4
-            y += 6
+                y += font_small.get_linesize() + 2
+            if len(others) > peer_slots:
+                self.screen.blit(font_small.render(
+                    "... AND %d MORE" % (len(others) - peer_slots), True,
+                    (80, 80, 80)), (cx, y))
+                y += font_small.get_linesize() + 2
+            y += 4
 
-        # A question may already be waiting for this session.
-        waiting = 0
-        if self.social is not None:
-            try:
-                waiting = self.social.pending_questions()
-            except Exception:
-                waiting = 0
-        if waiting:
+        # The options.
+        for i, option in enumerate(self.online_options):
+            sel = (i == self.online_selected)
+            prefix = "> " if sel else "  "
+            col = config.COLOR_WHITE if sel else (110, 110, 110)
+            self.screen.blit(font_med.render(prefix + option, True, col),
+                             (cx, y))
+            self._touch_zone(cx - 8, y - 3, int(w * 0.6) + 16,
+                             font_med.get_linesize() + 4, "online", i)
+            y += font_med.get_linesize() + 2
+
+        # The result of the connection test, if there is one.
+        test = self.online_test or {}
+        if test.get("state") == "running":
+            self.screen.blit(font_small.render("TESTING...", True, (200, 180, 90)),
+                             (cx, y))
+        elif test.get("state") in ("ok", "fail"):
+            col = (90, 200, 90) if test.get("state") == "ok" else (200, 80, 80)
             self.screen.blit(font_small.render(
-                "%d QUESTION%s STILL REACH YOU DURING A RUN" % (
-                    waiting, "" if waiting == 1 else "S"),
-                True, (90, 200, 90)), (cx, y))
-            y += font_small.get_linesize() + 8
+                "CONNECTION: " + str(test.get("detail", "")).upper(), True, col),
+                (cx, y))
 
-        # What this half of the feature is.
-        self.screen.blit(font_small.render(
-            "THE ROOM IS OPEN. YOU CAN SEE WHO IS IN IT,", True, (140, 140, 140)),
-            (cx, y))
-        self.screen.blit(font_small.render(
-            "AND YOU CAN BE FOUND IN IT. WRITING TO IT IS NOT", True, (140, 140, 140)),
-            (cx, y + font_small.get_linesize()))
-        self.screen.blit(font_small.render(
-            "YOURS TO DO — THAT IS THE OPERATOR'S HALF.", True, (140, 140, 140)),
-            (cx, y + font_small.get_linesize() * 2))
+        # What the room is, in the game's own voice.
+        ey = explain_top
+        self.screen.blit(font_tiny.render("HOW THIS WORKS", True, (120, 45, 45)),
+                         (cx, ey))
+        ey += font_tiny.get_linesize()
+        for line in ONLINE_EXPLAINER:
+            self.screen.blit(font_tiny.render(line, True, (140, 140, 140)),
+                             (cx, ey))
+            ey += font_tiny.get_linesize()
 
-        # One big back zone: there is nothing to choose here.
-        self._touch_zone(0, int(h * 0.2), w, int(h * 0.7), "online", 0)
-        self.screen.blit(font_small.render("[ESC] BACK", True, (80, 80, 80)),
-                         (cx, h - 50))
+        # Where the block ended: the smoke test uses it to prove the screen
+        # still fits in the default window.
+        self.online_layout_bottom = ey
+
+        self.screen.blit(font_small.render(
+            "[T] TEST CONNECTION   [N] RENAME   [UP/DOWN] MOVE   [ESC] BACK",
+            True, (80, 80, 80)), (cx, hint_y))
 
     def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
         """Section titles get the website's glow + red/cyan glitch split."""

@@ -91,6 +91,20 @@ def get_scaled_fonts(game_state, w, h):
     )
 
 
+def get_tiny_font(game_state, w, h, factor=0.027):
+    """One extra, smaller font for the dense explanatory blocks.
+
+    The ONLINE screen has to explain the room *and* list the room *and* offer
+    its options inside an 800x600 window. The explanation gets this one.
+    """
+    base = min(w, h)
+    s = game_state.get("settings", {})
+    mult = s.get("text_size", 1.0)
+    label = s.get("font", DEFAULT_FONT)
+    size = max(10, int(base * factor * mult))
+    return _font(label, size)
+
+
 def render_wrapped_text(surface, text, font, color, start_x, start_y, max_width, angle=0):
     words = text.split(" ")
     lines = []

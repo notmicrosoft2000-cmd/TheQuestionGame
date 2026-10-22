@@ -448,6 +448,18 @@ check("relay URL is set", "ts.net" in config.RELAY_URL,
 # --- Touch controls (the Android port) --------------------------------------
 # The phone control scheme end to end: tap zones recorded during draw, tap =
 # select+confirm, and the system Back key (K_AC_BACK) behaving as ESC.
+class _RoomStub:
+    """A presence client with a fixed room, for layout tests."""
+    status = "online"
+
+    def __init__(self, peers):
+        self._peers = [{"name": "player%d" % i, "platform": "linux"}
+                       for i in range(peers)]
+
+    def others(self):
+        return list(self._peers)
+
+
 gmain.IS_ANDROID = True
 game.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25, "alpha": 0, "target": None}
 game.state = "TITLE"
@@ -478,6 +490,67 @@ check("a new name is taken into the room",
 game.online_edit = None
 game._online_key(pygame.K_ESCAPE)
 check("ONLINE key exits the screen cleanly", True)
+
+# The online screen is an alpha and says so, and it explains the room.
+_ONLINE_ALPHA_LINE = "AN ALPHA. IT WILL BREAK A LOT."
+check("ONLINE says it is an alpha",
+      "ALPHA" in _ONLINE_ALPHA_LINE.upper(), _ONLINE_ALPHA_LINE)
+check("ONLINE explains how the room works", len(gmain.ONLINE_EXPLAINER) >= 4,
+      gmain.ONLINE_EXPLAINER)
+check("the explanation promises no writing",
+      any("CANNOT WRITE" in line.upper() for line in gmain.ONLINE_EXPLAINER),
+      gmain.ONLINE_EXPLAINER)
+check("the help screen explains the room too",
+      any("THE ROOM" in v for v in gmain.HELP_VARIATIONS), gmain.HELP_VARIATIONS)
+
+# The layout must still fit the default window with a full room on screen.
+game.state = "ONLINE"
+game.online_edit = None
+game.online_selected = 0
+game.online_test = {"state": "ok", "detail": "THE RELAY ANSWERED IN 42 MS", "ms": 42}
+game.social = _RoomStub(6)
+game._draw()
+check("ONLINE fits the default window",
+      game.online_layout_bottom <= config.WINDOW_H - 40,
+      (game.online_layout_bottom, config.WINDOW_H))
+check("ONLINE offers a connection test",
+      "TEST CONNECTION" in game.online_options, game.online_options)
+
+# T runs the test; with no real client it must not raise and must not block.
+game.online_test = {"state": "idle", "detail": "", "ms": 0}
+game.social = None
+game._start_connection_test()
+check("a connection test with multiplayer off fails honestly",
+      game.online_test.get("state") == "fail", game.online_test)
+
+# Nothing anywhere announces a question that has arrived: it is a secret.
+_src = open(os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "TheQuestionGameRemastered", "main.py"),
+    encoding="utf-8").read()
+check("nothing announces a received question",
+      "SENT YOU A QUESTION" not in _src)
+check("the ONLINE screen has no pending-question counter",
+      "STILL REACH YOU" not in _src)
+# The default name is the account running the game, not a random guest.
+check("the default player name comes from the account",
+      gmain._account_name() and not gmain._account_name().startswith("guest-"),
+      gmain._account_name())
+
+# It also survives an empty account environment: never an empty name.
+_old = {k: os.environ.get(k) for k in ("USER", "USERNAME", "LOGNAME")}
+try:
+    for k in _old:
+        os.environ.pop(k, None)
+    _imported = __import__("importlib").import_module("getpass")
+    _before = _imported.getuser
+    _imported.getuser = lambda: ""
+    check("an unknown account still yields a usable name",
+          bool(gmain._account_name()), gmain._account_name())
+    _imported.getuser = _before
+finally:
+    for k, v in _old.items():
+        if v is not None:
+            os.environ[k] = v
 
 
 # Full flow: a queued question is injected as the very next step...

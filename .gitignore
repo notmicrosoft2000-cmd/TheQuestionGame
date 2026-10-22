@@ -34,3 +34,7 @@ cmdtools.*
 server/relay.env
 server/*.env
 !server/relay.env.example
+
+# The operator send token — NEVER commit it. It is in the public history of
+# this repo already (commit 375a038), so the live token has to be rotated.
+tqg-token.txt

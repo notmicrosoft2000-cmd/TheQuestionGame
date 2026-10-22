@@ -31,8 +31,9 @@ RUNNING IT
 
     TQG_SEND_TOKEN=... python tools/sender/sender.py
 
-or just run it with no environment at all: the app asks for the token, checks
-it against the relay, and remembers it (0600) in the game's appdata folder.
+or with no environment at all: the app looks for the token in
+<repo>/tqg-token.txt, then in the game's appdata folder, and if it still has
+none it asks for one, checks it against the relay, and remembers it (0600).
 
     python tools/sender/sender.py        # then paste the token when asked
 
@@ -86,46 +87,90 @@ OPTION_LETTERS = ["A", "B", "C", "D"]
 TEXT_KEYS = ["q"] + OPTION_KEYS
 
 TOKEN_FILE = os.path.join(config.APP_DATA_DIR, "sender_token")
+REPO_TOKEN_FILE = os.path.join(_REPO, "tqg-token.txt")
 
-HELP_LINES = [
+HELP_STORY = [
     ("THE QUESTION GAME — OPERATOR SENDER", COLOR_ACCENT),
     ("", COLOR_DIM),
-    ("You are the operator. The game every player downloads is the RECEIVER:",
-     COLOR_TEXT),
-    ("it joins the room, plays what reaches it, and answers back. Only this",
-     COLOR_TEXT),
-    ("program can WRITE, because only this program holds the send token.",
-     COLOR_TEXT),
+    ("You are the operator. The game everyone", COLOR_TEXT),
+    ("downloads is the RECEIVER: it joins the room,", COLOR_TEXT),
+    ("plays what reaches it and answers back. Only", COLOR_TEXT),
+    ("this program can WRITE — it holds the token.", COLOR_TEXT),
     ("", COLOR_DIM),
-    ("THE RELAY", COLOR_ACCENT),
-    ("  Everything goes through one relay:", COLOR_DIM),
-    ("    %s" % config.SOCIAL_URL, COLOR_DIM),
-    ("  Players poll /v1/presence every few seconds; you post to",
-     COLOR_DIM),
-    ("  /v1/send-question with the token; answers come back on the next poll.",
-     COLOR_DIM),
+    ("THE RELAY — YES, THE HOME SERVER IS INVOLVED", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("Everything goes through one relay, and that", COLOR_DIM),
+    ("relay is the maintainer's own machine on their", COLOR_DIM),
+    ("home network at 192.168.99.56:", COLOR_DIM),
+    ("  %s" % config.SOCIAL_URL, COLOR_ACCENT),
+    ("That address is a Tailscale Funnel: the relay", COLOR_DIM),
+    ("listens on 127.0.0.1:8090 at home and the", COLOR_DIM),
+    ("funnel forwards it out. It is the SAME relay", COLOR_DIM),
+    ("that answers the AI.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("Players poll /v1/presence every few seconds;", COLOR_DIM),
+    ("you post to /v1/send-question with the token.", COLOR_DIM),
+    ("Answers come back on the next poll.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("The room lives in memory only: no database, no", COLOR_DIM),
+    ("accounts, no history. Restart it and it is empty.", COLOR_DIM),
     ("", COLOR_DIM),
     ("THE TOKEN", COLOR_ACCENT),
-    ("  It is the relay's RELAY_SEND_TOKEN (server/relay.env on the relay",
-     COLOR_DIM),
-    ("  host). Read it with:", COLOR_DIM),
-    ("    ssh nept@192.168.99.56 \\", COLOR_TEXT),
-    ("      \"sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env\"", COLOR_TEXT),
-    ("  Then paste it into the app. It is checked against the relay before it",
-     COLOR_DIM),
-    ("  is accepted, and stored with 0600 in:", COLOR_DIM),
-    ("    %s" % TOKEN_FILE, COLOR_DIM),
     ("", COLOR_DIM),
+    ("It is the relay's RELAY_SEND_TOKEN, in relay.env", COLOR_DIM),
+    ("on the relay host:", COLOR_DIM),
+    ("  ssh nept@192.168.99.56 \"sudo grep \\", COLOR_TEXT),
+    ("    RELAY_SEND_TOKEN /opt/tqg-relay/relay.env\"", COLOR_TEXT),
+    ("", COLOR_DIM),
+    ("Paste it in; it is checked against the relay", COLOR_DIM),
+    ("first, then stored with 0600. TQG_SEND_TOKEN and", COLOR_DIM),
+    ("tqg-token.txt work as well.", COLOR_DIM),
+]
+
+HELP_KEYS = [
     ("KEYS", COLOR_ACCENT),
-    ("  TAB / SHIFT+TAB    move between fields", COLOR_TEXT),
-    ("  ENTER             edit the field / press the focused button", COLOR_TEXT),
-    ("  UP / DOWN         choose who receives the question (TO field)", COLOR_TEXT),
-    ("  1 2 3 4           set the correct option", COLOR_TEXT),
-    ("  F1 or H           this help        ESC  quit", COLOR_TEXT),
+    ("", COLOR_DIM),
+    ("TAB / SHIFT+TAB   move between fields", COLOR_TEXT),
+    ("ENTER            edit the field, or press it", COLOR_TEXT),
+    ("UP / DOWN        pick who receives the question", COLOR_TEXT),
+    ("1 2 3 4          set the correct option", COLOR_TEXT),
+    ("MOUSE WHEEL      scroll the form", COLOR_TEXT),
+    ("F1 or H          this help", COLOR_TEXT),
+    ("ESC              quit", COLOR_TEXT),
+    ("CTRL+X           forget the saved token", COLOR_TEXT),
+    ("", COLOR_DIM),
+    ("WHAT PRESSING SEND DOES", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("The question goes to the relay with your token.", COLOR_DIM),
+    ("The relay hands it to everyone it was addressed", COLOR_DIM),
+    ("to, once. The game shows it as the next question", COLOR_DIM),
+    ("and the answer travels back to you.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("The DELIVERY panel says what the relay actually", COLOR_DIM),
+    ("replied. QUEUED IS NOT DELIVERED. Read it.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("WHO IS IN THE ROOM", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("The room only knows about the games that are", COLOR_DIM),
+    ("polling right now. A closed game is not in the", COLOR_DIM),
+    ("room and cannot be reached.", COLOR_DIM),
 ]
 
 
 # --- the token ----------------------------------------------------------------
+# Where the token can come from, in order:
+#
+#   1. TQG_SEND_TOKEN in the environment (an explicitly empty one means
+#      "no token" and stops the search — the tests rely on that).
+#   2. <repo>/tqg-token.txt — a plain file with the token in it. Hand-made,
+#      easy to edit, never written by the app, and gitignored.
+#   3. <appdata>/sender_token — the copy the app saved itself, 0600.
+#   4. Nothing: the app asks for it on the token screen.
+#
+# The token is the relay's RELAY_SEND_TOKEN. It is a secret: it must never be
+# committed, never be baked into a build, and never be shipped with the game.
+
+
 def _env_token():
     """The token from the environment. Present-but-empty means "no token"."""
     env = os.environ.get("TQG_SEND_TOKEN")
@@ -134,22 +179,53 @@ def _env_token():
     return env.strip()
 
 
-def _file_token():
+def _read_token_file(path):
+    """Read a token out of a text file. Tolerates KEY=value lines."""
     try:
-        with open(TOKEN_FILE, encoding="utf-8") as fh:
-            return fh.read().strip()
+        with open(path, encoding="utf-8") as fh:
+            raw = fh.read().strip()
     except OSError:
         return ""
+    if not raw:
+        return ""
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            key = key.strip().upper()
+            if "TOKEN" in key and value.strip():
+                return value.strip().strip("\"'")
+            continue
+        return line
+    return ""
+
+
+def _repo_token():
+    """The token from <repo>/tqg-token.txt, if that file is there."""
+    return _read_token_file(REPO_TOKEN_FILE)
+
+
+def _saved_token():
+    """The token the app saved for itself last time."""
+    return _read_token_file(TOKEN_FILE)
 
 
 def resolve_token():
-    """Environment first, then the saved copy."""
+    """(token, where it came from). The environment wins."""
     env = _env_token()
     if env:
-        return env
+        return env, "TQG_SEND_TOKEN"
     if os.environ.get("TQG_SEND_TOKEN") is not None:
-        return ""            # explicitly empty: do not fall back to the file
-    return _file_token()
+        return "", ""             # explicitly empty: do not fall back
+    repo = _repo_token()
+    if repo:
+        return repo, "tqg-token.txt"
+    saved = _saved_token()
+    if saved:
+        return saved, "saved token"
+    return "", ""
 
 
 def _save_token(token):
@@ -214,6 +290,61 @@ def _fit(text, font, max_w):
     return (text + "...") if text else ""
 
 
+def _wrap(text, font, max_w, max_lines=None):
+    """Break text into lines that fit `max_w`.
+
+    Words are kept whole where possible; a word longer than the panel is
+    split hard, because a question must never be cut off mid-word with an
+    ellipsis — the operator has to be able to read what they are sending.
+    Returns (lines, hidden_count).
+    """
+    text = (text or "").rstrip()
+    if not text:
+        return [""], 0
+    if max_w <= 0:
+        return [text], 0
+
+    def hard_split(word):
+        """Break a word that cannot fit on a line of its own."""
+        out = []
+        cur = ""
+        for ch in word:
+            if cur and font.size(cur + ch)[0] > max_w:
+                out.append(cur)
+                cur = ch
+            else:
+                cur += ch
+        if cur:
+            out.append(cur)
+        return out
+
+    lines = []
+    cur = ""
+    for word in text.split(" "):
+        if font.size(word)[0] > max_w:
+            if cur:
+                lines.append(cur)
+                cur = ""
+            pieces = hard_split(word)
+            lines.extend(pieces[:-1])
+            cur = pieces[-1]
+            continue
+        trial = word if not cur else cur + " " + word
+        if font.size(trial)[0] <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+
+    if max_lines is not None and len(lines) > max_lines:
+        hidden = len(lines) - max_lines
+        lines = lines[:max_lines]
+        return lines, hidden
+    return lines, 0
+
+
 class Sender:
     def __init__(self, token=None):
         pygame.init()
@@ -234,7 +365,12 @@ class Sender:
         self.operator_name = os.environ.get("TQG_SENDER_NAME", "OPERATOR")
 
         # --- the token ------------------------------------------------------
-        self.token = token if token is not None else resolve_token()
+        if token is None:
+            token, source = resolve_token()
+        else:
+            source = "given"
+        self.token = token or ""
+        self.token_source = source
         self.token_state = "checking" if self.token else "missing"
         self.token_detail = ""
         self.token_input = ""
@@ -263,6 +399,8 @@ class Sender:
 
         self.room_rects = []
         self.field_rects = []
+        self.compose_scroll = 0
+        self.compose_focus = -1
         self._layout()
         if self.token:
             self._validate_async(self.token)
@@ -329,22 +467,36 @@ class Sender:
         # the operator has to see a whole question at once.
         self.font_large, self.font_med, self.font_small = ui.get_scaled_fonts(
             {"settings": {"text_size": 0.85}}, w, h)
+        # The help screen has a lot to say; it gets its own, smaller font so
+        # that nothing is clipped and nothing has to be cut off at the bottom.
+        self.font_help = ui.get_scaled_fonts(
+            {"settings": {"text_size": 0.55}}, w, h)[2]
         pad = max(10, int(w * 0.016))
-        head_h = int(h * 0.135)
-        foot_h = max(28, int(h * 0.065))
         gap = pad
-        total = w - 2 * pad
-        room_w = int(total * 0.22)
-        side_w = int(total * 0.26)
-        comp_w = total - room_w - side_w - 2 * gap
+        head_h = int(h * 0.125)
+        foot_h = max(26, int(h * 0.058))
+        strip_h = max(90, int(h * 0.20))
+        total_w = w - 2 * pad
+        room_w = int(total_w * 0.24)
+        # The body: the room on the left, the form on the right. The form gets
+        # the room it needs — a question is 200 characters and it has to be
+        # readable, not clipped.
+        body_h = h - head_h - foot_h - strip_h - 2 * gap
         top = head_h
-        bottom = h - foot_h
+        body_bottom = top + body_h
+        strip_top = body_bottom + gap
+
         self.rect_head = pygame.Rect(0, 0, w, head_h)
-        self.rect_room = pygame.Rect(pad, top, room_w, bottom - top)
-        self.rect_comp = pygame.Rect(pad + room_w + gap, top, comp_w, bottom - top)
-        self.rect_side = pygame.Rect(pad + room_w + gap + comp_w + gap, top,
-                                     side_w, bottom - top)
-        self.rect_foot = pygame.Rect(0, bottom, w, foot_h)
+        self.rect_room = pygame.Rect(pad, top, room_w, body_h)
+        self.rect_comp = pygame.Rect(pad + room_w + gap, top,
+                                     total_w - room_w - gap, body_h)
+        half = (total_w - gap) // 2
+        self.rect_delivery = pygame.Rect(pad, strip_top, half, strip_h)
+        self.rect_replies = pygame.Rect(pad + half + gap, strip_top,
+                                        total_w - half - gap, strip_h)
+        self.rect_foot = pygame.Rect(0, h - foot_h, w, foot_h)
+        # Kept for the older helpers: the right-hand strip as a whole.
+        self.rect_side = pygame.Rect(pad, strip_top, total_w, strip_h)
 
     # --- helpers ------------------------------------------------------------
     def note(self, text, tone="info", seconds=6.0):
@@ -474,7 +626,7 @@ class Sender:
             return
         if self.help:
             if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
-                       pygame.K_h, pygame.K_H):
+                       pygame.K_h):
                 self.help = False
             return
         if self.unlocking:
@@ -627,7 +779,8 @@ class Sender:
                 self._draw_unlock(s, self.rect_comp)
             else:
                 self._draw_compose(s, self.rect_comp)
-            self._draw_side(s, self.rect_side)
+            self._draw_delivery(s, self.rect_delivery)
+            self._draw_replies(s, self.rect_replies)
         self._draw_footer(s, w, h)
 
         try:
@@ -689,11 +842,15 @@ class Sender:
 
     def _draw_room(self, s, rect):
         inner = self._panel(s, rect, "THE ROOM")
-        rows = self._room_rows()
         y = inner.y
+        rows = self._room_rows()
+        focused = (self.focus == 0 and not self.editing)
+        s.blit(self.font_small.render(
+            "PICK WHO GETS IT", True, COLOR_DIMMER), (inner.x, y))
+        y += self.font_small.get_linesize() + 6
+
         for peer in rows:
             selected = (self.recipient or {}).get("id") == peer["id"]
-            focused = (self.focus == 0 and not self.editing)
             if selected:
                 color = COLOR_ACCENT
                 prefix = "> "
@@ -706,7 +863,13 @@ class Sender:
             label = prefix + peer["name"]
             if peer.get("tag"):
                 label += "  (" + peer["tag"] + ")"
+            label = _fit(label, self.font_med, inner.width)
             surf = self.font_med.render(label, True, color)
+            if selected:
+                # a filled bar so the current recipient is obvious at a glance
+                bar = pygame.Rect(inner.x - 6, y - 2, inner.width + 4,
+                                  surf.get_height() + 4)
+                pygame.draw.rect(s, COLOR_EDGE, bar)
             s.blit(surf, (inner.x, y))
             self.room_rects.append(
                 (pygame.Rect(inner.x - 6, y - 2, inner.width + 8,
@@ -714,81 +877,132 @@ class Sender:
             y += self.font_med.get_linesize() + 4
             if y > inner.bottom - self.font_med.get_linesize():
                 break
-        if len(rows) == 1:
-            s.blit(self.font_small.render("NOBODY ELSE IS PLAYING", True, COLOR_DIMMER),
-                   (inner.x, y + 4))
+
+        n = len(self._others())
+        if n == 0:
+            s.blit(self.font_small.render("NOBODY ELSE IS PLAYING",
+                                          True, COLOR_DIMMER), (inner.x, y + 4))
         else:
             s.blit(self.font_small.render(
-                "[UP/DOWN] CHOOSE", True, COLOR_DIMMER), (inner.x, y + 4))
+                "%d PLAYER%s PLAYING" % (n, "" if n == 1 else "S"),
+                True, COLOR_DIMMER), (inner.x, y + 4))
+            s.blit(self.font_small.render("[UP/DOWN] CHOOSE", True, COLOR_DIMMER),
+                   (inner.x, y + 4 + self.font_small.get_linesize() + 2))
 
-    def _row(self, s, inner, y, label, value, focused, editing=False,
-             value_color=None, vfont=None):
-        """One labelled row. Returns the clickable rect."""
-        lab_font = self.font_small
-        vfont = vfont or self.font_med
-        lab_color = COLOR_ACCENT if focused else COLOR_DIM
-        val_color = value_color if value_color is not None else (
-            COLOR_TEXT if focused else COLOR_DIM)
-        lab = lab_font.render(label, True, lab_color)
-        s.blit(lab, (inner.x, y + 3))
-        vx = inner.x + lab.get_width() + 12
-        avail = inner.right - vx
-        text = value + ("_" if editing else "")
-        text = _fit(text, vfont, avail)
-        surf = vfont.render(text, True, val_color)
-        s.blit(surf, (vx, y))
-        return pygame.Rect(inner.x - 6, y - 2, inner.width + 8,
-                           max(surf.get_height(), lab.get_height()) + 4)
+    def _compose_rows(self):
+        """The rows of the compose panel: label, value, and a colour hint."""
+        opts = self._options()
+        rows = [{"key": "to", "label": "SEND TO",
+                 "value": self._recipient_label(), "color": None}]
+        rows.append({"key": "q", "label": "QUESTION",
+                     "value": self.fields["q"], "color": None})
+        for i, okey in enumerate(OPTION_KEYS):
+            rows.append({"key": okey, "label": "OPTION %s" % OPTION_LETTERS[i],
+                         "value": self.fields[okey], "color": None})
+        c = self.fields["correct"]
+        if c < len(opts):
+            value = "%s) %s" % (OPTION_LETTERS[c], opts[c])
+        else:
+            value = "-"
+        rows.append({"key": "correct", "label": "CORRECT ANSWER",
+                     "value": value, "color": COLOR_ACCENT})
+        rows.append({"key": "send", "label": "SEND",
+                     "value": "FIRE IT" if self._can_send_now() else "NO TOKEN",
+                     "color": COLOR_GOOD if self._can_send_now() else COLOR_BAD})
+        rows.append({"key": "back", "label": "QUIT", "value": "CLOSE",
+                     "color": COLOR_BAD})
+        return rows
 
     def _draw_compose(self, s, rect):
-        inner = self._panel(s, rect, "COMPOSE")
-        y = inner.y
-        # The rows always fit the panel, even in the smallest window.
-        row_h = max(self.font_med.get_linesize() + 4,
-                    min(self.font_med.get_linesize() + 8,
-                        inner.height // len(FIELD_ORDER)))
-        opts = self._options()
+        """The form.
 
-        for idx, fkey in enumerate(FIELD_ORDER):
+        The values are wrapped, never truncated: a question is 200 characters
+        and the operator has to be able to read every word of what they are
+        sending. When the form is taller than the panel it scrolls, and the
+        scroll follows whatever field is focused.
+        """
+        inner = self._panel(s, rect, "COMPOSE")
+        lab_font = self.font_small
+        val_font = self.font_med
+        rows = self._compose_rows()
+        label_w = max(lab_font.size(r["label"])[0] for r in rows) + 16
+        vx = inner.x + label_w
+        avail = max(60, inner.right - vx - 6)
+
+        # Wrap first, so every row can be as tall as its text needs.
+        laid = []
+        total = 0
+        for idx, r in enumerate(rows):
             focused = (idx == self.focus)
             editing = focused and self.editing
-            if fkey == "to":
-                r = self._row(s, inner, y, "SEND TO", self._recipient_label(),
-                              focused)
-            elif fkey in TEXT_KEYS:
-                label = "QUESTION" if fkey == "q" else \
-                    "OPTION %s" % OPTION_LETTERS[OPTION_KEYS.index(fkey)]
-                r = self._row(s, inner, y, label, self.fields[fkey], focused,
-                              editing)
-            elif fkey == "correct":
-                c = self.fields["correct"]
-                if c < len(opts):
-                    value = "%s) %s" % (OPTION_LETTERS[c], opts[c])
-                else:
-                    value = "-"
-                r = self._row(s, inner, y, "CORRECT ANSWER", value, focused,
-                              value_color=COLOR_ACCENT)
-            elif fkey == "send":
-                r = self._row(s, inner, y, "SEND",
-                              "FIRE IT" if self._can_send_now()
-                              else "NO TOKEN", focused,
-                              value_color=COLOR_GOOD if self._can_send_now()
-                              else COLOR_BAD)
-            else:
-                r = self._row(s, inner, y, "QUIT", "CLOSE", focused,
-                              value_color=COLOR_BAD)
-            self.field_rects.append((r, idx))
-            y += row_h
-            if y > inner.bottom:
-                break
+            text = r["value"] + ("_" if editing else "")
+            lines, hidden = _wrap(text, val_font, avail)
+            h = max(lab_font.get_linesize(),
+                    len(lines) * val_font.get_linesize())
+            laid.append({"r": r, "lines": lines, "hidden": hidden, "h": h,
+                         "focused": focused, "y": total})
+            total += h + 7
+        total = max(0, total - 7)
+
+        # Keep the focused row on screen.
+        view_h = inner.height
+        max_scroll = max(0, total - view_h)
+        if self.compose_focus != self.focus:
+            self.compose_focus = self.focus
+            cur = laid[min(max(self.focus, 0), len(laid) - 1)]
+            off = self.compose_scroll
+            if cur["y"] < off:
+                off = cur["y"]
+            elif cur["y"] + cur["h"] > off + view_h:
+                off = cur["y"] + cur["h"] - view_h + 6
+            self.compose_scroll = max(0, min(off, max_scroll))
+        off = max(0, min(self.compose_scroll, max_scroll))
+        self.compose_scroll = off
+        self.compose_overflow = max_scroll
+
+        for idx, item in enumerate(laid):
+            y = inner.y + item["y"] - off
+            if y + item["h"] < inner.y - 4 or y > inner.bottom + 4:
+                continue
+            r = item["r"]
+            color = r.get("color") or (
+                COLOR_TEXT if item["focused"] else COLOR_DIM)
+            lab_color = COLOR_ACCENT if item["focused"] else COLOR_DIM
+            lab = lab_font.render(r["label"], True, lab_color)
+            s.blit(lab, (inner.x, y + 3))
+            ly = y
+            for line in item["lines"]:
+                s.blit(val_font.render(line, True, color), (vx, ly))
+                ly += val_font.get_linesize()
+            if item["hidden"]:
+                s.blit(self.font_small.render(
+                    "+%d MORE LINES" % item["hidden"], True, COLOR_DIMMER),
+                    (vx, ly))
+                ly += self.font_small.get_linesize()
+            self.field_rects.append((pygame.Rect(inner.x - 6, y - 3,
+                                                 inner.width + 8,
+                                                 max(item["h"], ly - y) + 6),
+                                     idx))
+
+        # A scrollbar, so it is obvious that there is more form below.
+        if max_scroll > 0:
+            bar_h = max(24, int(view_h * view_h / max(1, total)))
+            bar_y = inner.y + int((view_h - bar_h) * (off / float(max_scroll)))
+            pygame.draw.rect(s, COLOR_EDGE,
+                             pygame.Rect(inner.right - 4, inner.y, 3, view_h))
+            pygame.draw.rect(s, COLOR_ACCENT,
+                             pygame.Rect(inner.right - 4, bar_y, 3, bar_h))
+
+    def _scroll_compose(self, delta):
+        """The mouse wheel scrolls the form."""
+        self.compose_scroll = max(0, self.compose_scroll + delta)
 
     def _draw_side(self, s, rect):
-        split = rect.y + int(rect.height * 0.46)
-        drect = pygame.Rect(rect.x, rect.y, rect.width, split - rect.y - 5)
-        rrect = pygame.Rect(rect.x, split + 5, rect.width,
-                            rect.bottom - split - 5)
-        self._draw_delivery(s, drect)
-        self._draw_replies(s, rrect)
+        """Kept for callers that still ask for the whole bottom strip."""
+        half = (rect.width - 10) // 2
+        self._draw_delivery(s, pygame.Rect(rect.x, rect.y, half, rect.height))
+        self._draw_replies(s, pygame.Rect(rect.x + half + 10, rect.y,
+                                          rect.width - half - 10, rect.height))
 
     def _draw_delivery(self, s, rect):
         inner = self._panel(s, rect, "DELIVERY")
@@ -797,7 +1011,7 @@ class Sender:
             s.blit(self.font_small.render("NOTHING SENT YET", True, COLOR_DIMMER),
                    (inner.x, y))
             return
-        for entry in self.sent_log[:5]:
+        for entry in self.sent_log[:4]:
             state = entry.get("state", "SENDING")
             if state == "DELIVERED":
                 col = COLOR_GOOD
@@ -806,12 +1020,21 @@ class Sender:
             else:
                 col = COLOR_BAD
             head = "%s  %s" % (entry.get("to", "?"), state)
-            surf = self.font_small.render(head, True, col)
-            s.blit(surf, (inner.x, y))
+            s.blit(self.font_small.render(_fit(head, self.font_small,
+                                               inner.width), True, col),
+                   (inner.x, y))
             y += self.font_small.get_linesize() + 1
-            q = _fit(entry.get("q", ""), self.font_small, inner.width)
-            s.blit(self.font_small.render(q, True, COLOR_DIM), (inner.x, y))
-            y += self.font_small.get_linesize() + 6
+            lines, hidden = _wrap(entry.get("q", ""), self.font_small,
+                                   inner.width, max_lines=2)
+            for line in lines:
+                s.blit(self.font_small.render(line, True, COLOR_DIM),
+                       (inner.x, y))
+                y += self.font_small.get_linesize()
+            if hidden:
+                s.blit(self.font_small.render("+%d MORE LINES" % hidden, True,
+                                              COLOR_DIMMER), (inner.x, y))
+                y += self.font_small.get_linesize()
+            y += 5
             if y > inner.bottom:
                 break
 
@@ -822,7 +1045,7 @@ class Sender:
             s.blit(self.font_small.render("NO ANSWERS YET", True, COLOR_DIMMER),
                    (inner.x, y))
             return
-        for res in self.results[:5]:
+        for res in self.results[:4]:
             who = str(res.get("by") or "?").upper()
             verdict = res.get("correct")
             if verdict is True:
@@ -839,10 +1062,17 @@ class Sender:
             y += self.font_small.get_linesize() + 1
             sent = self.sent_by_qid.get(res.get("qid"))
             if sent:
-                s.blit(self.font_small.render(
-                    _fit(sent.get("q", ""), self.font_small, inner.width),
-                    True, COLOR_DIMMER), (inner.x, y))
-                y += self.font_small.get_linesize() + 6
+                lines, hidden = _wrap(sent.get("q", ""), self.font_small,
+                                      inner.width, max_lines=2)
+                for qline in lines:
+                    s.blit(self.font_small.render(qline, True, COLOR_DIMMER),
+                           (inner.x, y))
+                    y += self.font_small.get_linesize()
+                if hidden:
+                    s.blit(self.font_small.render("+%d MORE LINES" % hidden, True,
+                                                  COLOR_DIMMER), (inner.x, y))
+                    y += self.font_small.get_linesize()
+                y += 4
             if y > inner.bottom:
                 break
 
@@ -890,19 +1120,38 @@ class Sender:
             (inner.x, inner.bottom - self.font_small.get_linesize()))
 
     def _draw_help(self, s, w, h):
-        rect = pygame.Rect(int(w * 0.12), int(h * 0.06),
-                           int(w * 0.76), int(h * 0.88))
+        """The help screen: two columns, so nothing is cut off.
+
+        The columns have a minimum width. On a window too small for two of
+        them, the right column moves below the left one instead of over it.
+        """
+        rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
+                           int(w * 0.90), int(h * 0.94))
         inner = self._panel(s, rect, "HOW THIS WORKS")
-        y = inner.y
-        for txt, col in HELP_LINES:
-            if not txt:
-                y += self.font_small.get_linesize() + 2
-                continue
-            s.blit(self.font_small.render(_fit(txt, self.font_small, inner.width),
-                                          True, col), (inner.x, y))
-            y += self.font_small.get_linesize() + 2
-            if y > inner.bottom:
-                break
+        gap = 26
+        stacked = inner.width < 2 * 360 + gap
+        col_w = (inner.width - gap) // 2 if not stacked else inner.width
+        x2 = inner.x + col_w + gap
+        y2 = inner.y
+
+        def draw(lines, x, y):
+            for txt, col in lines:
+                if not txt:
+                    y += self.font_help.get_linesize() + 1
+                    continue
+                s.blit(self.font_help.render(_fit(txt, self.font_help, col_w),
+                                              True, col), (x, y))
+                y += self.font_help.get_linesize() + 1
+                if y > inner.bottom:
+                    break
+            return y
+
+        if stacked:
+            y2 = draw(HELP_STORY, inner.x, inner.y) + 10
+            draw(HELP_KEYS, inner.x, y2)
+        else:
+            draw(HELP_STORY, inner.x, inner.y)
+            draw(HELP_KEYS, x2, y2)
 
     def _draw_footer(self, s, w, h):
         if self.toast:
@@ -930,8 +1179,13 @@ class Sender:
                         self._forget()
                     else:
                         self.handle_key(event)
-                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    self.handle_click(event.pos)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 4:
+                        self._scroll_compose(-48)
+                    elif event.button == 5:
+                        self._scroll_compose(48)
+                    elif event.button == 1:
+                        self.handle_click(event.pos)
                 elif event.type == pygame.VIDEORESIZE:
                     self.screen = pygame.display.set_mode(
                         (max(640, event.w), max(480, event.h)), pygame.RESIZABLE)
@@ -948,13 +1202,15 @@ class Sender:
 
 
 def main():
-    token = resolve_token()
+    token, source = resolve_token()
     if not token:
-        print("[*] No TQG_SEND_TOKEN in the environment — the app will ask for it.")
-        print("    Get it from the relay host:")
+        print("[*] No token found — the app will ask for one.")
+        print("    It looks, in order, at: TQG_SEND_TOKEN, %s," % REPO_TOKEN_FILE)
+        print("    and the copy it saved in %s." % TOKEN_FILE)
+        print("    To get it off the relay host:")
         print('      ssh nept@192.168.99.56 "sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env"')
     else:
-        print("[*] Using the token from the environment.")
+        print("[*] Using the token from %s." % source)
     app = Sender(token=token)
     app.run()
 
