@@ -555,8 +555,32 @@ TQG_SEND_TOKEN=... python3 tools/sender/sender.py
 
 # releases
 gh release list
-gh release view v5.0.0-remastered --json assets
+gh release view v5.1.0-beta-remastered --json assets
 ```
 
-Current versions: game **5.0.0** (multiplayer alpha, receiver build),
-classic **2.02**, site tag `v5.0.0-remastered`.
+Current versions: game **5.1.0-beta** (multiplayer alpha, receiver build),
+classic **2.02**, pinned site tag `v5.1.0-beta-remastered`, fallback tag
+`v5.0.0-remastered`.
+
+### Cutting a release
+
+Four things have to move together, and `server/test_site.py` guards three of
+them:
+
+1. `config.py` → `VERSION` (the single source of truth);
+2. `js/main.js` → `REMASTER_TAG` (`"v" + VERSION + "-remastered"`), and move
+   `REMASTER_FALLBACK_TAG` to the previous release;
+3. `index.html` / `legacy.html` → every `releases/download/<tag>/` URL and the
+   on-page labels. The test fails on any stale `vX.Y.Z-remastered` in a URL;
+4. publish a release whose tag contains `remastered` — the three build
+   workflows trigger on `release: published`.
+
+The site does not depend on step 2 staying fresh: `resolveRemasterTag()` reads
+the release list and picks the newest tag containing "remastered" that is newer
+than the pinned one, so a release published while the page is live becomes the
+download button immediately. `REMASTER_FALLBACK_TAG` is only what the buttons
+use if the GitHub API cannot be reached at all.
+
+The tag naming matters: `v5.1.0-beta-remastered` is a valid release tag *and*
+parses as version 5.1.0. `versionParts()` stops at the first non-numeric
+component, so `beta` and `remastered` cost nothing.

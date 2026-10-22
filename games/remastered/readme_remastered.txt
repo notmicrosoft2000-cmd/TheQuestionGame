@@ -62,7 +62,7 @@ NOTES:
   it without asking again.
 
 ONLINE (who is playing + questions from the operator):
-- This is the multiplayer alpha (v5.0.0). Treat it as an alpha: it will break,
+- This is the multiplayer alpha (v5.1.0-beta). Treat it as an alpha: it will break,
   and it will break often. When it does, the rest of the game is unaffected.
 - This build is the RECEIVER half. It joins the room, plays the questions the
   operator sends, and reports your answers back. The half that writes questions

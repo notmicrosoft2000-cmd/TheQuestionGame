@@ -3,7 +3,10 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
 
-  const REMASTER_TAG = "v5.0.0-remastered";
+  const REMASTER_TAG = "v5.1.0-beta-remastered";
+  // The known-good release to fall back to if the API cannot be reached and no
+  // bigger-versioned release can be resolved from the release list.
+  const REMASTER_FALLBACK_TAG = "v5.0.0-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -2471,9 +2474,57 @@
   const FALLBACKS = {
     classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz", apk: "TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" },
     // The multiplayer alpha is desktop only: Windows, macOS and Linux. There
-    // is no Android asset for it, so no apk fallback is offered.
-    remastered: { tag: REMASTER_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
+    // is no Android asset for it, so no apk fallback is offered. `tag` is the
+    // last release we know exists; `tag` is overwritten by
+    // resolveRemasterTag() when a newer one is published, so the buttons
+    // always point at the current release.
+    remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
+
+  // "v5.1.0-beta-remastered" -> [5, 1, 0, 0]  (a "beta" counts as 0)
+  function versionParts(tag) {
+    const m = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?/.exec(String(tag || ""));
+    if (!m) return null;
+    return [1, 2, 3, 4].map((i) => parseInt(m[i] || "0", 10) || 0);
+  }
+
+  function isRemasterTag(tag) {
+    return /remastered/i.test(String(tag || ""));
+  }
+
+  function higherVersion(a, b) {
+    const pa = versionParts(a);
+    const pb = versionParts(b);
+    if (!pa) return false;
+    if (!pb) return true;
+    for (let i = 0; i < 4; i++) {
+      if (pa[i] !== pb[i]) return pa[i] > pb[i];
+    }
+    return false;
+  }
+
+  // Pick the newest *published* remastered release, so a release that is
+  // published while the page is live becomes the download immediately. Falls
+  // through to the pinned tag, then to the last known-good one, and never
+  // touches state until a release we can actually use has been picked.
+  async function resolveRemasterTag() {
+    let names = [];
+    try {
+      const res = await fetch("https://api.github.com/repos/" + REPO + "/releases");
+      if (res.ok) {
+        const rels = await res.json();
+        names = (Array.isArray(rels) ? rels : [])
+          .filter((r) => isRemasterTag(r.tag_name))
+          .map((r) => r.tag_name)
+          .filter(Boolean);
+      }
+    } catch (e) { /* offline: the pinned tag stands */ }
+    if (!names.length) names = [REMASTER_TAG];
+    const candidate = names.reduce((best, t) => (higherVersion(t, best) ? t : best), names[0]);
+    if (higherVersion(REMASTER_TAG, candidate)) return REMASTER_TAG;
+    if (!names.length) return REMASTER_FALLBACK_TAG;
+    return candidate;
+  }
 
   function downloadUrl(tag, file) {
     return "https://github.com/" + REPO + "/releases/download/" + tag + "/" + file;
@@ -2575,7 +2626,9 @@
         if (t) t.classList.remove("hidden");
       });
     }
-    loadReleaseFromTag(REMASTER_TAG, {
+    const remTag = await resolveRemasterTag();
+    FALLBACKS.remastered.tag = remTag;
+    loadReleaseFromTag(remTag, {
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
       macBtn: "dlRemMac", macStatus: "dlRemMacStatus",
@@ -2591,6 +2644,7 @@
           if (match && match.tag_name) tag = match.tag_name;
         }
       } catch (e) { }
+      FALLBACKS.classic.tag = tag;
       loadReleaseFromTag(tag, {
         relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
         winBtn: "dlWindows", winStatus: "dlWindowsStatus",

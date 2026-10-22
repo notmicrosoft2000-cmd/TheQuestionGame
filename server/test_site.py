@@ -106,6 +106,33 @@ for ident in ("remRelVersion", "remRelDate", "relVersion", "relDate",
               "dlRemWindows", "dlRemMac", "dlRemLinux"):
     check("#%s exists in index.html" % ident, ('id="%s"' % ident) in index)
 
+print("== the site resolves the newest published remastered release ==")
+# The download buttons must follow whatever remastered release exists, so a
+# release published while the page is live becomes the download immediately.
+# The pinned REMASTER_TAG is only a floor; REMASTER_FALLBACK_TAG is the last
+# release known to exist if the API cannot be reached at all.
+check("main.js declares REMASTER_FALLBACK_TAG",
+      re.search(r'REMASTER_FALLBACK_TAG\s*=\s*"([^"]+)"', mainjs) is not None)
+fb_m = re.search(r'REMASTER_FALLBACK_TAG\s*=\s*"([^"]+)"', mainjs)
+fallback_tag = fb_m.group(1) if fb_m else "?"
+check("the fallback tag is not newer than the pinned tag",
+      not fallback_tag.startswith("v") or fallback_tag <= rem_tag or
+      fallback_tag.rsplit("-", 1)[0] <= rem_tag.rsplit("-", 1)[0],
+      (fallback_tag, rem_tag))
+
+check("a version parser exists", "function versionParts(" in mainjs)
+check("a version comparison exists", "function higherVersion(" in mainjs)
+check("the resolver exists", "async function resolveRemasterTag(" in mainjs)
+check("the release list is read, not just the pinned tag",
+      "const remTag = await resolveRemasterTag();" in mainjs)
+check("the chosen tag lands in the fallback map",
+      "FALLBACKS.remastered.tag = remTag;" in mainjs)
+check("remastered releases are recognised by name", "isRemasterTag" in mainjs)
+# The old behaviour pinned the downloads to REMASTER_TAG for ever; the resolver
+# must be what loadRelease uses now.
+check("loadRelease does not pin the remaster tag",
+      "loadReleaseFromTag(REMASTER_TAG," not in mainjs)
+
 print("== no API key is committed to the site ==")
 check("js/config.js has no gsk_ key", "gsk_" not in read("js/config.js"))
 

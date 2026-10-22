@@ -33,7 +33,7 @@ The debug APK from `bin/` was published on the GitHub release
 `v4.0.0-remastered` as
 `TheQuestionGameRemastered-Android-4.0.0-arm64-v8a-debug.apk`.
 
-That was the last Android build. The v5.0.0 multiplayer alpha is **desktop
+That was the last Android build. The v5.1.0-beta multiplayer alpha is **desktop
 only** — Windows, macOS and Linux — so there is no APK for it and the site's
 download card deliberately offers no Android link for that release. The site
 scans a release's assets for a `.apk`, so an APK dropped into a future release
