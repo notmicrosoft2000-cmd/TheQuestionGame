@@ -54,6 +54,34 @@ ONLINE_EXPLAINER = [
     "TO IT — THAT HALF IS NOT IN THIS BUILD.",
 ]
 
+# Names that mean "the operator's sender is connected". Matching is on the peer
+# name because the relay only knows ids and display names; the sender's name
+# defaults to OPERATOR (TQG_SENDER_NAME) unless the operator renames it.
+_OPERATOR_NAMES = frozenset({"OPERATOR", "OPERATOR APP", "SENDER"})
+
+
+def _is_operator_peer(peer):
+    """True when this room member is the operator's sender, not a player."""
+    if not isinstance(peer, dict):
+        return False
+    name = str(peer.get("name") or "").strip().upper()
+    return name in _OPERATOR_NAMES
+
+# Lobbies are not built yet. These are shown on the ONLINE screen as a teaser:
+# a fixed, obviously-placeholder list so the shape of the feature is visible
+# without pretending any of it works. Nothing here is clickable or real.
+ONLINE_LOBBY_TEASER = [
+    ("NIGHT SHIFT", "soon"),
+    ("THE WAITING ROOM", "soon"),
+    ("SESSION 3 ARCHIVE", "soon"),
+    ("PRIVATE — BY INVITATION", "later"),
+]
+ONLINE_LOBBY_BLURB = [
+    "ROOMS OF YOUR OWN ARE COMING. OPEN A LOBBY, DECIDE WHO",
+    "GETS IN, AND KEEP A SESSION TO YOURSELF INSTEAD OF",
+    "SHARING ONE WITH EVERY INSTALL. NONE OF THIS WORKS YET.",
+]
+
 LOGS_ENTRIES = [
     "ENTRY 04 — UNDATED\n\nThe questions were never the point. The pauses were.\nWe started timing the silences before we started reading the answers.",
     "ENTRY 11 — UNDATED\n\nSubject returned a second time. Most do not.\nWe do not know what brings them back. We have stopped asking.",
@@ -205,6 +233,12 @@ class Game:
             "screen_tear_until": 0.0,
             "whisper_text": None,
             "whisper_until": 0.0,
+            # Multiplier applied to the *duration* of a scare. The operator's
+            # sender sets it per effect, so the same scare can land gently or
+            # hard. 1.0 is the game's own behaviour. The relay clamps the
+            # operator's dial to 0.1-2.0; this clamps again so a hand-made
+            # effect can never stretch a scare past 2.5x.
+            "scare_scale": 1.0,
         }
 
         self.session_history = []
@@ -804,6 +838,43 @@ class Game:
         except Exception:
             pending = 0
         self._social_pending_cache = pending
+        self._play_social_effects()
+
+    def _play_social_effects(self):
+        """Play any scare/glitch the operator fired at us.
+
+        Same rule as a question: nothing announces it. No toast, no note — the
+        effect simply happens, exactly as if the model had chosen it. The
+        intensity the operator set stretches how long the effect lasts, so "a
+        little" and "a lot" are actually different on screen.
+        """
+        if self.social is None:
+            return
+        for _ in range(8):
+            try:
+                item = self.social.take_effect()
+            except Exception:
+                return
+            if not item:
+                return
+            name = str(item.get("effect") or "").strip().lower()
+            if not name:
+                continue
+            try:
+                inten = float(item.get("intensity") or 1.0)
+            except (TypeError, ValueError):
+                inten = 1.0
+            try:
+                # The operator's dial stretches how long the effect lasts.
+                fx = self.fx
+                before = fx.get("scare_scale", 1.0)
+                fx["scare_scale"] = max(0.25, min(2.5, inten))
+                if scares.apply_scare(self, name):
+                    self._scares_fired += 1
+                    self._used_scares.add(name)
+                fx["scare_scale"] = before
+            except Exception:
+                pass
 
     def _social_step_from(self, item):
         """Convert a relay question into a playable script step."""
@@ -842,7 +913,13 @@ class Game:
     # during play (see _queue_social_question).
 
     def _online_status(self):
-        """(status, others) from the presence client; never fatal."""
+        """(status, others) from the presence client; never fatal.
+
+        The operator is filtered out: the room is shown as *players*. Seeing a
+        peer called OPERATOR in the list would tell the player that someone is
+        watching them specifically, which is exactly what the room must not
+        give away. The operator still receives their questions.
+        """
         if self.social is None:
             return "disabled", []
         try:
@@ -853,6 +930,10 @@ class Game:
             others = self.social.others()
         except Exception:
             others = []
+        try:
+            others = [p for p in others if not _is_operator_peer(p)]
+        except Exception:
+            pass
         return status, others
 
     def _commit_online_name(self, text):
@@ -1738,7 +1819,7 @@ class Game:
 
         # The explanation is anchored to the bottom, so the room list above it
         # can grow into whatever space is left.
-        explain_lines = len(ONLINE_EXPLAINER) + 1
+        explain_lines = len(ONLINE_EXPLAINER) + len(ONLINE_LOBBY_BLURB) + 1
         explain_top = hint_y - explain_lines * font_tiny.get_linesize() - 10
 
         y = int(h * 0.20)
@@ -1753,6 +1834,8 @@ class Game:
         status, others = self._online_status()
         if status == "online":
             relay_txt, relay_col = "RELAY: ONLINE", (90, 200, 90)
+        elif status == "reconnecting":
+            relay_txt, relay_col = "RELAY: RECONNECTING...", (200, 180, 90)
         elif status == "connecting":
             relay_txt, relay_col = "RELAY: CONNECTING...", (200, 180, 90)
         elif status == "disabled":
@@ -1760,6 +1843,16 @@ class Game:
         else:
             relay_txt, relay_col = "RELAY: OFFLINE", (200, 80, 80)
         self.screen.blit(font_med.render(relay_txt, True, relay_col), (cx, y))
+        # After a drop that recovered, say so — a silent reconnect looks like a
+        # freeze, and this screen is where the player comes to check.
+        try:
+            reconnects = self.social.reconnects() if self.social else 0
+        except Exception:
+            reconnects = 0
+        if reconnects and status == "online":
+            self.screen.blit(font_small.render(
+                "RECONNECTED x%d" % reconnects, True, (90, 160, 90)),
+                (cx + font_med.size(relay_txt)[0] + 26, y + 10))
 
         # The name the room knows you by, on the same line.
         if self.online_edit is not None:
@@ -1783,8 +1876,10 @@ class Game:
         y += font_small.get_linesize() + 2
 
         # Reserve the room for the options and the test result, so the peer
-        # list can never push into the explanation below it.
-        reserve = (len(self.online_options) + 1) * font_med.get_linesize()
+        # list can never push into the explanation below it. The lobby teaser
+        # also has to fit, so it is charged against the same budget.
+        teaser_h = (len(ONLINE_LOBBY_TEASER) + 1) * font_small.get_linesize() + 8
+        reserve = (len(self.online_options) + 1) * font_med.get_linesize() + teaser_h
         peer_slots = int((explain_top - y - reserve) // font_small.get_linesize())
         peer_slots = max(0, min(4, peer_slots))
         if not others:
@@ -1804,6 +1899,22 @@ class Game:
                     (80, 80, 80)), (cx, y))
                 y += font_small.get_linesize() + 2
             y += 4
+
+        # Lobbies: not built, shown anyway. A quiet section that names the shape
+        # of what is coming, clearly marked SOON, so nothing here reads as a
+        # feature you can press. It is deliberately not focusable.
+        self.screen.blit(font_small.render(
+            "LOBBIES  —  COMING SOON", True, (100, 40, 40)), (cx, y))
+        y += font_small.get_linesize() + 2
+        for lobby_name, when in ONLINE_LOBBY_TEASER:
+            self.screen.blit(font_small.render("  " + lobby_name, True,
+                                               (70, 70, 70)), (cx, y))
+            tag = str(when).upper()
+            tx = cx + int(w * 0.30)
+            self.screen.blit(font_small.render("[" + tag + "]", True,
+                                               (60, 60, 60)), (tx, y))
+            y += font_small.get_linesize() + 2
+        y += 4
 
         # The options.
         for i, option in enumerate(self.online_options):
@@ -1834,6 +1945,10 @@ class Game:
         ey += font_tiny.get_linesize()
         for line in ONLINE_EXPLAINER:
             self.screen.blit(font_tiny.render(line, True, (140, 140, 140)),
+                             (cx, ey))
+            ey += font_tiny.get_linesize()
+        for line in ONLINE_LOBBY_BLURB:
+            self.screen.blit(font_tiny.render(line, True, (110, 90, 60)),
                              (cx, ey))
             ey += font_tiny.get_linesize()
 
@@ -1960,12 +2075,10 @@ class Game:
                          base_x, h - int(h * 0.18))
         else:
             text = step["q"] or ""
-            # A hand-written question is signed by whoever sent it.
-            social_item = step.get("_social")
-            if social_item:
-                who = str(social_item.get("from_name") or "someone").upper()
-                ui.draw_text(self.screen, "QUESTION FROM " + who, font_small,
-                             config.COLOR_DIM_RED, base_x, base_y - 30)
+            # A question that arrives from the room is dressed like every other
+            # question: no "from X" label, no attribution, nothing. Anything
+            # that distinguishes it tells the player somebody is watching, which
+            # is the whole thing this screen is not allowed to give away.
             t_color = config.COLOR_RED if ("afraid" in text.lower() or self.run_count >= 3) else config.COLOR_WHITE
             if self.typing_state == "THINKING":
                 dots = ["...", "....", ".....", "......"][int(self.now * 2) % 4]

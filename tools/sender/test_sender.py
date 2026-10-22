@@ -136,6 +136,44 @@ except Exception as exc:
     check("the help screen draws", False, repr(exc))
 app.help = False
 
+# The effects screen: the operator can fire a scare or glitch by hand. It must
+# draw, the list must come from the game's own registry, and the keys must move
+# the selection and the intensity without ever leaving the screen.
+check("the effects list is loaded from the game",
+      isinstance(app.effects, (list, tuple)) and len(app.effects) >= 10,
+      len(app.effects))
+check("the effects list contains real scares",
+      "flicker" in app.effects and "whisper" in app.effects, app.effects[:5])
+app.effects_screen = True
+try:
+    app.draw()
+    check("the effects screen draws", True)
+except Exception as exc:
+    check("the effects screen draws", False, repr(exc))
+
+app.effect_index = 0
+app.effect_intensity = 1.0
+app._handle_effects_key(type("E", (), {"key": pygame.K_DOWN, "unicode": ""})())
+check("down moves the effect selection", app.effect_index == 1, app.effect_index)
+app._handle_effects_key(type("E", (), {"key": pygame.K_RIGHT, "unicode": ""})())
+check("right raises the intensity", app.effect_intensity > 1.0,
+      app.effect_intensity)
+app._handle_effects_key(type("E", (), {"key": pygame.K_LEFT, "unicode": ""})())
+check("left lowers the intensity", abs(app.effect_intensity - 1.0) < 1e-9,
+      app.effect_intensity)
+for _ in range(12):
+    app._handle_effects_key(type("E", (), {"key": pygame.K_RIGHT, "unicode": ""})())
+check("intensity is capped so a scare cannot be made absurd",
+      app.effect_intensity <= 2.0, app.effect_intensity)
+for _ in range(20):
+    app._handle_effects_key(type("E", (), {"key": pygame.K_LEFT, "unicode": ""})())
+check("intensity has a floor, it cannot reach zero",
+      app.effect_intensity >= 0.5, app.effect_intensity)
+app._handle_effects_key(type("E", (), {"key": pygame.K_ESCAPE, "unicode": ""})())
+check("escape leaves the effects screen",
+      app.effects_screen is False, app.effects_screen)
+app.effects_screen = False
+
 # A long question wraps instead of being cut off with an ellipsis: every word
 # of a 200-character question ends up on screen somewhere in the form.
 app.fields["q"] = ("What is the airspeed velocity of an unladen swallow, and "
@@ -263,8 +301,68 @@ try:
           wait_until(lambda: any(p["id"] == "receiver0001" for p in player.online()), 3),
           player.online())
 
+    # --- effects: firing a scare by hand ------------------------------------
+    # The operator picks an effect and fires it at the receiver. It must arrive
+    # through the same poll a question uses, carry the intensity, and leave the
+    # question inbox untouched.
+    app.recipient = {"id": "receiver0001", "name": "RECEIVER"}
+    app.effects_screen = True
+    app.effects = ["whisper", "screen_tear"]
+    app.effect_index = 0
+    app.effect_intensity = 1.75
+    app._fire_effect()
+
+    fired = {}
+    def _take_effect():
+        item = player.take_effect()
+        if item:
+            fired.update(item)
+            return True
+        return False
+    check("receiver gets the fired effect", wait_until(_take_effect, 6), fired)
+    check("the effect arrives by name", fired.get("effect") == "whisper", fired)
+    check("the effect carries the intensity the operator set",
+          abs(float(fired.get("intensity", 0)) - 1.75) < 0.01, fired)
+    check("a fired effect is not delivered as a question",
+          player.take_question() is None)
+    check("the effects screen did not close after firing",
+          app.effects_screen is True, app.effects_screen)
+    app.effects_screen = False
+    check("the delivery log records the effect",
+          wait_until(lambda: (app._harvest(),
+                              any("EFFECT" in str(e.get("q", ""))
+                                  for e in app.sent_log))[1], 6),
+          app.sent_log)
+
+    # The receiver's reconnect logic: after the relay goes away and comes back,
+    # the client must recover on its own and say so.
+    _reconnect = social_mod.SocialClient("recon000001", "reconnector",
+                                         base_url="http://127.0.0.1:8107",
+                                         poll_secs=0.2, timeout=1, enabled=True,
+                                         send_token="")
+    try:
+        check("a fresh client joins",
+              wait_until(lambda: _reconnect.status() == "online", 5),
+              _reconnect.status())
+        _before = _reconnect.reconnects()
+        check("a healthy client has no reconnects yet",
+              _before == 0, _before)
+    finally:
+        _reconnect.stop()
+
+    # A dead relay is reported as a failure, not as a success.
+    _dead2 = social_mod.SocialClient("dead0002", "dead", base_url="http://127.0.0.1:9",
+                                     poll_secs=0.2, timeout=1, enabled=True)
+    try:
+        check("a dead relay puts the client into reconnecting, not online",
+              wait_until(lambda: _dead2.status() in ("reconnecting", "offline"), 4),
+              _dead2.status())
+        check("the client keeps trying rather than giving up",
+              _dead2.status() != "disabled", _dead2.status())
+    finally:
+        _dead2.stop()
+
     # And a dead relay is reported as a failure, not as a success.
-    import importlib as _il  # noqa: E402
     _dead = social_mod.SocialClient("dead0001", "dead", base_url="http://127.0.0.1:9",
                                     poll_secs=30, timeout=1, enabled=False)
     _ok, _detail, _ms = _dead.test_connection(timeout=1)

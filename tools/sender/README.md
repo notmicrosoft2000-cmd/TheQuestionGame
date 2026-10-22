@@ -57,9 +57,19 @@ ssh nept@192.168.99.56 "sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env"
 | `UP` / `DOWN` | on the `SEND TO` field: choose who receives the question |
 | `1` `2` `3` `4` | set which option is the correct one |
 | `F1` (or `H`) | the "how this works" screen |
+| `F2` | the effects screen: fire a scare or glitch by hand |
 | `CTRL+X` | forget the token |
 | `ESC` | quit (or leave the field you are editing) |
 | mouse wheel | scroll the compose form |
+
+On the effects screen (`F2`):
+
+| key | what it does |
+|---|---|
+| `UP` / `DOWN` | pick the effect |
+| `LEFT` / `RIGHT` | set the intensity — how long it lasts (x0.50 to x2.00) |
+| `ENTER` | fire it at the current recipient (stays open, so you can fire again) |
+| `F2` / `ESC` | back |
 
 ## Sections
 
@@ -74,6 +84,29 @@ ssh nept@192.168.99.56 "sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env"
   belong to.
 
 `F1` opens the full explanation, including where the relay physically lives.
+
+## Effects — firing a scare by hand (`F2`)
+
+The operator can also fire the game's own scares and glitches at a player,
+without writing a question. The list is read from the game's
+`scares.SCARE_REGISTRY`, so it can never drift from what the receiver can
+actually play.
+
+The effect travels the **same route** as a question (`/v1/send-question`, same
+`X-Send-Token` gate), but the body carries `"effect"` instead of `"q"` and it
+lands in its own store on the relay. The player's next presence poll collects it
+under `"effects"` and the game plays it through `scares.apply_scare` — which
+means it is **indistinguishable from the model choosing that effect itself**.
+No toast, no note, no warning. It simply happens.
+
+`intensity` scales how long the effect lasts (`game.fx["scare_scale"]`), so the
+same flicker can be a blink or a sustained stutter. The relay clamps it to
+`[0.1, 2.0]` and refuses unknown effect names with a `400`, so a typo fails
+loudly here instead of silently doing nothing on the player's screen.
+
+Effects are recorded in the delivery log like questions are, so the relay's
+verdict about them is reported just as honestly. They do not clear the compose
+form — there is nothing in it to clear.
 
 ## How a question travels
 

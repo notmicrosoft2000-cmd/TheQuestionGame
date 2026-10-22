@@ -414,6 +414,54 @@ check("camera scare is guaranteed only when it is enabled",
       ("webcam_flash" in config.SCARE_FLOOR_POOL) ==
       (config.WEBCAM_ENABLED and config.WEBCAM_GUARANTEED),
       config.SCARE_FLOOR_POOL)
+
+# The operator can fire an effect gently or hard. That scales how LONG it
+# lasts, by stretching the deadline the scare writes. Scaling the clock instead
+# is a trap: 2x made the effect last for the whole uptime, and 0.5x moved the
+# deadline into the past so nothing ever showed. These assertions pin the
+# duration maths, using a fixed-length effect so the ratio is exact.
+def _scaled_duration(effect, scale):
+    sc._last_applied.clear()
+    game.now = 1000.0
+    game.fx[effect + "_until"] = 0.0
+    game.fx["scare_scale"] = scale
+    sc.apply_scare(game, effect)
+    return game.fx[effect + "_until"] - 1000.0
+
+_was_webcam = config.WEBCAM_ENABLED
+config.WEBCAM_ENABLED = True
+try:
+    _d1 = _scaled_duration("webcam_flash", 1.0)
+    _d2 = _scaled_duration("webcam_flash", 2.0)
+    _dh = _scaled_duration("webcam_flash", 0.5)
+    check("an effect's duration is the game's own at x1.0", _d1 > 0, _d1)
+    check("x2.0 doubles how long the effect lasts",
+          abs(_d2 - _d1 * 2) < 1e-6, (_d1, _d2))
+    check("x0.5 halves how long the effect lasts",
+          abs(_dh - _d1 * 0.5) < 1e-6, (_d1, _dh))
+    check("a gentle effect still lands in the future, not the past", _dh > 0, _dh)
+finally:
+    config.WEBCAM_ENABLED = _was_webcam
+    game.fx["scare_scale"] = 1.0
+
+check("scaling an effect never moves the game clock",
+      game.now == 1000.0, game.now)
+
+# Every registered effect must survive a scaled and an unscaled call.
+_broke = []
+for _eff in sorted(sc.SCARE_REGISTRY):
+    for _s in (0.1, 1.0, 2.0):
+        try:
+            sc._last_applied.clear()
+            game.now = 1000.0
+            game.fx["scare_scale"] = _s
+            sc.apply_scare(game, _eff)
+            assert game.now == 1000.0, "clock moved"
+        except Exception as _exc:
+            _broke.append((_eff, _s, repr(_exc)))
+check("every effect survives every intensity", not _broke, _broke)
+game.fx["scare_scale"] = 1.0
+
 _fired = {"n": 0}
 _orig_apply = sc.apply_scare
 sc.apply_scare = lambda g, n: (_fired.__setitem__("n", _fired["n"] + 1) or True)
@@ -452,12 +500,17 @@ class _RoomStub:
     """A presence client with a fixed room, for layout tests."""
     status = "online"
 
-    def __init__(self, peers):
+    def __init__(self, peers, effects=None):
         self._peers = [{"name": "player%d" % i, "platform": "linux"}
                        for i in range(peers)]
+        self._effects = list(effects or [])
+        self.reconnects = lambda: 0
 
     def others(self):
         return list(self._peers)
+
+    def take_effect(self):
+        return self._effects.pop(0) if self._effects else None
 
 
 gmain.IS_ANDROID = True
@@ -502,6 +555,70 @@ check("the explanation promises no writing",
       gmain.ONLINE_EXPLAINER)
 check("the help screen explains the room too",
       any("THE ROOM" in v for v in gmain.HELP_VARIATIONS), gmain.HELP_VARIATIONS)
+
+# The room is shown as *players*. A peer called OPERATOR (the sender's default
+# name) must never appear in the list: seeing it tells the player that someone
+# is watching them specifically, which the room is not allowed to give away.
+_op_room = _RoomStub(2)
+_op_room._peers.append({"name": "OPERATOR", "platform": "linux"})
+_op_room._peers.append({"name": "operator", "platform": "linux"})
+_saved_social = game.social
+game.social = _op_room
+_visible = [p["name"] for p in game._online_status()[1]]
+check("the operator is kept out of the room list",
+      not any(n.upper() == "OPERATOR" for n in _visible), _visible)
+check("ordinary players still show up", len(_visible) == 2, _visible)
+game.social = _saved_social
+
+check("the operator filter recognises the sender's default name",
+      gmain._is_operator_peer({"name": "OPERATOR"}) is True)
+check("the operator filter leaves real players alone",
+      gmain._is_operator_peer({"name": "neptune"}) is False)
+
+# Lobbies are teased, not built. They must be present as a shape of things to
+# come, and clearly marked as not working yet.
+check("ONLINE teases lobbies", len(gmain.ONLINE_LOBBY_TEASER) >= 3,
+      gmain.ONLINE_LOBBY_TEASER)
+check("every teased lobby is marked soon or later",
+      all(str(w).lower() in ("soon", "later") for _, w in gmain.ONLINE_LOBBY_TEASER),
+      gmain.ONLINE_LOBBY_TEASER)
+check("the lobby blurb admits none of it works",
+      any("NONE OF THIS WORKS YET" in line.upper() for line in gmain.ONLINE_LOBBY_BLURB),
+      gmain.ONLINE_LOBBY_BLURB)
+
+# A room question must be dressed like any other question: no attribution, no
+# "from X" line telling the player a person wrote it.
+_social_src = open(os.path.join(HERE, "..", "TheQuestionGameRemastered", "main.py"),
+                   encoding="utf-8").read()
+check("a room question carries no 'from' label",
+      "QUESTION FROM " not in _social_src)
+check("a room question is not announced",
+      "SENT YOU A QUESTION" not in _social_src)
+check("nothing counts the questions someone sent",
+      "STILL REACH YOU" not in _social_src)
+
+# The receiver plays an operator-fired effect through its own scare system, and
+# says nothing about it.
+_effect_game = game
+_effect_game.fx["scare_scale"] = 1.0
+_effect_game.social = _RoomStub(1, effects=[
+    {"effect": "flicker", "intensity": 1.5},
+    {"effect": "no_such_scare", "intensity": 1.0},
+])
+try:
+    _effect_game._play_social_effects()
+    check("an operator effect is played without raising", True)
+except Exception as exc:
+    check("an operator effect is played without raising", False, repr(exc))
+check("an unknown effect is ignored, not fatal",
+      _effect_game.social.take_effect() is None)
+check("the effect did not leave the scare scale changed",
+      abs(_effect_game.fx.get("scare_scale", 1.0) - 1.0) < 1e-9,
+      _effect_game.fx.get("scare_scale"))
+check("effects leave no notice on screen — nothing announces them",
+      "EFFECT" not in " ".join(n.get("text", "") for n in _effect_game.social_notes),
+      _effect_game.social_notes)
+game.social = _saved_social
 
 # The layout must still fit the default window with a full room on screen.
 game.state = "ONLINE"

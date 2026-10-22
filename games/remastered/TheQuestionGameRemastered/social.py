@@ -62,12 +62,14 @@ class SocialClient:
         self._online = []
         self._inbox = []
         self._results = []
+        self._effects = []            # scares/glitches the operator fired at us
         self._send_outcomes = []      # what the relay said about a queued send
         self._status = "connecting"
         self._last_ok = 0.0
         self._last_error = ""
         self._sent = 0
         self._received = 0
+        self._reconnects = 0          # times a dropped link came back
 
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -102,9 +104,14 @@ class SocialClient:
         return bool(self._send_token)
 
     def status(self):
-        """'online' / 'offline' / 'connecting' / 'disabled'."""
+        """'online' / 'reconnecting' / 'offline' / 'connecting' / 'disabled'."""
         with self._lock:
             return self._status
+
+    def reconnects(self):
+        """How many times a dropped link came back. For the ONLINE screen."""
+        with self._lock:
+            return self._reconnects
 
     def online(self):
         """Everyone the relay currently knows about, including us."""
@@ -115,6 +122,22 @@ class SocialClient:
         """Everyone except us — that's the list you can send to."""
         with self._lock:
             return [dict(p) for p in self._online if p.get("id") != self.player_id]
+
+    def take_effect(self):
+        """Pop the oldest effect the operator fired at us, or None.
+
+        Effects ride the presence poll the same way questions do: the receiver
+        has no way to ask for one. The caller decides what to do with it — the
+        game plays it through the same `scares.apply_scare` the model uses.
+        """
+        with self._lock:
+            if not self._effects:
+                return None
+            return self._effects.pop(0)
+
+    def pending_effects(self):
+        with self._lock:
+            return len(self._effects)
 
     def pending_questions(self):
         with self._lock:
@@ -232,6 +255,33 @@ class SocialClient:
         self._wake.set()
         return True
 
+    def send_effect(self, to_id, effect, intensity=None):
+        """Fire a scare or glitch at one peer id (or 'all'). Operator only.
+
+        This rides the same relay and the same `to` field as a question, but it
+        is not a question: the relay delivers it as an effect and the receiver
+        plays it through its own scare system. The shipped game never calls
+        this — it has no send token, so the relay would refuse.
+        """
+        name = _clean(effect, 32).lower().replace(" ", "_")
+        if not name:
+            return False
+        payload = {
+            "from": self.player_id,
+            "to": to_id or "all",
+            "effect": name,
+        }
+        try:
+            level = float(intensity) if intensity is not None else 1.0
+        except (TypeError, ValueError):
+            level = 1.0
+        payload["intensity"] = max(0.1, min(2.0, level))
+        with self._lock:
+            self._outbox.append(("effect", payload))
+            self._sent += 1
+        self._wake.set()
+        return True
+
     def send_answer(self, item, choice, correct):
         """Report the answer to a question taken from `take_question()`."""
         if not isinstance(item, dict):
@@ -295,9 +345,22 @@ class SocialClient:
                 if not self._outbox:
                     return
                 kind, payload = self._outbox.pop(0)
-            path = "/v1/send-question" if kind == "send" else "/v1/answer"
+            path = "/v1/send-question" if kind in ("send", "effect") \
+                else "/v1/answer"
             ok, data = self._post(path, payload)
-            if kind == "send":
+            if kind == "effect":
+                # Same rule as a question: queueing is not delivery. Record
+                # what the relay said so the operator UI can tell the truth.
+                with self._lock:
+                    self._send_outcomes.append({
+                        "ok": ok,
+                        "to": payload.get("to", "all"),
+                        "q": "EFFECT: " + payload.get("effect", ""),
+                        "qid": data.get("id") or "",
+                        "delivered": data.get("delivered") or [],
+                        "error": "" if ok else (data.get("_error") or "offline"),
+                    })
+            elif kind == "send":
                 # Record what the relay actually said. The UI must not claim a
                 # question was sent just because it was queued.
                 outcome = {
@@ -312,6 +375,7 @@ class SocialClient:
                     self._send_outcomes.append(outcome)
 
     def _run(self):
+        fail_streak = 0
         while not self._stop.is_set():
             try:
                 self._drain_outbox()
@@ -325,6 +389,11 @@ class SocialClient:
                 now = time.time()
                 with self._lock:
                     if ok and data.get("ok"):
+                        # Recovered: drop the backoff and the streak at once so
+                        # the next blip starts from a normal poll interval.
+                        if fail_streak:
+                            self._reconnects += 1
+                        fail_streak = 0
                         self._status = "online"
                         self._last_ok = now
                         self._last_error = ""
@@ -333,14 +402,30 @@ class SocialClient:
                         if len(self._inbox) > config.SOCIAL_INBOX_MAX:
                             del self._inbox[:-config.SOCIAL_INBOX_MAX]
                         self._results.extend(data.get("results") or [])
+                        # Effects the operator fired at us while we were here.
+                        # They ride the same presence poll, so they arrive even
+                        # though the receiver has no way to ask for them.
+                        self._effects.extend(data.get("effects") or [])
+                        if len(self._effects) > config.SOCIAL_INBOX_MAX:
+                            del self._effects[:-config.SOCIAL_INBOX_MAX]
                     else:
-                        self._status = "offline"
+                        fail_streak += 1
+                        # "reconnecting" is a distinct state: the UI says so
+                        # instead of showing OFFLINE for one dropped packet.
+                        self._status = "reconnecting" if fail_streak < 3 else "offline"
                         # Keep the last known list briefly: a single dropped
                         # poll should not make the room flicker empty.
                         if now - self._last_ok > max(15.0, self._poll_secs * 3):
                             self._online = []
             except Exception:
+                fail_streak += 1
                 with self._lock:
-                    self._status = "offline"
-            self._wake.wait(self._poll_secs)
+                    self._status = "reconnecting" if fail_streak < 3 else "offline"
+            # Reconnect with resume: back off as failures mount so a dead relay
+            # is not hammered, but cap it so recovery is quick when it returns.
+            if fail_streak:
+                delay = min(self._poll_secs * (2 ** min(fail_streak, 4)), 20.0)
+            else:
+                delay = self._poll_secs
+            self._wake.wait(delay)
             self._wake.clear()

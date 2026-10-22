@@ -86,6 +86,30 @@ OPTION_KEYS = ["o0", "o1", "o2", "o3"]
 OPTION_LETTERS = ["A", "B", "C", "D"]
 TEXT_KEYS = ["q"] + OPTION_KEYS
 
+
+def _load_effect_names():
+    """The effects this sender can fire, straight from the game's registry.
+
+    Read from the game's own scares module so the list can never drift from
+    what the receiver is able to play. If the import fails for any reason, fall
+    back to the names the receiver is known to handle.
+    """
+    try:
+        from TheQuestionGameRemastered import scares as _scares
+        names = sorted(_scares.SCARE_REGISTRY.keys())
+        if names:
+            return names
+    except Exception:
+        pass
+    return [
+        "corruption", "flicker", "heartbeat", "jumpscare", "mouse_move",
+        "notification", "picture", "reverse_chord", "rgb_split", "rumble",
+        "screen_tear", "static_scream", "wallpaper", "webcam_flash", "whisper",
+        "window_drift", "window_shake", "window_teleport", "windows_minimize",
+        "windows_shake",
+    ]
+
+
 TOKEN_FILE = os.path.join(config.APP_DATA_DIR, "sender_token")
 REPO_TOKEN_FILE = os.path.join(_REPO, "tqg-token.txt")
 
@@ -136,8 +160,19 @@ HELP_KEYS = [
     ("1 2 3 4          set the correct option", COLOR_TEXT),
     ("MOUSE WHEEL      scroll the form", COLOR_TEXT),
     ("F1 or H          this help", COLOR_TEXT),
+    ("F2               effects: fire a scare or glitch", COLOR_TEXT),
     ("ESC              quit", COLOR_TEXT),
     ("CTRL+X           forget the saved token", COLOR_TEXT),
+    ("", COLOR_DIM),
+    ("EFFECTS — F2", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("The same echo only goes one way: you can also", COLOR_DIM),
+    ("fire the game's own scares and glitches at a", COLOR_DIM),
+    ("player by hand. Pick one, set how hard with", COLOR_DIM),
+    ("LEFT/RIGHT, press ENTER. It arrives through the", COLOR_DIM),
+    ("same poll as a question, and the game plays it", COLOR_DIM),
+    ("exactly as if it had chosen the effect itself —", COLOR_DIM),
+    ("no notice, no warning. It just happens.", COLOR_DIM),
     ("", COLOR_DIM),
     ("WHAT PRESSING SEND DOES", COLOR_ACCENT),
     ("", COLOR_DIM),
@@ -389,6 +424,14 @@ class Sender:
         self.sent_by_qid = {}            # qid -> the question we sent
         self.help = False
 
+        # Effects screen: fire a scare/glitch at the current recipient. The list
+        # is the game's own SCARE_REGISTRY, so the sender can never drift from
+        # what the receiver can actually play.
+        self.effects_screen = False
+        self.effects = _load_effect_names()
+        self.effect_index = 0
+        self.effect_intensity = 1.0      # 0.5 gentle .. 2.0 hard
+
         # Compose state.
         self.fields = {
             "q": "", "o0": "", "o1": "", "o2": "", "o3": "",
@@ -573,6 +616,34 @@ class Sender:
         else:
             self.note("COULD NOT QUEUE THE QUESTION", "bad")
 
+    def _fire_effect(self):
+        """Fire the selected effect at the current recipient."""
+        try:
+            name = self.effects[self.effect_index]
+        except Exception:
+            self.note("NO EFFECTS AVAILABLE", "bad")
+            return
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        try:
+            ok = self.social.send_effect(to.get("id", "all"), name,
+                                         self.effect_intensity)
+        except Exception:
+            ok = False
+        if ok:
+            # Record it in the delivery log too, so the relay's verdict about
+            # an effect is reported the same honest way a question's is.
+            self.sent_log.insert(0, {
+                "to": str(to.get("name", "EVERYONE")).upper(),
+                "q": "EFFECT: " + name.upper().replace("_", " "),
+                "at": self.now, "state": "SENDING", "n": 0})
+            del self.sent_log[8:]
+            self.note("FIRED %s x%.1f AT %s"
+                      % (name.upper().replace("_", " "), self.effect_intensity,
+                         str(to.get("name", "EVERYONE")).upper()),
+                      "info", 3.0)
+        else:
+            self.note("COULD NOT QUEUE THAT EFFECT", "bad")
+
     def _apply_outcome(self, out):
         """Turn the relay's answer about a queued send into something honest."""
         q = out.get("q", "")
@@ -606,7 +677,11 @@ class Sender:
                 if state == "DELIVERED":
                     # Only now is the question really gone. If the send was
                     # refused, the form keeps it, so nothing has to be retyped.
-                    if self.fields.get("q", "").strip() == q.strip():
+                    # Effects have no form to clear — they are fired, not
+                    # written — so only a real question empties the compose.
+                    is_effect = q.startswith("EFFECT:")
+                    if (not is_effect
+                            and self.fields.get("q", "").strip() == q.strip()):
                         for k in TEXT_KEYS:
                             self.fields[k] = ""
                         self.fields["correct"] = 0
@@ -624,10 +699,16 @@ class Sender:
         if key == pygame.K_F1:
             self.help = not self.help
             return
+        if key == pygame.K_F2:
+            self.effects_screen = not self.effects_screen
+            return
         if self.help:
             if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
                        pygame.K_h):
                 self.help = False
+            return
+        if self.effects_screen:
+            self._handle_effects_key(event)
             return
         if self.unlocking:
             self._handle_unlock_key(event)
@@ -673,6 +754,29 @@ class Sender:
             idx = key - pygame.K_1
             if idx < len(self._options()):
                 self.fields["correct"] = idx
+
+    def _handle_effects_key(self, event):
+        """The effects screen: pick an effect, set how hard, fire it."""
+        key = event.key
+        unicode = event.unicode
+        n = max(1, len(self.effects))
+        if key in (pygame.K_UP,):
+            self.effect_index = (self.effect_index - 1) % n
+        elif key in (pygame.K_DOWN, pygame.K_TAB):
+            self.effect_index = (self.effect_index + 1) % n
+        elif key in (pygame.K_LEFT,):
+            self.effect_intensity = max(0.5, round(self.effect_intensity - 0.25, 2))
+        elif key in (pygame.K_RIGHT,):
+            self.effect_intensity = min(2.0, round(self.effect_intensity + 0.25, 2))
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self._fire_effect()
+            return          # stay on this screen: firing is repeatable
+        elif key in (pygame.K_ESCAPE, pygame.K_F2):
+            self.effects_screen = False
+        elif key == pygame.K_a:
+            # Same shortcut the game uses for its own choice list.
+            self._fire_effect()
+        return
 
     def _handle_unlock_key(self, event):
         key = event.key
@@ -773,6 +877,8 @@ class Sender:
         self._draw_header(s, w, h)
         if self.help:
             self._draw_help(s, w, h)
+        elif self.effects_screen:
+            self._draw_effects(s, w, h)
         else:
             self._draw_room(s, self.rect_room)
             if self.unlocking:
@@ -1153,13 +1259,60 @@ class Sender:
             draw(HELP_STORY, inner.x, inner.y)
             draw(HELP_KEYS, x2, y2)
 
+    def _draw_effects(self, s, w, h):
+        """Fire a scare or glitch at the current recipient, by hand.
+
+        The receiver plays these through its own scare system, so what the
+        player sees is indistinguishable from the model choosing it. The list
+        scrolls; the intensity dial stretches how long the effect lasts.
+        """
+        rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
+                           int(w * 0.90), int(h * 0.94))
+        inner = self._panel(s, rect, "EFFECTS — FIRE A SCARE OR GLITCH")
+
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        head = "TARGET: " + str(to.get("name", "EVERYONE")).upper()
+        s.blit(self.font_med.render(head, True, COLOR_TEXT), (inner.x, inner.y))
+        y = inner.y + self.font_med.get_linesize() + 6
+
+        s.blit(self.font_small.render(
+            "INTENSITY  x%.2f   [LEFT/RIGHT]   (how long it lasts)"
+            % self.effect_intensity, True, COLOR_ACCENT), (inner.x, y))
+        y += self.font_small.get_linesize() + 8
+
+        bottom = inner.bottom - self.font_small.get_linesize() - 6
+        line_h = self.font_med.get_linesize() + 2
+        rows = max(1, (bottom - y) // line_h)
+        n = len(self.effects)
+        # Keep the selected effect on screen as the list is walked.
+        top = max(0, min(self.effect_index - rows // 2, max(0, n - rows)))
+        for i in range(top, min(n, top + rows)):
+            name = self.effects[i]
+            sel = (i == self.effect_index)
+            col = config.COLOR_WHITE if sel else COLOR_DIM
+            prefix = "> " if sel else "  "
+            label = prefix + name.upper().replace("_", " ")
+            s.blit(self.font_med.render(_fit(label, self.font_med, inner.width),
+                                        True, col), (inner.x, y))
+            y += line_h
+
+        s.blit(self.font_small.render(
+            "[ENTER] FIRE   [UP/DOWN] PICK   [LEFT/RIGHT] INTENSITY   "
+            "[F2/ESC] BACK", True, COLOR_DIMMER),
+            (inner.x, inner.bottom - self.font_small.get_linesize()))
+
     def _draw_footer(self, s, w, h):
         if self.toast:
             tone = self.toast.get("tone", "info")
             color = {"good": COLOR_GOOD, "bad": COLOR_BAD}.get(tone, COLOR_ACCENT)
             txt = _fit(self.toast["text"], self.font_med, w - 40)
             s.blit(self.font_med.render(txt, True, color), (20, h - 62))
-        hints = "[TAB] FIELD  [ENTER] EDIT/ACT  [1-4] CORRECT  [F1] HELP  [ESC] QUIT"
+        if self.effects_screen:
+            hints = ("[UP/DOWN] PICK  [LEFT/RIGHT] INTENSITY  [ENTER] FIRE  "
+                     "[F1] HELP  [F2/ESC] BACK")
+        else:
+            hints = ("[TAB] FIELD  [ENTER] EDIT/ACT  [1-4] CORRECT  [F1] HELP  "
+                     "[F2] EFFECTS  [ESC] QUIT")
         s.blit(self.font_small.render(hints, True, COLOR_DIMMER),
                (20, h - self.font_small.get_linesize() - 10))
         if self.token:

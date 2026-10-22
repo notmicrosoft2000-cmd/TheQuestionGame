@@ -311,6 +311,61 @@ try:
     code, h = post2("/v1/presence", {"id": "player000001", "name": "player"})
     check("the result reaches the sender without a token",
           len(h.get("results") or []) == 1, h.get("results"))
+
+    # --- effects: the operator can fire a scare by hand ---------------------
+    # An effect rides the same route and token gate as a question, but lands in
+    # its own store, so the receiver plays it instead of showing it as text.
+    code, i = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001", "effect": "flicker"})
+    check("an effect without the token is refused", code == 403, (code, i))
+
+    code, j = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001",
+        "effect": "screen_tear", "intensity": 2.0},
+        {"X-Send-Token": "operator-secret"})
+    check("an effect with the token is delivered",
+          code == 200 and j.get("delivered") == ["player000001"], (code, j))
+
+    code, k = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    got = k.get("effects") or []
+    check("the effect reaches the player on the next poll",
+          len(got) == 1 and got[0].get("effect") == "screen_tear", got)
+    check("the effect keeps the operator's intensity",
+          got and abs(float(got[0].get("intensity", 0)) - 2.0) < 0.01, got)
+    check("an effect is not smuggled into the question inbox",
+          not (k.get("inbox") or []), k.get("inbox"))
+
+    code, l = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    check("an effect is delivered once, like a question",
+          not (l.get("effects") or []), l.get("effects"))
+
+    code, m = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001", "effect": "not_a_scare"},
+        {"X-Send-Token": "operator-secret"})
+    check("an unknown effect name is refused, not silently dropped",
+          code == 400 and "effect" in str(m.get("error", "")), (code, m))
+
+    code, n = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "all", "effect": "whisper", "intensity": 0.5},
+        {"X-Send-Token": "operator-secret"})
+    check("an effect can be broadcast to the room",
+          code == 200 and n.get("delivered") == ["player000001"], (code, n))
+
+    code, o = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    check("the broadcast effect arrives",
+          [e.get("effect") for e in (o.get("effects") or [])] == ["whisper"],
+          o.get("effects"))
+    check("a gentle intensity is carried through",
+          (o.get("effects") or [{}])[0].get("intensity") == 0.5, o.get("effects"))
+
+    code, p = post2("/v1/send-question", {
+        "from": "op0000000001", "to": "player000001",
+        "effect": "whisper", "intensity": 99},
+        {"X-Send-Token": "operator-secret"})
+    check("an absurd intensity is clamped, not passed on", code == 200, (code, p))
+    code, q = post2("/v1/presence", {"id": "player000001", "name": "player"})
+    check("the clamp lands at the ceiling",
+          (q.get("effects") or [{}])[0].get("intensity") == 2.0, q.get("effects"))
 finally:
     srv2.shutdown()
 

@@ -217,13 +217,25 @@ operator's question.
 
 | endpoint | who may call it | what it does |
 |---|---|---|
-| `POST /v1/presence` | anyone | heartbeat. Returns the online list, questions addressed to you, and results for questions you sent. |
-| `POST /v1/send-question` | only with `X-Send-Token` | deliver a question to one peer or to `"all"`. |
+| `POST /v1/presence` | anyone | heartbeat. Returns the online list, questions addressed to you, results for questions you sent, and any effects fired at you. |
+| `POST /v1/send-question` | only with `X-Send-Token` | deliver a question **or an effect** to one peer or to `"all"`. |
 | `POST /v1/answer` | anyone | report a recipient's answer back to the question's author. |
 
 Delivery is **one-shot** — the server clears an item as it hands it over, so a
 question is never replayed. Items expire after `RELAY_QUESTION_TTL` (900 s) and
 a peer drops off the list after `RELAY_PEER_TTL` (20 s) without a poll.
+
+`/v1/send-question` carries two shapes of body. With `"q"` + `"opts"` it is a
+question. With `"effect"` it is a scare the operator fires by hand; the relay
+dispatches it to `_handle_send_effect` (same route, same token gate, its own
+`_effects` store) and presence returns it under `"effects"`. The receiver plays
+it through `scares.apply_scare`, so it is indistinguishable from the model
+choosing that effect itself: no toast, no note, nothing. `"intensity"`
+(default 1.0, clamped to `[0.1, 2.0]`) scales how long it lasts via
+`game.fx["scare_scale"]`, which `apply_scare` applies by scaling the clock the
+scare sees. An unknown effect name is **refused with 400**, not silently
+dropped — `relay.EFFECT_NAMES` mirrors `scares.SCARE_REGISTRY` (the relay is
+deployed separately and cannot import it, so keep the two lists in step).
 
 Tunables on the server: `RELAY_SEND_TOKEN`, `RELAY_PEER_TTL`,
 `RELAY_QUESTION_TTL`, `RELAY_INBOX_MAX`, `RELAY_RESULT_MAX`,
@@ -237,6 +249,26 @@ else is playing. The player can rename themselves there (`N`), which is
 persisted in the save file and pushed into the room by the presence client, and
 can ping the relay with `T` / `TEST CONNECTION` (runs
 `SocialClient.test_connection()` in a worker thread — never on the frame).
+
+**The operator is filtered out of the room list.** `_online_status()` drops any
+peer whose name is in `_OPERATOR_NAMES` (`OPERATOR`, `OPERATOR APP`, `SENDER`)
+via `_is_operator_peer()`. The sender's default name is `OPERATOR`
+(`TQG_SENDER_NAME`), and seeing it in the list would tell the player that
+somebody is watching them specifically — the whole thing the room must not give
+away. Add the operator's custom name to that set if it is ever renamed
+permanently.
+
+**Lobbies are teased, not built.** `ONLINE_LOBBY_TEASER` (names + `soon`/`later`)
+and `ONLINE_LOBBY_BLURB` render a "LOBBIES — COMING SOON" section on the ONLINE
+screen. Nothing there is focusable or clickable, and the blurb says outright
+that none of it works yet. Do not wire these to anything without building the
+feature behind them.
+
+**Reconnect is automatic.** The presence worker backs off (`poll * 2^fails`,
+capped at 20 s) and reports `reconnecting` for the first two failures before
+falling to `offline`, so one dropped packet does not read as "you are offline".
+A successful poll resets the streak and bumps `reconnects()`, which the ONLINE
+screen shows as `RECONNECTED xN`.
 
 The whole screen is explained by `ONLINE_EXPLAINER` in `main.py` and by the
 fourth `HELP_VARIATIONS` entry: the heartbeat, the room living on the server,
@@ -253,8 +285,11 @@ default is treated as "not chosen" and replaced once.
 **A received question is a secret.** Nothing in the shipped build announces one:
 there is no toast, and the ONLINE screen does not show a pending count. The
 question simply becomes the next thing in the queue and looks like every other
-question. Do not add a "someone sent you a question!" notice back; it is the
-single easiest way to break the feature.
+question. It is also **not attributed**: `_draw_playing` used to draw a
+`QUESTION FROM <NAME>` line above any `_social` step, which told the player
+someone had written it. That label is gone and a smoke test asserts the string
+stays gone. Do not add a "someone sent you a question!" notice, a source label,
+or a counter back; they are the single easiest way to break the feature.
 
 It used to be a fake compatibility check that ended in "MULTIPLAYER IS NOT
 SUPPORTED" — that was true for v4 and is false for v5.0.0, where this build

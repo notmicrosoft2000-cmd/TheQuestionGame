@@ -130,9 +130,22 @@ SOCIAL_OPTS_MAX = 4
 SOCIAL_RATE = int(os.environ.get("RELAY_SOCIAL_RATE", "120"))
 SOCIAL_BURST = int(os.environ.get("RELAY_SOCIAL_BURST", "40"))
 
+# The scares the receiver knows how to play. The relay is deployed on its own,
+# so it cannot import the game's SCARE_REGISTRY; this is a copy of it. An
+# unknown name is refused rather than delivered, so a typo in the operator's
+# sender fails loudly instead of silently doing nothing on the player's screen.
+EFFECT_NAMES = frozenset({
+    "corruption", "flicker", "heartbeat", "jumpscare", "mouse_move",
+    "notification", "picture", "reverse_chord", "rgb_split", "rumble",
+    "screen_tear", "static_scream", "wallpaper", "webcam_flash", "whisper",
+    "window_drift", "window_shake", "window_teleport", "windows_minimize",
+    "windows_shake",
+})
+
 _peers = {}          # peer id -> {"id", "name", "platform", "last"}
 _inboxes = {}        # peer id -> [question]
 _results = {}        # sender id -> [answer result]
+_effects = {}        # peer id -> [effect the operator fired at them]
 _social_lock = threading.Lock()
 _social_hits = {}    # ip -> [timestamp]; separate from the AI limiter
 _social_hits_lock = threading.Lock()
@@ -177,7 +190,7 @@ def _purge_locked(now):
     """
     for pid in [p for p, v in _peers.items() if now - v["last"] > PEER_TTL]:
         _peers.pop(pid, None)
-    for table in (_inboxes, _results):
+    for table in (_inboxes, _results, _effects):
         for pid in list(table):
             fresh = [item for item in table[pid]
                      if now - item.get("ts", now) < QUESTION_TTL]
@@ -203,13 +216,23 @@ def _handle_presence(body):
         # an item loses it, which beats replaying old questions forever.
         inbox = _inboxes.pop(pid, [])
         results = _results.pop(pid, [])
+        effects = _effects.pop(pid, [])
     online.sort(key=lambda p: p["name"].lower())
-    return 200, {"ok": True, "online": online, "inbox": inbox, "results": results}
+    return 200, {"ok": True, "online": online, "inbox": inbox,
+                 "results": results, "effects": effects}
 
 
 def _handle_send(body):
     from_id = body.get("from")
     to = body.get("to")
+
+    # An effect is not a question: it shares the route and the token gate, but
+    # it carries no options and lands in its own store. The receiver plays it
+    # through its scare system instead of showing it as a question.
+    effect = _clean_social_text(body.get("effect"), 32)
+    if effect:
+        return _handle_send_effect(body, from_id, to, effect)
+
     q = _clean_social_text(body.get("q"), SOCIAL_Q_MAX)
     if not _valid_peer_id(from_id):
         return 400, {"error": "bad sender id"}
@@ -263,6 +286,54 @@ def _handle_send(body):
             del box[:-INBOX_MAX]
             delivered.append(target)
     return 200, {"ok": True, "id": qid, "delivered": delivered}
+
+
+def _handle_send_effect(body, from_id, to, effect):
+    """Deliver an operator-fired scare/glitch. Same rules as a question.
+
+    Reached from _handle_send once the body is known to carry "effect" rather
+    than "q", so this shares the route and therefore the send-token gate. The
+    receiver plays it through scares.apply_scare — it never appears as text.
+    """
+    if not _valid_peer_id(from_id):
+        return 400, {"error": "bad sender id"}
+    if effect not in EFFECT_NAMES:
+        return 400, {"error": "unknown effect"}
+    try:
+        intensity = float(body.get("intensity") or 1.0)
+    except (TypeError, ValueError):
+        intensity = 1.0
+    intensity = max(0.1, min(2.0, intensity))
+
+    now = time.time()
+    delivered = []
+    with _social_lock:
+        _purge_locked(now)
+        sender = _peers.get(from_id)
+        if not sender:
+            return 403, {"error": "join presence first"}
+        if to == "all":
+            targets = [pid for pid in _peers if pid != from_id]
+        elif isinstance(to, str) and to in _peers and to != from_id:
+            targets = [to]
+        else:
+            targets = []
+        if not targets:
+            return 404, {"error": "nobody to send to"}
+        eid = uuid.uuid4().hex[:12]
+        item = {
+            "id": eid,
+            "from": from_id,
+            "effect": effect,
+            "intensity": intensity,
+            "ts": now,
+        }
+        for target in targets[:20]:
+            box = _effects.setdefault(target, [])
+            box.append(dict(item))
+            del box[:-INBOX_MAX]
+            delivered.append(target)
+    return 200, {"ok": True, "id": eid, "delivered": delivered}
 
 
 def _handle_answer(body):

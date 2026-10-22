@@ -241,9 +241,31 @@ def apply_scare(game, name):
     if now - _last_applied.get(name, -999.0) < _COOLDOWN:
         return False
     _last_applied[name] = now
+    # The operator's sender can fire the same effect gently or hard. A scare
+    # sets an "until" timestamp of the form now + duration, so scaling the
+    # *duration* is what scales how long it lasts. Scale the clock by mistake
+    # and the maths is wrong twice over: 2x makes the effect last for the whole
+    # uptime, and 0.5x puts it in the past so nothing shows at all.
+    try:
+        scale = float(game.fx.get("scare_scale", 1.0) or 1.0)
+    except Exception:
+        scale = 1.0
     try:
         fn(game)
         _android_stand_in(game, name)
-        return True
     except Exception:
         return False
+    if scale != 1.0:
+        # Stretch every deadline the scare just wrote, relative to now, then
+        # clamp to the future so a tiny scale cannot retire it instantly.
+        for key, value in list(game.fx.items()):
+            if not key.endswith("_until"):
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if value <= now:
+                continue
+            game.fx[key] = now + (value - now) * max(0.05, scale)
+    return True

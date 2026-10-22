@@ -70,16 +70,25 @@ ONLINE (who is playing + questions from the operator):
   published, and it cannot be downloaded from the site.
 - The title menu has an ONLINE entry. It shows everyone else running the game
   right now (names only), whether the relay is reachable, and the name the
-  room knows you by.
+  room knows you by. The operator is deliberately left out of that list: the
+  room is shown as players, so nothing hints that someone is watching you.
+- Lobbies are teased on that screen and are not built yet. They are marked SOON
+  and nothing there can be pressed.
 - How it works, end to end: your game checks in with the room every few seconds
   (that is why other players can see you), with the name you are playing under.
   The room itself lives on the server that runs the game — the same one that
   answers the AI questions. Nothing is installed on your machine and no file is
   written there for it.
+- If the link drops, the game keeps trying on its own and says RECONNECTING
+  rather than pretending you are offline. When it comes back it carries on, and
+  the screen notes how many times it had to recover.
 - Questions written by hand by the operator can join the queue between the
   ordinary generated ones. They look exactly the same and nothing announces
-  them — the whole point is that you cannot tell which questions were written
-  for you.
+  them — no label, no note, no counter. The whole point is that you cannot tell
+  which questions were written for you, or that anyone is there at all.
+- The operator can also fire the game's own effects — a flicker, a whisper, a
+  screen tear — by hand. They arrive the same way the AI's own effects do and
+  are equally unannounced. You will not be told one was sent.
 - When you answer one, the operator is told whether you got it right, with the
   name you are playing under.
 - Press N on the ONLINE screen to set your own name; press T to test the
