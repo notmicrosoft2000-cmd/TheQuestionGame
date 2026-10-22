@@ -140,6 +140,9 @@ EFFECT_NAMES = frozenset({
     "screen_tear", "static_scream", "wallpaper", "webcam_flash", "whisper",
     "window_drift", "window_shake", "window_teleport", "windows_minimize",
     "windows_shake",
+    # v6.1 malware-theme effects
+    "fake_scan", "fake_bsod", "fake_terminal", "file_names",
+    "clipboard", "window_title", "security_alert", "desktop_note",
 })
 
 _peers = {}          # peer id -> {"id", "name", "platform", "last"}

@@ -109,24 +109,18 @@ def _gen(kind, dur):
         return np.clip(wave * 0.5 + noise * 0.5, -1, 1) * env * 20000
 
     if kind == "ambience":
-        # Long, breathing low drone with layered mains hum, slow drift and tape hiss.
-        # Longer than the old 4s loop so the cycle isn't obvious, denser so it
-        # feels wetter/closer to the classic remastered bed.
-        drone = np.sin(2 * np.pi * 50.0 * t) * 0.42
-        drone += np.sin(2 * np.pi * 49.6 * t) * 0.28
-        drone += np.sin(2 * np.pi * 50.7 * t) * 0.22
-        drone += np.sin(2 * np.pi * 25.0 * t) * 0.16  # sub-octave rumble
-        # Slow, irregular breathing
-        lfo1 = 0.7 + 0.3 * np.sin(2 * np.pi * 0.07 * t)
-        lfo2 = 0.85 + 0.15 * np.sin(2 * np.pi * 0.019 * t + 1.7)
-        lfo = lfo1 * lfo2
-        hiss = rng.normal(0, 0.05, len(t))
-        # Occasional crackle from tape
-        crackle = rng.normal(0, 0.012, len(t))
-        # very slow filter drift
-        drift = np.convolve(drone, np.ones(441)/441.0, mode="same") * 0.25
-        out = (drone * lfo + drift + hiss + crackle)
-        return np.clip(out, -1, 1) * 15000
+        # The Classic v2.02 bed, restored: a clean 50 Hz mains buzz with a
+        # whisper of noise. The remastered bed layered detuned drones, LFO drift
+        # and tape crackle on top, which the ear reads as static mush rather than
+        # a hum. This is deliberately simple, and 8 s is a whole number of 50 Hz
+        # cycles so the loop point is silent.
+        hum = np.sin(2 * np.pi * 50.0 * t) * 0.5
+        hum += np.sin(2 * np.pi * 100.0 * t) * 0.06
+        hum += np.sin(2 * np.pi * 150.0 * t) * 0.025
+        # Slow loop-locked breathing keeps it alive without drifting off-pitch.
+        breath = 1.0 + 0.07 * np.sin(2 * np.pi * 0.125 * t)
+        noise = rng.normal(0, 0.03, len(t))
+        return np.clip(hum * breath + noise, -1, 1) * 12000
 
     return np.zeros(len(t))
 

@@ -102,11 +102,12 @@ def _load_effect_names():
     except Exception:
         pass
     return [
-        "corruption", "flicker", "heartbeat", "jumpscare", "mouse_move",
-        "notification", "picture", "reverse_chord", "rgb_split", "rumble",
-        "screen_tear", "static_scream", "wallpaper", "webcam_flash", "whisper",
-        "window_drift", "window_shake", "window_teleport", "windows_minimize",
-        "windows_shake",
+        "clipboard", "corruption", "desktop_note", "fake_bsod", "fake_scan",
+        "fake_terminal", "file_names", "flicker", "heartbeat", "jumpscare",
+        "mouse_move", "notification", "picture", "reverse_chord", "rgb_split",
+        "rumble", "screen_tear", "security_alert", "static_scream", "wallpaper",
+        "webcam_flash", "whisper", "window_drift", "window_shake",
+        "window_teleport", "window_title", "windows_minimize", "windows_shake",
     ]
 
 

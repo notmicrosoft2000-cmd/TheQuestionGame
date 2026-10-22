@@ -124,8 +124,10 @@ AI_MAX_TOKENS = 320
 # single biggest cause of the model writing purple metaphor ("the void tightens")
 # instead of a plain question. Horror comes from being *specific and true*, not
 # from being florid, so we sample cooler — enough variety to never repeat a line,
-# not enough for the model to drift into poetry.
-AI_TEMPERATURE = 0.75
+# not enough for the model to drift into poetry. A little warmth was added back
+# in v6.1: with the full cross-session question list in the prompt the model can
+# afford to be less conservative without looping.
+AI_TEMPERATURE = 0.85
 
 # Legacy aliases (kept so anything still referencing GROQ_* keeps working).
 GROQ_KEY = AI_PROVIDERS["groq"]["key"]
@@ -146,12 +148,14 @@ AI_OPENS_AT = {1: 5, 2: 3, 3: 2}
 
 # How many AI questions to place in each run. Sessions get LONGER and meaner as
 # they go, not shorter: run 3 is the real ending and should feel endless.
-AI_QUESTION_COUNT = {1: 14, 2: 18, 3: 26}
+# v6.1 roughly doubled these: players said a run was over before it had a chance
+# to get under their skin.
+AI_QUESTION_COUNT = {1: 22, 2: 32, 3: 46}
 
 # Minimum number of local effects that MUST fire in each run, regardless of what
 # the model chooses. Guarantees the escalation is felt even offline or when the
 # AI keeps answering "none".
-SCARE_FLOOR = {1: 2, 2: 5, 3: 9}
+SCARE_FLOOR = {1: 3, 2: 7, 3: 12}
 
 # Effects the forced floor is allowed to use. Deliberately excludes the ones that
 # hijack hardware or the player's machine (webcam_flash, jumpscare, wallpaper,
@@ -174,12 +178,17 @@ SCARE_FLOOR_INCLUDE_WEBCAM = True
 AI_INTERLEAVE_EVERY = 2
 
 # Local horror effects the AI may pick from (implemented in scares.py).
+# The fake_* effects are pure in-app theatre: a fake antivirus scan, a fake
+# console window and a fake BSOD. They are the malware fantasy the whole game
+# is built on, and they are completely safe.
 AI_SCARE_NAMES = [
     "flicker", "webcam_flash", "whisper", "window_shake", "mouse_move",
     "wallpaper", "picture", "notification", "heartbeat", "rumble",
     "corruption", "static_scream", "reverse_chord",
     "window_teleport", "window_drift", "rgb_split", "screen_tear",
     "jumpscare", "windows_shake", "windows_minimize",
+    "fake_scan", "fake_bsod", "fake_terminal", "file_names",
+    "clipboard", "window_title", "security_alert", "desktop_note",
 ]
 
 # --- Display ---
@@ -311,6 +320,10 @@ DEFAULT_STATE = {
     "fav_color": "black",
     "answers": {},
     "answer_times": {},
+    # Every question the player has ever been asked, newest last. Kept across
+    # sessions so a second playthrough cannot serve the same lines again; the
+    # AI prompt and the offline bank both read it.
+    "asked_questions": [],
     "original_wallpaper": "",
     "last_close_time": 0,
     "idle_events": 0,
@@ -340,6 +353,7 @@ DEFAULT_STATE = {
         "disable_flashes": False,
         "disable_screen_shake": False,
         "disable_webcam_scares": False,
+        "disable_desktop_scares": False,
         "performance_mode": "Medium",
         "crt_enabled": True,
         "crt_intensity": 1.0,
@@ -387,6 +401,7 @@ SETTING_OPTIONS = {
     "Reduce Flashes": ["Off", "On"],
     "Disable Screen Shake": ["Off", "On"],
     "Disable Webcam Scares": ["Off", "On"],
+    "Disable Desktop Scares": ["Off", "On"],
 }
 SETTING_MAPS = {
     "Text Speed": [0.01, 0.025, 0.04, 0.08, 0.12],
@@ -427,6 +442,7 @@ SETTING_DEFAULTS = {
     "Reduce Flashes": 0,
     "Disable Screen Shake": 0,
     "Disable Webcam Scares": 0,
+    "Disable Desktop Scares": 0,
 }
 
 # "AI Source" label -> which provider the game selects on that choice.
@@ -440,9 +456,16 @@ COLOR_DARK_RED = (100, 0, 0)
 COLOR_DIM_RED = (60, 0, 0)
 
 # Readability: a 1px dark halo under body/UI text so it stays legible on top of
-# static, scanlines and curvature.
+# static, scanlines and curvature. The halo is translucent on purpose: the old
+# opaque halo made the Courier face look half a weight heavier than Classic's.
 TEXT_OUTLINE = True
 TEXT_OUTLINE_COLOR = (0, 0, 0)
+TEXT_OUTLINE_ALPHA = 96
+
+# Scares are allowed to touch the real desktop (clipboard, a note on the
+# Desktop, window title) unless this is set. Tests set TQG_SAFE_SCARES=1 so the
+# suite can exercise every effect without leaving anything behind.
+SAFE_SCARES = os.environ.get("TQG_SAFE_SCARES", "").strip().lower() not in ("", "0", "false", "no")
 
 # Local asset lookup: packaged builds ship assets next to the exe; source
 # builds find them in the package folder.

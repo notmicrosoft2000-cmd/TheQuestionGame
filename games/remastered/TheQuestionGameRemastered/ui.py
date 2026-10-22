@@ -17,10 +17,12 @@ from . import persistence
 FONT_NAME = pygame.font.match_font("courier")
 
 # Font choices offered in Settings. Each maps to candidate names; the first that
-# resolves wins. "Courier" prefers the bundled asset so packaged builds always
-# have a face.
+# resolves wins. "Courier" deliberately prefers the *system* face, exactly like
+# the Classic edition: the bundled Courier has taller glyph metrics and reads as
+# a heavier, chunkier typeface at the same point size. The bundled file stays as
+# the last resort so packaged builds on a font-less machine still have a face.
 FONT_CHOICES = {
-    "Courier":  ["__bundled__", "couriernew", "courier", "monospace"],
+    "Courier":  ["couriernew", "courier", "monospace", "__bundled__"],
     "Terminal": ["consolas", "monospace", "couriernew", "courier"],
     "Mono":     ["dejavusansmono", "liberationmono", "notosansmono", "monospace"],
     "Sans":     ["dejavusans", "liberationsans", "arial", "verdana"],
@@ -523,13 +525,15 @@ def _get_cached_lines(text, font, color, max_width, outline=None, pad=0):
             except Exception:
                 pass
             if outline:
-                # 1px dark halo so text stays legible over static/CRT noise.
+                # Translucent 1px halo so text stays legible over static/CRT
+                # noise without gaining the visual weight of a bold face.
                 lw, lh = surf.get_size()
                 halo = font.render(line, True, outline)
-                out = pygame.Surface((lw + 4, lh + 4), pygame.SRCALPHA)
-                for ox, oy in ((0, 1), (1, 0), (2, 1), (1, 2), (0, 2), (2, 0), (1, 1), (2, 2)):
+                halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
+                out = pygame.Surface((lw + 2, lh + 2), pygame.SRCALPHA)
+                for ox, oy in ((0, 1), (2, 1), (1, 0), (1, 2)):
                     out.blit(halo, (ox, oy))
-                out.blit(surf, (2, 2))
+                out.blit(surf, (1, 1))
                 try:
                     out = out.convert_alpha()
                 except Exception:
@@ -607,7 +611,8 @@ def draw_text(surface, text, font, color, x, y, outline=None):
     if outline:
         try:
             halo = font.render(text, True, outline)
-            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+            halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 surface.blit(halo, (x + ox, y + oy))
         except Exception:
             pass
@@ -782,7 +787,8 @@ def render_glitch_text(surface, text, font, x, y, t=0.0, color=config.COLOR_WHIT
     if outline:
         try:
             halo = font.render(text, True, outline)
-            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1)):
+            halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 surface.blit(halo, (x + jx + ox, y + jy + oy))
         except Exception:
             pass
@@ -1568,3 +1574,270 @@ def draw_eye(surface, cx, cy, r, openness=1.0, pupil=(0.0, 0.0), angry=False,
         if lid > 0:
             pygame.draw.ellipse(surface, (0, 0, 0),
                                  (cx - r, cy - ry, r * 2, lid * 2))
+
+
+# --- Malware-theme overlays --------------------------------------------------
+# Fake system windows drawn *inside* the game. Nothing here touches the OS: it
+# is theatre, but theatre that looks like a scanner, a console, a file manager
+# and a blue screen. All of it fades in and out so it never traps the player.
+
+def _overlay_alpha(t, duration):
+    try:
+        return max(0.0, min(1.0, float(t) * 5.0, max(0.0, float(duration) - float(t)) * 5.0))
+    except Exception:
+        return 1.0
+
+
+def _overlay_layer(w, h, alpha):
+    layer = pygame.Surface((w, h), pygame.SRCALPHA)
+    return layer, int(255 * max(0.0, min(1.0, alpha)))
+
+
+def _fit_text(font, text, max_w):
+    """Trim a line with an ellipsis so it can never spill out of a panel."""
+    try:
+        text = str(text)
+        if font.size(text)[0] <= max_w:
+            return text
+        out = text
+        while out and font.size(out + "...")[0] > max_w:
+            out = out[:-1]
+        return out + "..."
+    except Exception:
+        return str(text)[:40]
+
+
+def _fake_panel(layer, x, y, pw, ph, title, font_title, accent=(200, 0, 0)):
+    """Draw a fake window frame and return its title-bar height.
+
+    The title bar is sized from the font rather than a fixed 26px so the
+    overlay still fits a 640x480 window without clipping.
+    """
+    th = max(26, font_title.get_height() + 8)
+    pygame.draw.rect(layer, (8, 8, 10, 236), (x, y, pw, ph))
+    pygame.draw.rect(layer, (70, 0, 0, 255), (x, y, pw, th))
+    pygame.draw.rect(layer, accent, (x, y, pw, ph), 2)
+    try:
+        t = font_title.render(_fit_text(font_title, title, pw - 16), True, accent)
+        layer.blit(t, (x + 8, y + (th - t.get_height()) // 2))
+    except Exception:
+        pass
+    return th
+
+
+def draw_fake_scan(surface, w, h, t, duration=7.0, font_title=None, font_body=None,
+                   font_small=None, username=""):
+    """Fake antivirus scan. Progresses, finds 'threats', fails to remove one."""
+    alpha = _overlay_alpha(t, duration)
+    if alpha <= 0:
+        return
+    layer, a = _overlay_layer(w, h, alpha)
+    layer.fill((0, 0, 0, 150))
+    font_title = font_title or pygame.font.SysFont("couriernew,courier,monospace", 24)
+    font_body = font_body or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    font_small = font_small or pygame.font.SysFont("couriernew,courier,monospace", 14)
+    pw, ph = int(w * 0.80), int(h * 0.58)
+    x, y = (w - pw) // 2, (h - ph) // 2
+    th = _fake_panel(layer, x, y, pw, ph, " SYSTEM SCANNER  v4.07 ", font_title)
+    who = username or "user"
+    progress = max(0.0, min(1.0, t / max(0.1, duration * 0.78)))
+    paths = [
+        "C:\\Users\\%s\\Documents" % who,
+        "C:\\Users\\%s\\Downloads" % who,
+        "C:\\Users\\%s\\Pictures" % who,
+        "C:\\Users\\%s\\AppData\\Roaming" % who,
+        "C:\\Windows\\System32",
+    ]
+    i = min(len(paths) - 1, int(progress * len(paths)))
+    lines = [
+        ("Scanning: " + paths[i], config.COLOR_WHITE),
+        ("Objects scanned: %d" % int(progress * 18432), (150, 150, 150)),
+    ]
+    if progress < 0.72:
+        lines.append(("Threats found: 0", (0, 200, 0)))
+        lines.append(("", config.COLOR_WHITE))
+        lines.append(("Do not close this window.", (130, 130, 130)))
+    else:
+        lines.append(("Threats found: 3", config.COLOR_RED))
+        lines.append(("  -> 1 could not be removed", config.COLOR_RED))
+        lines.append(("", config.COLOR_WHITE))
+        lines.append(("It is still running.", (200, 0, 0)))
+    lh = font_body.get_linesize() + 4
+    body_y = y + th + 6
+    bx, by, bw, bh = x + 16, y + ph - 50, pw - 32, 16
+    # Keep every line above the progress bar at any window size.
+    slots = max(1, (by - 6 - body_y) // lh)
+    yy = body_y
+    for text, col in lines[:slots]:
+        if text:
+            try:
+                layer.blit(font_body.render(_fit_text(font_body, text, pw - 32), True, col),
+                           (x + 16, yy))
+            except Exception:
+                pass
+        yy += lh
+    # progress bar
+    pygame.draw.rect(layer, (30, 30, 34, 255), (bx, by, bw, bh))
+    pygame.draw.rect(layer, (0, 170, 0, 255), (bx, by, int(bw * progress), bh))
+    pygame.draw.rect(layer, (120, 120, 120, 255), (bx, by, bw, bh), 1)
+    pct = font_small.render("%d%% complete" % int(progress * 100), True, (200, 200, 200))
+    layer.blit(pct, (bx, by + 20))
+    layer.set_alpha(a)
+    surface.blit(layer, (0, 0))
+
+
+def draw_fake_bsod(surface, w, h, t, duration=3.5, font_title=None, font_body=None):
+    """A blue screen that is not real, on top of a game that is still running."""
+    alpha = _overlay_alpha(t, duration)
+    if alpha <= 0:
+        return
+    layer, a = _overlay_layer(w, h, alpha)
+    layer.fill((10, 60, 170, 255))
+    font_title = font_title or pygame.font.SysFont("couriernew,courier,monospace", 64)
+    font_body = font_body or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    sad = font_title.render(":(", True, (255, 255, 255))
+    layer.blit(sad, (max(20, int(w * 0.08)), int(h * 0.20)))
+    body = [
+        "Your PC ran into a problem and needs to restart.",
+        "We're just collecting some error info, and then we'll restart for you.",
+        "",
+        "%d%% complete" % min(99, int(t * 26)),
+        "",
+        "If you call a support person, give them this info:",
+        "Stop code: 0x00000000  (THE QUESTION GAME)",
+    ]
+    yy = int(h * 0.42)
+    lh = font_body.get_linesize() + 8
+    x = int(w * 0.09)
+    max_w = w - 2 * x
+    for line in body:
+        try:
+            layer.blit(font_body.render(_fit_text(font_body, line, max_w),
+                                        True, (235, 235, 245)), (x, yy))
+        except Exception:
+            pass
+        yy += lh
+    layer.set_alpha(a)
+    surface.blit(layer, (0, 0))
+
+
+def draw_fake_terminal(surface, w, h, t, duration=6.0, lines=None, font_body=None,
+                       font_title=None):
+    """A fake console typing out its own commands, with a blinking cursor."""
+    alpha = _overlay_alpha(t, duration)
+    if alpha <= 0:
+        return
+    layer, a = _overlay_layer(w, h, alpha)
+    layer.fill((0, 0, 0, 170))
+    font_body = font_body or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    font_title = font_title or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    pw, ph = int(w * 0.84), int(h * 0.62)
+    x, y = (w - pw) // 2, (h - ph) // 2
+    th = _fake_panel(layer, x, y, pw, ph, " Administrator: C:\\Windows\\System32\\cmd.exe ",
+                     font_title, accent=(0, 200, 0))
+    lines = lines or []
+    lh = font_body.get_linesize() + 4
+    body_y = y + th + 6
+    slots = max(1, (y + ph - 12 - body_y) // lh)
+    lines = lines[:slots]
+    budget = int(max(0.0, t - 0.25) * 42)
+    yy = body_y
+    shown = 0
+    for line in lines:
+        if shown >= budget:
+            break
+        take = min(len(line), budget - shown)
+        try:
+            layer.blit(font_body.render(_fit_text(font_body, line[:take], pw - 28),
+                                        True, (0, 220, 0)), (x + 14, yy))
+        except Exception:
+            pass
+        shown += len(line) + 1
+        yy += lh
+    if int(t * 2) % 2 == 0:
+        pygame.draw.rect(layer, (0, 220, 0, 255), (x + 14, yy, 9, 16))
+    layer.set_alpha(a)
+    surface.blit(layer, (0, 0))
+
+
+def draw_file_list(surface, w, h, t, duration=6.0, names=None, font_body=None,
+                   font_title=None, title=" C:\\Users\\user\\Desktop "):
+    """A fake file-manager window listing the player's real file names."""
+    alpha = _overlay_alpha(t, duration)
+    if alpha <= 0:
+        return
+    layer, a = _overlay_layer(w, h, alpha)
+    layer.fill((0, 0, 0, 140))
+    font_body = font_body or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    font_title = font_title or pygame.font.SysFont("couriernew,courier,monospace", 18)
+    names = names or []
+    pw = int(w * 0.70)
+    ph = int(h * 0.56)
+    x, y = (w - pw) // 2, (h - ph) // 2
+    th = _fake_panel(layer, x, y, pw, ph, title, font_title, accent=(180, 180, 180))
+    names = names or []
+    lh = font_body.get_linesize() + 4
+    body_y = y + th + 6
+    note_y = y + ph - lh - 8
+    slots = max(1, (note_y - 6 - body_y) // lh)
+    yy = body_y
+    for name in names[:slots]:
+        try:
+            layer.blit(font_body.render(_fit_text(font_body, "  " + name, pw - 28),
+                                        True, (210, 210, 210)), (x + 14, yy))
+        except Exception:
+            pass
+        yy += lh
+    try:
+        note = font_body.render("I have read all of them.", True, config.COLOR_RED)
+        layer.blit(note, (x + 14, note_y))
+    except Exception:
+        pass
+    layer.set_alpha(a)
+    surface.blit(layer, (0, 0))
+
+
+def draw_security_alert(surface, w, h, t, duration=5.0, font_title=None, font_body=None):
+    """A fake OS security modal: a sign-in warning that came from inside."""
+    alpha = _overlay_alpha(t, duration)
+    if alpha <= 0:
+        return
+    layer, a = _overlay_layer(w, h, alpha)
+    layer.fill((0, 0, 0, 90))
+    font_title = font_title or pygame.font.SysFont("couriernew,courier,monospace", 20)
+    font_body = font_body or pygame.font.SysFont("couriernew,courier,monospace", 16)
+    lines = [
+        "A new sign-in to this device was allowed.",
+        "Device: this computer",
+        "Location: this room",
+        "",
+        "If this was not you, someone is still inside.",
+    ]
+    lh = font_body.get_linesize() + 4
+    th = max(26, font_title.get_height() + 8)
+    # Height follows the content instead of a fixed fraction, so the last line
+    # and the fake button never collide on a 640x480 window.
+    ph = min(h - 24, th + 12 + len(lines) * lh + 48)
+    pw = int(w * 0.58)
+    x, y = (w - pw) // 2, max(12, int(h * 0.18))
+    _fake_panel(layer, x, y, pw, ph, " SECURITY ALERT ", font_title, accent=(220, 40, 40))
+    yy = y + th + 6
+    slots = max(1, (y + ph - 44 - yy) // lh)
+    for line in lines[:slots]:
+        if line:
+            try:
+                layer.blit(font_body.render(_fit_text(font_body, line, pw - 28),
+                                            True, (225, 225, 225)), (x + 14, yy))
+            except Exception:
+                pass
+        yy += lh
+    try:
+        btn = font_body.render("[ OK ]", True, (255, 255, 255))
+        bx = x + pw - btn.get_width() - 18
+        by = y + ph - 32
+        pygame.draw.rect(layer, (150, 0, 0, 255), (bx - 8, by - 4, btn.get_width() + 16, 26))
+        layer.blit(btn, (bx, by))
+    except Exception:
+        pass
+    layer.set_alpha(a)
+    surface.blit(layer, (0, 0))

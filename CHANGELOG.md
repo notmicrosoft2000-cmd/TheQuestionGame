@@ -12,7 +12,50 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 
 ## Unreleased
 
-Nothing yet.
+### Changed
+
+- **Sessions are roughly twice as long.** The AI now writes 22 / 32 / 46
+  questions for runs 1 / 2 / 3 (was 14 / 18 / 26), and the guaranteed scare
+  floor rises to 3 / 7 / 12. A full run no longer ends before it has time to
+  get under your skin.
+- **The entity stops asking the same question.** Every question the player has
+  ever answered is kept in the save (new `asked_questions` field) and the most
+  recent 60 are sent to the model as a hard "never repeat" list. The prompt also
+  rotates an explicit subject per question, so it cannot orbit the same three
+  ideas. Duplicates from the model trigger one retry with a "different subject"
+  nudge, and identical effects are blocked locally for the rest of the session.
+  The offline bank grows from 24 to 109 unique questions and filters itself
+  against both the current session and earlier runs.
+- **The ambience is the Classic v2.02 buzz again.** The remastered bed layered
+  detuned drones, LFO drift and tape hiss, which read as static. It is now a
+  clean 50 Hz mains hum with quiet 100/150 Hz harmonics, a whisper of noise and
+  a loop-locked breath, at the old, quieter channel level.
+- **Text is back to Classic thickness.** The bundled Courier face has taller
+  glyph metrics than the system face the Classic edition used, which made every
+  line look heavier at the same point size. "Courier" now prefers the system
+  face (bundled stays as a packaged-build fallback), and the 8-direction opaque
+  halo became a translucent 4-direction halo.
+
+### Added
+
+- **Malware-theme scares.** Eight new effects sell the feeling that something
+  got installed: a fake antivirus scan (`fake_scan`), a fake blue screen
+  (`fake_bsod`), a fake administrator console typing on its own
+  (`fake_terminal`), a file-manager window listing real file names
+  (`file_names`), a fake OS sign-in alert (`security_alert`), the real clipboard
+  (`clipboard`), the real window title (`window_title`), and one harmless
+  uniquely-named `.txt` on the real Desktop (`desktop_note`). The note never
+  overwrites an existing file, is capped at one per session, and every one of
+  these effects degrades to a no-op (or to the in-app fake scan) on platforms
+  or setups where it cannot work.
+- **New ACCESSIBILITY setting: "Disable Desktop Scares".** Swaps the four
+  real-desktop effects for the in-app fake scan while keeping the beat. Tests
+  and screenshots use `TQG_SAFE_SCARES=1` for the same guarantee.
+- New authored malware beats in all three runs, with longer endings.
+
+### Fixed
+
+- The relay and the operator sender now recognise all eight new effect names.
 
 ---
 

@@ -342,25 +342,23 @@ def start_ambience():
                 _SOUND_CACHE["_ambience_sound"] = snd
             _ambience_channel = snd.play(-1)
             if _ambience_channel:
-                _ambience_channel.set_volume(0.32 * _ambience_volume)
+                _ambience_channel.set_volume(0.26 * _ambience_volume)
             return
         except Exception:
             pass
-    # Fallback: synthesize the drone in memory.
+    # Fallback: synthesize the classic 50 Hz buzz in memory.
     try:
-        t = np.linspace(0, 30.0, int(_SAMPLE_RATE * 30.0), False)
-        # Layered low drone with hiss and slow movement for a less cyclical feel
-        drone = np.sin(2 * np.pi * 50 * t) * 0.4
-        drone += np.sin(2 * np.pi * 50.6 * t) * 0.25
-        drone += np.sin(2 * np.pi * 49.4 * t) * 0.2
-        lfo = 0.75 + 0.25 * np.sin(2 * np.pi * 0.08 * t) + 0.1 * np.sin(2 * np.pi * 0.023 * t)
-        hiss = np.random.RandomState(12345).normal(0, 0.04, len(t))
-        rumble = np.random.RandomState(54321).normal(0, 0.015, len(t))
-        wave = (drone * lfo + hiss + rumble) * 0.8
-        sound = pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 14000))
+        t = np.linspace(0, 8.0, int(_SAMPLE_RATE * 8.0), False)
+        hum = np.sin(2 * np.pi * 50 * t) * 0.5
+        hum += np.sin(2 * np.pi * 100 * t) * 0.06
+        hum += np.sin(2 * np.pi * 150 * t) * 0.025
+        breath = 1.0 + 0.07 * np.sin(2 * np.pi * 0.125 * t)
+        noise = np.random.RandomState(12345).normal(0, 0.03, len(t))
+        wave = np.clip(hum * breath + noise, -1, 1)
+        sound = pygame.mixer.Sound(buffer=np.int16(wave * 12000))
         _ambience_channel = sound.play(-1)
         if _ambience_channel:
-            _ambience_channel.set_volume(0.32 * _ambience_volume)
+            _ambience_channel.set_volume(0.26 * _ambience_volume)
     except Exception:
         pass
 

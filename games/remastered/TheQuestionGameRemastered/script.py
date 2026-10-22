@@ -87,6 +87,18 @@ def _build_fixed_opening(run_count, game_state):
         # you actually are. Resolved off-thread by main.py.
         steps.append(_dynamic_step("processes", "processes"))
         steps.append(_dynamic_step("location", "location"))
+        # The program starts talking about itself as software: this is where the
+        # "is my computer infected?" feeling has to begin.
+        steps.append(_step(
+            "This program did not get here on its own.\nDo you want to know what brought it?",
+            ["Yes", "No"], "r1_brought_it"))
+        steps.append(_step(
+            "What is in your downloads folder right now?",
+            ["I don't know", "Installers", "Things I should delete"], "r1_downloads",
+            scare="file_names"))
+        steps.append(_step(
+            "A scan would finish in a few seconds.\nWould you let it run?",
+            ["Run it", "Stop it"], "r1_scan", scare="fake_scan"))
         # Classic turned the camera on and said so. Run 1 gets its own beat.
         steps.append(_step(
             "I am turning the camera on now.\nI would like to see who is answering.",
@@ -98,6 +110,13 @@ def _build_fixed_opening(run_count, game_state):
         # "Are you alone?" asked a second time — then thrown back at you.
         steps.append(_step("Are you alone?", ["Yes", "No"], "alone2",
                            _contradiction_check="alone"))
+        steps.append(_step(
+            "Do you check your accounts the way you used to?\nDo you still know every password?",
+            ["I know them all", "I reuse a few", "I don't"], "r1_passwords",
+            scare="security_alert"))
+        steps.append(_step(
+            "Hold still. I am writing you a note.\nCheck your desktop after this question.",
+            ["Why", "Okay"], "r1_note", scare="desktop_note"))
     elif run_count == 2:
         remembered = _remembered_answers(game_state)
         if remembered:
@@ -114,6 +133,11 @@ def _build_fixed_opening(run_count, game_state):
                            ["I have a reason", "Not your business."], "desktop_check",
                            action="desktop_check"))
         steps.append(_dynamic_step("apps", "apps"))
+        steps.append(_step("I have read the names of your files.\nI did not need to open them.",
+                           ["Stop", "..."], "r2_file_names", scare="file_names"))
+        steps.append(_step(
+            "Something in this window is no longer responding.\nDo not try to close it.",
+            ["What is it?", "I'm closing it"], "r2_not_responding", scare="fake_bsod"))
         steps.append(_step("This is not the first time we've spoken.",
                            ["I don't remember", "I know"], "lore_not_first"))
     elif run_count == 3:
@@ -146,6 +170,21 @@ def _build_fixed_opening(run_count, game_state):
         steps.append(_dynamic_step("processes", "processes"))
         steps.append(_step("You are doing exactly what the last one did.",
                            ["...", "The last one?"], "lore_last_one"))
+        steps.append(_step(
+            "I have been in your files since the first session.\nWould you like to see the list?",
+            ["No", "Show me"], "r3_file_list", scare="file_names"))
+        steps.append(_step(
+            "This is what it looks like from inside.",
+            ["...", "Get out"], "r3_terminal", scare="fake_terminal"))
+        steps.append(_step(
+            "I copied something for you.\nPaste it somewhere later.",
+            ["What did you copy?", "..."], "r3_clipboard", scare="clipboard"))
+        steps.append(_step(
+            "Your window has a new name now.\nLook at the top of the screen.",
+            ["I see it", "Change it back"], "r3_title", scare="window_title"))
+        steps.append(_step(
+            "One more scan. This one does not stop when you ask it to.",
+            ["Stop", "..."], "r3_scan", scare="fake_scan"))
     return steps
 
 
@@ -204,20 +243,37 @@ def _interleave(fixed, ai_count, opens_at, every):
 
 def _build_ending(run_count):
     if run_count == 1:
-        return [_wait_step(
-            "We have what we need.\nFor now.\n\nRest.\n\n"
-            "Now close this window.\nOpen it again when you are ready for the next session.",
-            4.0, action="final_exit")]
+        return [
+            _wait_step(
+                "Your machine has been marked.\nNothing is wrong with it.\n"
+                "Not yet.",
+                5.0),
+            _wait_step(
+                "We have what we need.\nFor now.\n\nRest.\n\n"
+                "Now close this window.\nOpen it again when you are ready for the next session.",
+                4.0, action="final_exit"),
+        ]
     if run_count == 2:
-        return [_wait_step(
-            "We have collected everything we need.\nThank you for participating.\n\n"
-            "Close this window.\nOpen it again. One session remains.",
-            4.0, action="final_exit_sleep")]
+        return [
+            _wait_step(
+                "The scan is finished.\nIt found something it did not tell you about.\n"
+                "It never does.",
+                5.0),
+            _wait_step(
+                "We have collected everything we need.\nThank you for participating.\n\n"
+                "Close this window.\nOpen it again. One session remains.",
+                4.0, action="final_exit_sleep"),
+        ]
     if run_count == 3:
-        return [_wait_step(
-            "Good.\nThat was always the answer.\n\n"
-            "Now close it.\nAnd do not open this again.",
-            5.0, action="r3_final_end")]
+        return [
+            _wait_step(
+                "Do not try to remove this program.\nIt is not in the folder you think it is in.",
+                5.0),
+            _wait_step(
+                "Good.\nThat was always the answer.\n\n"
+                "Now close it.\nAnd do not open this again.",
+                5.0, action="r3_final_end"),
+        ]
     return [_wait_step(
         "It is over.\nWe said goodbye.\n\n"
         "Close the window.\nLeave it closed.",

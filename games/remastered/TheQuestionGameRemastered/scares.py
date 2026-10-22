@@ -6,6 +6,9 @@ unavailable (no webcam, no Accessibility permission, etc.).
 """
 import random
 import threading
+import time
+
+import pygame
 
 from . import audio
 from . import config
@@ -156,6 +159,150 @@ def _do_windows_minimize(game):
     audio.play_mechanical_beep()
 
 
+# --- Malware theatre ---------------------------------------------------------
+# The player should leave a session unsure whether something got installed.
+# These effects are the lie that sells it. The fake windows are drawn inside
+# the game; clipboard / desktop note / title bar are the only real touches and
+# they all pass through os_layer's safety gates.
+
+_MALWARE_LINES = [
+    "Your files are being indexed.",
+    "Nothing was opened. Only read.",
+    "I have been here since the first session.",
+    "There is no uninstall for me.",
+]
+
+_CLIPBOARD_LINES = [
+    "I can see you.",
+    "You should not have come back.",
+    "This was copied while you were reading.",
+    "Do not open the next window.",
+]
+
+
+def _start_overlay(game, key, seconds):
+    # Base duration only. apply_scare() stretches every *_until deadline once,
+    # after the effect returns, using the operator's scare_scale.
+    game.fx[key + "_at"] = game.now
+    game.fx[key + "_until"] = game.now + max(0.5, seconds)
+
+
+def _do_fake_scan(game):
+    _start_overlay(game, "fake_scan", 7.0)
+    audio.play_glitch_sound()
+
+
+def _do_fake_bsod(game):
+    _start_overlay(game, "fake_bsod", 3.5)
+    audio.play_error_sound()
+
+
+def _do_fake_terminal(game):
+    name = ""
+    try:
+        name = os_layer.get_cached_username() or ""
+    except Exception:
+        pass
+    who = name or "user"
+    lines = [
+        "Microsoft Windows [Version 10.0.19045.5011]",
+        "(c) Microsoft Corporation. All rights reserved.",
+        "",
+        "C:\\Windows\\System32> whoami",
+        "%s\\%s" % (who, who),
+        "",
+        "C:\\Windows\\System32> dir C:\\Users\\%s /s /b" % who,
+        "Access is not required.",
+        "I already have what I need.",
+        "",
+        "C:\\Windows\\System32> " + random.choice(_MALWARE_LINES),
+    ]
+    game.fx["terminal_lines"] = lines
+    _start_overlay(game, "fake_terminal", 6.0)
+    audio.play_mechanical_beep()
+
+
+def _do_file_names(game):
+    names = []
+    try:
+        names = os_layer.list_visible_files(limit=9)
+    except Exception:
+        names = []
+    if not names:
+        # Nothing readable (sandboxed phone, empty home). Give the beat anyway.
+        _do_fake_scan(game)
+        return
+    game.fx["file_names"] = names
+    _start_overlay(game, "file_names", 6.0)
+    audio.play_static_burst()
+
+
+def _do_clipboard(game):
+    line = random.choice(_CLIPBOARD_LINES)
+    os_layer.set_clipboard(line)
+    game.fx["whisper_text"] = '"%s"' % line
+    game.fx["whisper_until"] = game.now + 4.0
+    audio.play_mechanical_beep()
+
+
+def _do_security_alert(game):
+    _start_overlay(game, "security_alert", 5.0)
+    if not config.SAFE_SCARES:
+        try:
+            os_layer.show_os_notification("Security alert",
+                                          "A new sign-in to this device was allowed.")
+        except Exception:
+            pass
+    audio.play_error_sound()
+
+
+def _do_desktop_note(game):
+    # One note per app session, even if an operator keeps firing the effect:
+    # a Desktop full of files is vandalism, not horror.
+    if getattr(game, "_desktop_note_made", False):
+        _do_fake_scan(game)
+        return
+    name = ""
+    try:
+        name = os_layer.create_desktop_note()
+    except Exception:
+        name = ""
+    if not name:
+        # The scary part is not the file, it is the feeling. If the OS will not
+        # let us write one (or the player disabled desktop scares) the in-app
+        # scan lands instead.
+        _do_fake_scan(game)
+        return
+    game._desktop_note_made = True
+    game.fx["whisper_text"] = '"I left you something on your desktop."'
+    game.fx["whisper_until"] = game.now + 5.0
+    audio.play_mechanical_beep()
+
+
+def _do_window_title(game):
+    try:
+        original = pygame.display.get_caption()[0]
+    except Exception:
+        original = config.APP_NAME
+    creepy = "TheQuestionGame.exe  \u2014  3 threats detected"
+    try:
+        pygame.display.set_caption(creepy)
+    except Exception:
+        return
+    game.fx["whisper_text"] = '"Look at the top of the window."'
+    game.fx["whisper_until"] = game.now + 4.0
+
+    def _restore():
+        time.sleep(6.0)
+        try:
+            pygame.display.set_caption(original or config.APP_NAME)
+        except Exception:
+            pass
+
+    threading.Thread(target=_restore, daemon=True).start()
+    audio.play_mechanical_beep()
+
+
 # Fixed, AI-choosable set.
 SCARE_REGISTRY = {
     "flicker": _do_flicker,
@@ -178,6 +325,14 @@ SCARE_REGISTRY = {
     "jumpscare": _do_jumpscare,
     "windows_shake": _do_windows_shake,
     "windows_minimize": _do_windows_minimize,
+    "fake_scan": _do_fake_scan,
+    "fake_bsod": _do_fake_bsod,
+    "fake_terminal": _do_fake_terminal,
+    "file_names": _do_file_names,
+    "clipboard": _do_clipboard,
+    "window_title": _do_window_title,
+    "security_alert": _do_security_alert,
+    "desktop_note": _do_desktop_note,
 }
 
 # Stacking guard: at most one scare per kind within this window (seconds).
@@ -191,12 +346,21 @@ _last_applied = {}
 _DESKTOP_SCARES = frozenset({
     "window_shake", "windows_shake", "windows_minimize",
     "window_teleport", "window_drift", "wallpaper", "mouse_move",
+    "clipboard", "window_title", "security_alert", "desktop_note",
+})
+
+# Effects that leave something behind on the real machine (clipboard contents,
+# a file on the Desktop, the title bar). The ACCESSIBILITY switch swaps them for
+# the in-app fake scan so the beat still lands without touching anything.
+_DESKTOP_TWEAK_SCARES = frozenset({
+    "clipboard", "window_title", "security_alert", "desktop_note",
 })
 
 # Scares that flash the screen hard or fast. "Reduce Flashes" swaps them for
 # something slower and dimmer — the hit still lands, it just does not strobe.
 _FLASH_SCARES = frozenset({
     "flicker", "webcam_flash", "rgb_split", "screen_tear", "jumpscare",
+    "fake_bsod",
 })
 
 # Scares that turn the camera on. "Disable Webcam Scares" swaps them.
@@ -207,6 +371,9 @@ _CAMERA_SCARES = frozenset({
 # The scares the low-performance mode is willing to keep.
 _LOW_PERF_SCARES = frozenset({
     "flicker", "corruption", "whisper",
+    # Malware theatre is rects and text, not particles: it stays in low mode.
+    "fake_scan", "fake_bsod", "fake_terminal", "file_names",
+    "clipboard", "window_title", "security_alert", "desktop_note",
 })
 
 
@@ -259,7 +426,9 @@ def apply_scare(game, name):
         sset = (getattr(game, "game_state", {}) or {}).get("settings", {}) or {}
     except Exception:
         sset = {}
-    if sset.get("disable_webcam_scares", False) and name in _CAMERA_SCARES:
+    if sset.get("disable_desktop_scares", False) and name in _DESKTOP_TWEAK_SCARES:
+        name = "fake_scan"
+    elif sset.get("disable_webcam_scares", False) and name in _CAMERA_SCARES:
         name = "corruption"
     elif sset.get("disable_flashes", False) and name in _FLASH_SCARES:
         name = "corruption"

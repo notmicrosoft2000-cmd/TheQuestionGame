@@ -21,6 +21,9 @@ os.environ["TQG_DATA_DIR"] = tempfile.mkdtemp(prefix="tqg_smoke_")
 # Tests never touch the network: the presence client is disabled and the new
 # online/compose screens are exercised against a fake, offline state.
 os.environ["TQG_SOCIAL"] = "0"
+# Never leave a clipboard entry or a file on the real Desktop while exercising
+# the scare registry.
+os.environ["TQG_SAFE_SCARES"] = "1"
 
 # Make the package importable when run from anywhere.
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -619,6 +622,61 @@ check("AI context carries hesitation counts", True)
 check("AI context forbids reusing scares", "whisper" not in _body)  # we simplified context
 check("AI context carries prior-session answers", True)
 check("AI context states it is the last session", "Session 3" in _body)
+
+# v6.1 anti-repetition: the cross-session list is the hard "never repeat" set,
+# and the prompt rotates an explicit subject instead of orbiting the same idea.
+check("asked_questions is in the save schema",
+      isinstance(config.DEFAULT_STATE.get("asked_questions"), list))
+msgs_rep = ai_client.ScaryAI._context_messages(
+    None, 2, [{"q": "What is your favorite color?", "a": "Blue"}],
+    asked=["Are you alone right now?", "Do you lock your door at night?"])
+_rep_body = msgs_rep[1]["content"]
+check("AI context lists cross-session questions as forbidden",
+      "Are you alone right now?" in _rep_body
+      and "Do you lock your door at night?" in _rep_body)
+check("AI context rotates the suggested topic",
+      "Lean this question toward:" in _rep_body)
+_more_rep = ai_client.ScaryAI._context_messages(
+    None, 2, [], asked=["Question number %d?" % i for i in range(12)])
+check("the suggested topic changes as questions accumulate",
+      _more_rep[1]["content"].split("Lean this question toward: ")[-1].splitlines()[0]
+      != _rep_body.split("Lean this question toward: ")[-1].splitlines()[0])
+
+_bank_qs = [q for q, _ in ai_client._OFFLINE_BANK]
+check("offline bank is large",
+      len(_bank_qs) >= 80, len(_bank_qs))
+check("offline bank has no duplicates",
+      len({ai_client._norm_question(q) for q in _bank_qs}) == len(_bank_qs))
+_drawn = set()
+_asked = []
+for _ in range(len(ai_client._OFFLINE_BANK)):
+    _q = ai_client.offline_question(2, [], asked=_asked)["q"]
+    _drawn.add(ai_client._norm_question(_q))
+    _asked.append(_q)
+check("the offline bank fills a long run without repeating",
+      len(_drawn) == len(ai_client._OFFLINE_BANK),
+      (len(_drawn), len(ai_client._OFFLINE_BANK)))
+
+# The new malware effects are real registry entries, and the accessibility
+# switch swaps the real-desktop ones for the in-app scan without dropping the
+# beat.
+_malware = ("fake_scan", "fake_bsod", "fake_terminal", "file_names",
+            "clipboard", "window_title", "security_alert", "desktop_note")
+check("malware effects are registered",
+      all(n in sc.SCARE_REGISTRY for n in _malware))
+_rep_settings = game.game_state.get("settings", {})
+try:
+    game.game_state["settings"] = dict(_rep_settings)
+    game.game_state["settings"]["disable_desktop_scares"] = True
+    sc._last_applied.clear()
+    game.now = 1000.0
+    game.fx["fake_scan_until"] = 0.0
+    sc.apply_scare(game, "desktop_note")
+    check("Disable Desktop Scares swaps the note for the in-app scan",
+          game.fx.get("fake_scan_until", 0.0) > game.now,
+          game.fx.get("fake_scan_until"))
+finally:
+    game.game_state["settings"] = _rep_settings
 
 # Truncated / malformed model replies must still yield a usable question.
 _salv = ai_client._salvage_step('{"q":"Why did you lie about the dark?","opts":["I did')

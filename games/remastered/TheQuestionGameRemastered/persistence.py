@@ -52,6 +52,7 @@ def load_game_state():
         state["answers"] = dict(loaded.get("answers", {}) or {})
         state["answer_times"] = dict(loaded.get("answer_times", {}) or {})
         state["lie_ids"] = list(loaded.get("lie_ids", []) or [])
+        state["asked_questions"] = list(loaded.get("asked_questions", []) or [])
         settings = dict(config.DEFAULT_STATE["settings"])
         loaded_settings = loaded.get("settings", {}) or {}
         settings.update(loaded_settings)
@@ -111,6 +112,7 @@ def reset_all_data():
     state["answers"] = {}
     state["answer_times"] = {}
     state["lie_ids"] = []
+    state["asked_questions"] = []
     state["settings"] = dict(config.DEFAULT_STATE["settings"])
     save_game_state(state)
     return state

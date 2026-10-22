@@ -10,6 +10,7 @@ import math
 import os
 import platform
 import random
+import shutil
 import subprocess
 import threading
 import time
@@ -1540,3 +1541,128 @@ def flash_cmd():
             subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
+
+
+# --- Malware-theme desktop touches -------------------------------------------
+# These are the effects that make the program feel like it is *in* the machine
+# rather than in a window. Everything here is reversible, harmless, and gated:
+# the ACCESSIBILITY switch ("Disable Desktop Scares") and TQG_SAFE_SCARES both
+# turn them into no-ops, so CI and screenshots never leave anything behind.
+
+def _desktop_dir():
+    """Best-effort path to the player's Desktop, or "" if there isn't one."""
+    home = os.path.expanduser("~")
+    if SYSTEM == "Windows":
+        profile = os.environ.get("USERPROFILE", home)
+        onedrive = os.environ.get("OneDrive", "")
+        cands = [os.path.join(profile, "Desktop")]
+        # Only join OneDrive when it is actually set: an empty value would turn
+        # this into the relative path "Desktop" and could match the CWD.
+        if onedrive:
+            cands.append(os.path.join(onedrive, "Desktop"))
+        cands.append(os.path.join(profile, "OneDrive", "Desktop"))
+    elif SYSTEM == "Darwin":
+        cands = [os.path.join(home, "Desktop")]
+    else:
+        cands = [
+            os.path.join(home, "Desktop"),
+            os.path.join(home, "desktop"),
+        ]
+        try:
+            xdg = subprocess.run(["xdg-user-dir", "DESKTOP"], capture_output=True,
+                                 text=True, timeout=1.0).stdout.strip()
+            if xdg:
+                cands.insert(0, xdg)
+        except Exception:
+            pass
+    for c in cands:
+        if c and os.path.isdir(c):
+            return c
+    return ""
+
+
+def list_visible_files(limit=10):
+    """Real file names from the places a person keeps their life.
+
+    Names only — never contents, never paths. This is exactly what the entity
+    "reads" on screen: enough to make the player check their own folder, not
+    enough to expose anything they did not already see in a file manager.
+    """
+    places = [_desktop_dir()]
+    home = os.path.expanduser("~")
+    for sub in ("Downloads", "Documents", "Pictures"):
+        places.append(os.path.join(home, sub))
+    out = []
+    seen = set()
+    for folder in places:
+        if not folder or not os.path.isdir(folder):
+            continue
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            continue
+        random.shuffle(names)
+        for name in names:
+            if name.startswith(".") or name in seen:
+                continue
+            full = os.path.join(folder, name)
+            if not os.path.isfile(full):
+                continue
+            seen.add(name)
+            out.append(name)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def create_desktop_note(text=None):
+    """Leave one small, harmless text file on the Desktop. Returns its name.
+
+    Never overwrites anything: the name is unique and the file is opened with
+    mode "x". The content is a short in-fiction line, nothing executable.
+    """
+    if config.SAFE_SCARES:
+        return ""
+    folder = _desktop_dir()
+    if not folder:
+        return ""
+    name = "I_WAS_HERE_%04d.txt" % random.randint(1, 9999)
+    body = text or (
+        "I did not need to open your files.\n"
+        "I only needed to know their names.\n\n"
+        "You can delete this.\n"
+        "It will not change anything.\n"
+    )
+    try:
+        path = os.path.join(folder, name)
+        with open(path, "x", encoding="utf-8") as f:
+            f.write(body)
+        return name
+    except Exception:
+        return ""
+
+
+def set_clipboard(text):
+    """Put a line in the real clipboard, the way malware would.
+
+    Uses the platform's own clipboard tool. Silently does nothing when no tool
+    is available (headless Linux, Wayland without wl-clipboard, etc.).
+    """
+    if config.SAFE_SCARES or not text:
+        return False
+    try:
+        if SYSTEM == "Windows":
+            subprocess.run(["cmd", "/c", "clip"], input=text, text=True, timeout=2,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return True
+        if SYSTEM == "Darwin":
+            subprocess.run(["pbcopy"], input=text, text=True, timeout=2)
+            return True
+        for cmd in (["wl-copy"], ["xclip", "-selection", "clipboard"],
+                    ["xsel", "--clipboard", "--input"]):
+            if shutil.which(cmd[0]):
+                subprocess.run(cmd, input=text, text=True, timeout=2)
+                return True
+    except Exception:
+        pass
+    return False

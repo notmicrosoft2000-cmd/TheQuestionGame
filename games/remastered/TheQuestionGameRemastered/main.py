@@ -355,6 +355,21 @@ class Game:
             "screen_tear_until": 0.0,
             "whisper_text": None,
             "whisper_until": 0.0,
+            # Malware-theme overlay clocks (fake scan / BSOD / console / file
+            # list / security modal). They are drawn inside the game and scale
+            # with the operator's effect dial like every other deadline.
+            "fake_scan_at": 0.0,
+            "fake_scan_until": 0.0,
+            "fake_bsod_at": 0.0,
+            "fake_bsod_until": 0.0,
+            "fake_terminal_at": 0.0,
+            "fake_terminal_until": 0.0,
+            "terminal_lines": None,
+            "file_names_at": 0.0,
+            "file_names_until": 0.0,
+            "file_names": None,
+            "security_alert_at": 0.0,
+            "security_alert_until": 0.0,
             # Multiplier applied to the *duration* of a scare. The operator's
             # sender sets it per effect, so the same scare can land gently or
             # hard. 1.0 is the game's own behaviour. The relay clamps the
@@ -390,7 +405,7 @@ class Game:
             "VIDEO": ["Fullscreen", "VSync", "Resolution", "UI Scale"],
             "GRAPHICS": ["Performance Mode", "CRT Effects", "CRT Intensity", "Scanlines", "Vignette", "Dust", "Static Line", "Tube Curvature", "Phosphor Mask"],
             "GAMEPLAY": ["Font", "Text Speed", "Text Size", "Text Sway", "AI Source"],
-            "ACCESSIBILITY": ["Reduce Flashes", "Disable Screen Shake", "Disable Webcam Scares"],
+            "ACCESSIBILITY": ["Reduce Flashes", "Disable Screen Shake", "Disable Webcam Scares", "Disable Desktop Scares"],
             "CONTROLS": ["Rebind: Up", "Rebind: Down", "Rebind: Confirm", "Rebind: Back/Pause"],
             "OTHER": ["VHS Effects", "Reset All Data", "< Back"],
         }
@@ -748,6 +763,7 @@ class Game:
         idx["Reduce Flashes"] = 1 if s.get("disable_flashes", False) else 0
         idx["Disable Screen Shake"] = 1 if s.get("disable_screen_shake", False) else 0
         idx["Disable Webcam Scares"] = 1 if s.get("disable_webcam_scares", False) else 0
+        idx["Disable Desktop Scares"] = 1 if s.get("disable_desktop_scares", False) else 0
         return idx
 
     def _startup_badges(self):
@@ -927,11 +943,17 @@ class Game:
         "ready" flag, so no half-filled step can ever be drawn.
         """
         q, opts, scare, src = None, [], None, None
+        asked = []
+        try:
+            asked = list(self.game_state.get("asked_questions") or [])
+        except Exception:
+            asked = []
         try:
             result = ai_client.next_question(self.ai, self.run_count,
                                              list(self.session_history),
                                              geo=os_layer.get_cached_geo(),
-                                             facts=self._ai_facts())
+                                             facts=self._ai_facts(),
+                                             asked=asked)
             q = result.get("q")
             opts = result.get("opts") or []
             scare = result.get("scare")
@@ -950,6 +972,21 @@ class Game:
         step["_id"] = step.get("_id") or "ai"
         step["type"] = "choice"
         step["q"] = q
+
+    def _remember_asked(self, q):
+        """Append a question to the cross-session list (deduped, capped)."""
+        q = " ".join(str(q or "").split())
+        if not q:
+            return
+        box = self.game_state.get("asked_questions")
+        if not isinstance(box, list):
+            box = []
+            self.game_state["asked_questions"] = box
+        if q not in box:
+            box.append(q)
+        # Keep the save small; the prompt only sends the most recent 60.
+        if len(box) > 500:
+            del box[:-500]
 
     def _reset_question_state(self):
         self.typing_state = "THINKING"
@@ -996,6 +1033,7 @@ class Game:
         s["disable_flashes"] = bool(self.settings_idx.get("Reduce Flashes", 0))
         s["disable_screen_shake"] = bool(self.settings_idx.get("Disable Screen Shake", 0))
         s["disable_webcam_scares"] = bool(self.settings_idx.get("Disable Webcam Scares", 0))
+        s["disable_desktop_scares"] = bool(self.settings_idx.get("Disable Desktop Scares", 0))
         try:
             # The desktop window-jiggle is part of the screen shake, so the
             # switch reaches the OS layer too.
@@ -1449,6 +1487,7 @@ class Game:
         # Little window shuffle on committing to an answer (Windows/macOS).
         os_layer.nudge_window()
         self.session_history.append({"q": step["q"], "a": answer})
+        self._remember_asked(step["q"])
         persistence.save_answer(self.game_state, step["_id"], answer, elapsed)
         self._note_answer_meta(step, answer, elapsed)
         # The eye is watching how you answer. It keeps its own tally.
@@ -1459,6 +1498,11 @@ class Game:
             self._report_social_answer(social_item, answer)
         result = self.handle_step_action(step.get("action"), step)
         scare = step.get("scare")
+        if scare and scare in self._used_scares:
+            # The model can pick the same effect twice; the player should not
+            # see the same trick twice in one session. Authored beats are also
+            # checked, but they are written to avoid this by design.
+            scare = None
         if scare:
             # The photosensitivity switches and the low-performance mode are
             # applied inside apply_scare, so every effect that reaches the
@@ -3092,7 +3136,65 @@ class Game:
         ui.apply_shadow_static(self.screen, w, h,
                                intensity=1.5 if self.run_count >= 3 else 1.0)
 
+        self._draw_malware_overlays(w, h)
+
+    def _draw_malware_overlays(self, w, h):
+        """Fake scanner / BSOD / console / file list / security modal.
+
+        All of it is drawn by the game. The only real-world touches elsewhere in
+        a scare (clipboard, a Desktop note, the title bar) are handled by
+        os_layer and gated by the ACCESSIBILITY setting.
+        """
+        fx = self.fx
+        now = self.now
+        try:
+            font_large, font_med, font_small = self._fonts()
+        except Exception:
+            return
+        who = ""
+        if (fx.get("fake_scan_until", 0) > now or fx.get("fake_terminal_until", 0) > now
+                or fx.get("file_names_until", 0) > now):
+            try:
+                who = os_layer.get_cached_username() or ""
+            except Exception:
+                who = ""
+
+        def span(key):
+            at = float(fx.get(key + "_at", 0.0) or 0.0)
+            until = float(fx.get(key + "_until", 0.0) or 0.0)
+            return now - at, max(0.1, until - at)
+
+        if fx.get("fake_bsod_until", 0) > now:
+            t, d = span("fake_bsod")
+            ui.draw_fake_bsod(self.screen, w, h, t, duration=d,
+                              font_title=font_large, font_body=font_small)
+        if fx.get("fake_scan_until", 0) > now:
+            t, d = span("fake_scan")
+            ui.draw_fake_scan(self.screen, w, h, t, duration=d,
+                              font_title=font_med, font_body=font_small,
+                              font_small=font_small, username=who)
+        if fx.get("fake_terminal_until", 0) > now:
+            t, d = span("fake_terminal")
+            ui.draw_fake_terminal(self.screen, w, h, t, duration=d,
+                                  lines=fx.get("terminal_lines") or [],
+                                  font_body=font_small, font_title=font_small)
+        if fx.get("file_names_until", 0) > now:
+            t, d = span("file_names")
+            sep = "\\" if os_layer.SYSTEM == "Windows" else "/"
+            label = (" C:%sUsers%s%s%sDesktop " % (sep, sep, who or "user", sep)
+                     if os_layer.SYSTEM == "Windows"
+                     else " %s%s%sDesktop " % (sep, "home" + sep, (who or "user") + sep))
+            ui.draw_file_list(self.screen, w, h, t, duration=d,
+                              names=fx.get("file_names") or [],
+                              font_body=font_small, font_title=font_small,
+                              title=label)
+        if fx.get("security_alert_until", 0) > now:
+            t, d = span("security_alert")
+            ui.draw_security_alert(self.screen, w, h, t, duration=d,
+                                   font_title=font_med, font_body=font_small)
+
     # --- aggression helpers ----------------------------------------------------
+
     def _say_aggressive(self, text, duration=3.5, violent=True):
         """Show an aggressive line and shove the window at the same moment — the
         shout and the shake land together.
