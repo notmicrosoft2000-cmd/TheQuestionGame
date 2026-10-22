@@ -81,7 +81,8 @@ Entry point `games/remastered/run_remastered.py` → package
 | `social.py` | the online room client: presence, inbox, answering |
 | `persistence.py` | run count, answers, badges, settings (`~/.tqgame_remastered/game_state.json`) |
 | `scares.py` | local effects the AI may trigger (camera, wallpaper, window drift, noise…) |
-| `os_layer.py` | process detection (Discord, Task Manager), location lookup, camera access |
+| `os_layer.py` | process detection (Discord, Task Manager), location lookup, camera access, global cursor + window bounds |
+| `eye_overlay.py` | the desktop eye: a separate borderless overlay process (Windows/macOS) |
 | `audio.py`, `sfx_gen.py`, `interjections.py` | sound, procedurally generated SFX, one-off interjections |
 
 Everything is tunable through `config.py`; **do not hardcode behaviour in
@@ -91,6 +92,43 @@ Persistence lives in `config.get_appdata_dir()`:
 `%APPDATA%/TQGameRemastered` (Windows),
 `~/Library/Application Support/TheQuestionGameRemastered` (macOS),
 `~/.tqgame_remastered` (Linux). `TQG_DATA_DIR` overrides it (used by tests).
+
+### The watching eye
+
+Since v6.0.0 there is an eye in the corner of the screen at all times. There
+is **no toggle** and there must not be one — it is the feature.
+
+| Piece | Where |
+|---|---|
+| the drawing | `ui.draw_eye()` — sclera, iris, pupil, socket ring. Procedural, no art assets |
+| where it sits | `main._eye_anchor()` — bottom-right in the menus, top-right in `PLAYING`/`EXITFADE` |
+| what it looks at | `main._eye_look_target()` — the highlighted option, else the cursor |
+| the pupil | `main._eye_state["pupil_x"/"pupil_y"]`, smoothed towards the target at ~0.30/frame |
+| blinking | `main._eye_state["next_blink"/"blink_until"]` — 3.5–11s calm, 0.12–0.35s during a scare |
+| the scare reaction | `main._eye_scare_active()` reads the `fx` timers, so it covers every scare without naming them |
+| the answer reaction | `main._eye_react_to_answer()` — same answer twice → the pupil contracts; three times → it swells and flushes red; a long hesitation → it widens |
+| the pulse | `main._eye_dilation()` — a slow sine swell, wider and faster in later sessions |
+| the ending | `main._draw_end_eye()` — at the end of the session one big eye takes over the whole screen, drawn *before* the text so the text sits on top of it |
+
+The eye is drawn in the game's own black-and-white language: white sclera,
+black iris, black pupil, a hard black socket ring. Only the scare state and
+the "accuse" reaction turn the iris red.
+
+**The desktop overlay.** On Windows and macOS the game re-executes itself with
+`--eye-overlay`, which runs `eye_overlay.main()` in a second process: a
+borderless, always-on-top, click-through window with an eye in it that trails
+the cursor across the whole desktop. It appears when the game window loses
+focus and disappears when it gets it back. `main._supervise_overlay()` starts
+it and restarts it if it dies; `run()` kills it on exit.
+
+**The overlay is Windows and macOS only. Do not add it to Linux.** Wayland
+compositors deliberately keep the pointer position private and there is no API
+that exposes it; X11 does expose it, and `os_layer._query_global_cursor_x11()`
+uses that for the in-game eye so the pupil keeps following the cursor off the
+edge of the window on Linux too.
+
+Every overlay failure path degrades to "no overlay". It must never crash the
+game — the overlay is a toy, the game is not.
 
 ---
 

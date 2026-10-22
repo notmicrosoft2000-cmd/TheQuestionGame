@@ -16,6 +16,9 @@ ICON = os.path.join(ASSETS, "windowq.ico")
 
 hiddenimports = ['cv2', 'numpy', 'requests', 'pygame']
 hiddenimports += collect_submodules('pyttsx3')
+# The desktop eye overlay. Imported lazily by run_remastered.py, so name it
+# explicitly or PyInstaller may leave it out.
+hiddenimports += ['TheQuestionGameRemastered.eye_overlay']
 
 
 a = Analysis(
@@ -27,7 +30,8 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # tkinter is only used by the macOS overlay; the Windows overlay is Win32.
+    excludes=['tkinter'],
     noarchive=False,
     optimize=0,
 )

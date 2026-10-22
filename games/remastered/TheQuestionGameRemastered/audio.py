@@ -19,6 +19,15 @@ _logs_music_playing = False
 _current_music = None
 _music_lock = threading.Lock()
 _sfx_duck = 1.0
+# The player's own SFX volume, from the settings screen. Kept apart from the
+# duck, which is a transient thing the game does on its own: they multiply.
+_sfx_volume = 1.0
+# The player's ambience volume. Remembered separately so it can be set before
+# the ambience is even playing.
+_ambience_volume = 1.0
+# The player's music volume, and the level the game itself wants right now.
+_music_volume = 1.0
+_music_level = 0.5
 
 
 def set_sfx_duck(factor):
@@ -163,7 +172,7 @@ def build_sound_cache():
     _SOUND_CACHE["static_scream"] = [_mk_scream() for _ in range(_POOL_SIZE)]
     _load_asset_sounds()
     try:
-        pygame.mixer.music.set_volume(0.5)
+        set_music_level(config.MUSIC_VOLUME)
     except Exception:
         pass
 
@@ -227,7 +236,7 @@ def _safe_play(sound, volume):
     try:
         chan = sound.play()
         if chan:
-            chan.set_volume(volume * _sfx_duck)
+            chan.set_volume(volume * _sfx_duck * _sfx_volume)
     except Exception:
         pass
 
@@ -306,7 +315,7 @@ def play_jumpscare():
             _jumpscare_cache[path] = snd
         chan = snd.play()
         if chan:
-            chan.set_volume(0.6 * _sfx_duck)
+            chan.set_volume(0.6 * _sfx_duck * _sfx_volume)
     except Exception:
         pass
 
@@ -333,7 +342,7 @@ def start_ambience():
                 _SOUND_CACHE["_ambience_sound"] = snd
             _ambience_channel = snd.play(-1)
             if _ambience_channel:
-                _ambience_channel.set_volume(0.32)
+                _ambience_channel.set_volume(0.32 * _ambience_volume)
             return
         except Exception:
             pass
@@ -351,7 +360,7 @@ def start_ambience():
         sound = pygame.mixer.Sound(buffer=np.int16(np.clip(wave, -1, 1) * 14000))
         _ambience_channel = sound.play(-1)
         if _ambience_channel:
-            _ambience_channel.set_volume(0.32)
+            _ambience_channel.set_volume(0.32 * _ambience_volume)
     except Exception:
         pass
 
@@ -408,9 +417,60 @@ def play_music(name, loops=-1, fade_ms=400):
 
 
 def set_music_volume(volume):
-    """Set the looping-music volume (0.0-1.0), clamped and fail-safe."""
+    """The player's music volume, from the settings screen.
+
+    Kept apart from the level the game itself wants for the current screen
+    (calm menus, in-game): the two multiply, so the player is always in
+    charge of how loud it is.
+    """
+    global _music_volume
     try:
-        pygame.mixer.music.set_volume(max(0.0, min(1.0, float(volume))))
+        _music_volume = max(0.0, min(1.0, float(volume)))
+    except Exception:
+        _music_volume = 1.0
+    _apply_music_volume()
+
+
+def set_music_level(level):
+    """The level the game wants for the music right now."""
+    global _music_level
+    try:
+        _music_level = max(0.0, min(1.0, float(level)))
+    except Exception:
+        _music_level = 1.0
+    _apply_music_volume()
+
+
+def _apply_music_volume():
+    try:
+        pygame.mixer.music.set_volume(_music_level * _music_volume)
+    except Exception:
+        pass
+
+
+def set_sfx_volume(volume):
+    """The player's sound-effect volume, from the settings screen."""
+    global _sfx_volume
+    try:
+        _sfx_volume = max(0.0, min(1.0, float(volume)))
+    except Exception:
+        _sfx_volume = 1.0
+
+
+def set_ambience_volume(volume):
+    """The player's ambience volume, from the settings screen.
+
+    Remembered even before the ambience starts, so the setting survives being
+    applied at launch.
+    """
+    global _ambience_volume
+    try:
+        _ambience_volume = max(0.0, min(1.0, float(volume)))
+    except Exception:
+        _ambience_volume = 1.0
+    try:
+        if _ambience_channel is not None:
+            _ambience_channel.set_volume(0.32 * _ambience_volume)
     except Exception:
         pass
 

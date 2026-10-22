@@ -6,13 +6,96 @@ This file covers the **games and the server**. The website has its own long
 history in the git log; only version-bearing site changes are listed here.
 
 Version numbers follow the game's `config.VERSION`. Release tags look like
-`v5.1.0-beta-remastered`; the site picks the newest one automatically.
+`v6.0.0-remastered`; the site picks the newest one automatically.
 
 ---
 
 ## Unreleased
 
 Nothing yet.
+
+---
+
+## v6.0.0 — 2026-10-22
+
+A big release. The game gets a settings overhaul it badly needed, a pile of
+quality-of-life, a real graphics control panel, and — because it turns out the
+game needed one — **an eye that watches you the whole time**.
+
+### Added
+
+- **The watching eye.** There is an eye in the corner of the screen, and there
+  is no way to turn it off. It is drawn in the game's own language: barebone
+  white sclera, black iris, black pupil, a hard black socket ring. No art
+  assets, no veins, no glamour — just a drawn shape that watches.
+  - It **follows the cursor**. Move the mouse and the pupil goes with it.
+  - It **looks at what you are choosing**. When a menu option is highlighted,
+    the pupil turns to look straight at it, and it moves fast enough that you
+    can actually see it move between options.
+  - It **sits in different corners**: bottom-right in the menus and on the
+    title screen, top-right during the game, out of the way of the text.
+  - It **blinks**, at irregular intervals, and it blinks a lot more and turns
+    **red** whenever a scare is playing — a flicker, a corruption, a whisper.
+  - It gets **more erratic in later sessions**: faster blinking, more
+    wandering, a wider pulse.
+  - It **keeps its own tally of your answers.** Answer the same thing twice and
+    the pupil contracts and holds that stare. Do it three times and the eye
+    swells and flushes red. Hesitate on a question for long enough and it
+    widens instead.
+  - The pupil **breathes** — a slow, irregular swell and shrink, all the time.
+  - At the **end of the session** the corner eye stands down and **one big eye
+    takes over the whole screen**, sitting behind the text and staring out.
+    That is the last thing you see.
+- **A desktop eye (Windows and macOS).** When the game window loses focus, a
+  borderless, always-on-top, click-through window appears on the desktop with
+  an eye in it, and that eye trails your cursor across your whole screen. It
+  follows you into other windows. Bring the game back and it disappears again.
+  It runs as a separate process (`--eye-overlay`), is supervised by the game,
+  and dies with it. Linux does not get the desktop overlay — Wayland
+  compositors deliberately keep the pointer position private, and there is no
+  way around that — but the in-game eye follows the cursor off the edge of the
+  window there instead.
+- **A settings overhaul.** The old flat list of eight options is now seven
+  tabbed categories — `AUDIO`, `VIDEO`, `GRAPHICS`, `GAMEPLAY`,
+  `ACCESSIBILITY`, `CONTROLS`, `OTHER` — and everything in them is saved to
+  the save file and survives a restart.
+- **Volume controls.** Separate master, sound-effect, ambience and music
+  sliders, each with a mute. The game honours them everywhere, including the
+  procedurally generated sound.
+- **Video options.** Fullscreen, vsync (asked of the driver — a driver that
+  cannot do it simply runs unthrottled), a window resolution from 640×480 to
+  1600×1200, and a UI scale from 75% to 150%. The UI scale is a *real* scale:
+  the game is drawn at another resolution and stretched to the window, so the
+  text and the layout grow together instead of the text drifting out of its
+  boxes.
+- **A graphics control panel.** A performance preset (`Low` / `Medium` /
+  `High`), a CRT on/off switch with its own intensity, and individual toggles
+  for every post-processing layer: scanlines, vignette, dust, the static line,
+  tube curvature and the phosphor mask. `Low` turns the expensive layers off
+  by itself.
+- **A pause menu.** `ESC` during the game opens `RESUME` / `SETTINGS` /
+  `MAIN MENU` / `EXIT` instead of the game just ignoring the key.
+- **Key rebinding.** The `CONTROLS` tab rebinds up, down, confirm and
+  back/pause. Rebinds are saved with the rest of the settings, and a conflict
+  is rejected rather than silently shadowing another action.
+- **Photosensitivity switches.** `Reduce Flashes`, `Disable Screen Shake` and
+  `Disable Webcam Scares` — and the scare system actually respects them.
+
+### Changed
+
+- The version label on the title screen moved from the bottom-right to the
+  top-right. The bottom-right corner belongs to the eye now.
+- The settings list scrolls when a category is taller than the window
+  (`GRAPHICS` has nine options).
+- `Text Speed` and `VHS Effects` gained more steps (`Very Fast` …
+  `Very Slow`, and `Extreme`).
+
+### Notes
+
+- The desktop eye is **Windows and macOS only**. The in-game eye is on every
+  platform, including Linux and Android.
+- Every overlay failure path degrades to "no overlay". It never crashes the
+  game.
 
 ---
 

@@ -159,6 +159,118 @@ class Game:
     def screen(self):
         return self._frame
 
+    # --- the window ----------------------------------------------------------
+    def _window_size(self):
+        """The size the window opens at, from the resolution setting."""
+        sset = self.game_state.get("settings", {}) or {}
+        res = str(sset.get("resolution", "") or "").lower()
+        if "x" in res:
+            try:
+                w, h = res.split("x", 1)
+                w, h = int(w), int(h)
+                if w >= config.WINDOW_MIN_W and h >= config.WINDOW_MIN_H:
+                    return (w, h)
+            except Exception:
+                pass
+        return (config.WINDOW_W, config.WINDOW_H)
+
+    def _render_size(self, win_size):
+        """The size of the drawing frame for a window of this size.
+
+        The UI scale is a real scale: the game is drawn at another resolution
+        and stretched to the window, so the text and the layout grow or shrink
+        together. Scaling the fonts alone would leave the text drifting out of
+        its boxes.
+        """
+        scale = 1.0
+        try:
+            scale = float((self.game_state.get("settings", {}) or {})
+                          .get("ui_scale", 1.0) or 1.0)
+        except Exception:
+            scale = 1.0
+        scale = max(0.5, min(2.0, scale))
+        return (max(1, int(round(win_size[0] / scale))),
+                max(1, int(round(win_size[1] / scale))))
+
+    def _create_display(self):
+        """Create the window, honouring the video settings.
+
+        Fullscreen and vsync are asked of the driver. A driver that cannot do
+        either is not an error: the game runs windowed, and unthrottled.
+        """
+        flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
+        if IS_ANDROID:
+            try:
+                info = pygame.display.Info()
+                disp = pygame.display.set_mode(
+                    (info.current_w, info.current_h), pygame.FULLSCREEN)
+                self._video_applied = self._video_wanted()
+                return disp
+            except Exception:
+                disp = pygame.display.set_mode((config.WINDOW_W, config.WINDOW_H), flags)
+                self._video_applied = self._video_wanted()
+                return disp
+        sset = self.game_state.get("settings", {}) or {}
+        size = self._window_size()
+        if sset.get("fullscreen", False):
+            flags |= pygame.FULLSCREEN
+        vsync = 1 if sset.get("vsync", True) else 0
+        disp = None
+        for attempt in (lambda: pygame.display.set_mode(size, flags, vsync=vsync),
+                        lambda: pygame.display.set_mode(size, flags),
+                        lambda: pygame.display.set_mode((config.WINDOW_W,
+                                                         config.WINDOW_H), flags)):
+            try:
+                disp = attempt()
+                break
+            except Exception:
+                disp = None
+        if disp is None:
+            disp = pygame.display.get_surface()
+        if not config.WINDOW_LOCKED and not sset.get("fullscreen", False):
+            try:
+                self._apply_resize_limits()
+            except Exception:
+                pass
+        self._video_applied = self._video_wanted()
+        return disp
+
+    def _video_wanted(self):
+        """The video settings as a comparable tuple."""
+        sset = self.game_state.get("settings", {}) or {}
+        return (bool(sset.get("fullscreen", False)),
+                bool(sset.get("vsync", True)),
+                str(sset.get("resolution", "")))
+
+    def _apply_video_settings(self):
+        """Re-make the window when the video settings change.
+
+        Fullscreen and the resolution are properties of the window itself, so
+        they can only be changed by making a new one. The UI scale needs no
+        window: the frame is simply drawn at another resolution.
+        """
+        want = self._video_wanted()
+        if getattr(self, "_video_applied", None) == want:
+            # Only the UI scale changed: resize the frame, not the window.
+            try:
+                self._set_frame_size(self._display.get_size())
+            except Exception:
+                pass
+            return
+        self._video_applied = want
+        try:
+            self._display = self._create_display()
+        except Exception:
+            return
+        try:
+            self._frame = self._new_frame(self._render_size(self._display.get_size()))
+            self._font_cache_key = None
+            self._black_overlay_key = None
+            if getattr(self, "starfield", None) is not None:
+                self.starfield = ui.build_starfield(*self._frame.get_size())
+        except Exception:
+            pass
+
     def __init__(self):
         pygame.init()
         pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
@@ -166,32 +278,20 @@ class Game:
             pygame.mixer.set_num_channels(16)  # default 8 exhausts under scare layers
         except Exception:
             pass
-        # A resizable frame, clamped between a floor and a ceiling. The ceiling
-        # is deliberately short of the desktop so the window can be stretched
-        # but never becomes fullscreen — there is no F11/Alt+Enter handler and
-        # pygame.FULLSCREEN is never used anywhere in this build.
-        flags = pygame.NOFRAME if config.WINDOW_LOCKED else pygame.RESIZABLE
+        # The save file decides the window, so it is read before the display is
+        # made: a player who asked for fullscreen, a different resolution or a
+        # different UI scale gets it on the first run, not after a restart.
+        self.game_state = persistence.load_game_state()
+        self.run_count = self.game_state.get("run_count", 1)
         try:
-            if IS_ANDROID:
-                info = pygame.display.Info()
-                self._display = pygame.display.set_mode(
-                    (info.current_w, info.current_h), pygame.FULLSCREEN)
-            else:
-                self._display = pygame.display.set_mode(
-                    (config.WINDOW_W, config.WINDOW_H), flags)
-                if not config.WINDOW_LOCKED:
-                    self._apply_resize_limits()
+            self.settings_idx = self._load_settings_idx()
         except Exception:
-            self._display = pygame.display.set_mode(
-                (config.WINDOW_W, config.WINDOW_H), flags)
-            if not config.WINDOW_LOCKED:
-                try:
-                    self._apply_resize_limits()
-                except Exception:
-                    pass
+            self.settings_idx = dict(config.SETTING_DEFAULTS)
+        self.ai = ai_client.ScaryAI()
+        self._display = self._create_display()
         # Everything from here on draws into this surface; _draw() copies it
         # onto the window. See the `screen` property above for why.
-        self._frame = self._new_frame(self._display.get_size())
+        self._frame = self._new_frame(self._render_size(self._display.get_size()))
         # The window surface we last painted opaque (see _make_window_opaque).
         self._opaque_surface = None
         try:
@@ -202,13 +302,14 @@ class Game:
         pygame.display.set_caption(config.APP_NAME)
         pygame.mouse.set_visible(False)
 
-        self.game_state = persistence.load_game_state()
-        self.run_count = self.game_state.get("run_count", 1)
+        try:
+            self._apply_settings()
+        except Exception:
+            pass
         self.state = "LOADING"
         self.now = time.time()
         self.loading_start = self.now
 
-        self.ai = ai_client.ScaryAI()
         self.active_script = []
         self.current_step = 0
         self.typing_index = 0
@@ -261,9 +362,61 @@ class Game:
         if self.game_state.get("logs_unlocked") and "LOGS" not in self.menu_options:
             self.menu_options.insert(len(self.menu_options) - 1, "LOGS")
         self.selected_option = 0
-        self.settings_options = ["Font", "Text Speed", "VHS Effects", "Text Sway", "Text Size", "AI Source", "Reset All Data", "< Back"]
+        self.settings_categories = ["AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY", "CONTROLS", "OTHER"]
+        self.settings_category_selected = 0
+        self.settings_options_by_category = {
+            "AUDIO": ["Master Volume", "SFX Volume", "Ambience Volume", "Music Volume"],
+            "VIDEO": ["Fullscreen", "VSync", "Resolution", "UI Scale"],
+            "GRAPHICS": ["Performance Mode", "CRT Effects", "CRT Intensity", "Scanlines", "Vignette", "Dust", "Static Line", "Tube Curvature", "Phosphor Mask"],
+            "GAMEPLAY": ["Font", "Text Speed", "Text Size", "Text Sway", "AI Source"],
+            "ACCESSIBILITY": ["Reduce Flashes", "Disable Screen Shake", "Disable Webcam Scares"],
+            "CONTROLS": ["Rebind: Up", "Rebind: Down", "Rebind: Confirm", "Rebind: Back/Pause"],
+            "OTHER": ["VHS Effects", "Reset All Data", "< Back"],
+        }
+        self.settings_options = self.settings_options_by_category[self.settings_categories[self.settings_category_selected]]
         self.settings_selected = 0
+        self.settings_scroll = 0
         self.settings_idx = self._load_settings_idx()
+        self.pause_options = ["RESUME", "SETTINGS", "MAIN MENU", "EXIT"]
+        self.pause_selected = 0
+        self.paused = False
+        self.rebinding = None
+        self.rebind_error = ""
+        self.rebind_error_until = 0.0
+        # The desktop eye: a separate process that trails the player's cursor
+        # across their whole desktop while the game window is not focused.
+        try:
+            from . import eye_overlay
+            self._overlay = eye_overlay.OverlayController()
+        except Exception:
+            self._overlay = None
+        self._window_focused = True
+        self._eye_state = {
+            "x": 0, "y": 0, "radius": 0,
+            "pupil_x": 0, "pupil_y": 0,
+            "blink_until": 0.0,
+            "blink_start": 0.0,
+            "next_blink": time.time() + random.uniform(4.0, 9.0),
+            "last_mouse": (0, 0),
+            "drift_phase": random.random() * 6.28,
+            "look_target": None,
+            "offscreen_angle": 0.0,
+            "scared_until": 0.0,
+            "wander_until": 0.0,
+            # Answer reactions and pupil size.
+            "answers": [],
+            "reaction_until": 0.0,
+            "reaction_kind": "",
+            "reaction_dilation": 1.0,
+            "reaction_angry": False,
+            "reaction_blend": 0.0,
+            "pulse_phase": 0.0,
+            "pulse_epoch": time.time(),
+        }
+        # Where the eye should look. Filled in by the screens that draw a
+        # highlighted option, because the option lists move around.
+        self._eye_answer_rect = None
+        self._eye_online_rect = None
         self.about_selected = 0
         self.credits_scroll_y = 0
 
@@ -384,7 +537,7 @@ class Game:
 
     def _set_frame_size(self, size):
         """Resize the drawing frame (and everything that is baked to its size)."""
-        size = (max(1, int(size[0])), max(1, int(size[1])))
+        size = self._render_size(size)
         if size == self._frame.get_size():
             return
         self._frame = self._new_frame(size)
@@ -484,25 +637,37 @@ class Game:
     # --- setup helpers -------------------------------------------------------
     def _load_settings_idx(self):
         idx = dict(config.SETTING_DEFAULTS)
-        s = self.game_state.get("settings", {})
+        s = self.game_state.get("settings", {}) or {}
         speed = s.get("text_speed", 0.04)
-        if speed <= 0.02:
+        if speed <= 0.0175:
             idx["Text Speed"] = 0
-        elif speed >= 0.07:
+        elif speed <= 0.0325:
+            idx["Text Speed"] = 1
+        elif speed <= 0.06:
             idx["Text Speed"] = 2
+        elif speed <= 0.1:
+            idx["Text Speed"] = 3
+        else:
+            idx["Text Speed"] = 4
         vhs = s.get("vhs_intensity", 1.0)
         if vhs <= 0.0:
             idx["VHS Effects"] = 0
         elif vhs <= 0.4:
             idx["VHS Effects"] = 1
-        elif vhs >= 1.5:
+        elif vhs <= 1.5:
+            idx["VHS Effects"] = 2
+        elif vhs <= 2.5:
             idx["VHS Effects"] = 3
+        else:
+            idx["VHS Effects"] = 4
         sway = s.get("sway_intensity", 1.0)
         if sway <= 0.0:
             idx["Text Sway"] = 0
         elif sway <= 0.4:
             idx["Text Sway"] = 1
-        elif sway >= 1.5:
+        elif sway <= 1.4:
+            idx["Text Sway"] = 2
+        else:
             idx["Text Sway"] = 3
         size = s.get("text_size", 1.0)
         if size <= 0.85:
@@ -513,18 +678,55 @@ class Game:
             idx["Text Size"] = 2
         else:
             idx["Text Size"] = 3
-        # Font is a label, not a number.
         font_label = s.get("font", "Courier")
         try:
             idx["Font"] = config.SETTING_OPTIONS["Font"].index(font_label)
         except (ValueError, KeyError):
             idx["Font"] = 0
-        # AI Source is also a label.
         source_label = s.get("ai_source", "Relay")
         try:
             idx["AI Source"] = config.SETTING_OPTIONS["AI Source"].index(source_label)
         except (ValueError, KeyError):
             idx["AI Source"] = 0
+        for key in ("Master Volume", "SFX Volume", "Ambience Volume", "Music Volume", "CRT Intensity", "UI Scale"):
+            val = None
+            if key == "CRT Intensity":
+                val = s.get("crt_intensity")
+            elif key == "UI Scale":
+                val = s.get("ui_scale")
+            else:
+                val = s.get(key.lower().replace(" ", "_"))
+            if isinstance(val, (int, float)) and key in config.SETTING_MAPS:
+                best = 0
+                best_diff = 10
+                for i, v in enumerate(config.SETTING_MAPS[key]):
+                    d = abs(float(val) - float(v))
+                    if d < best_diff:
+                        best_diff = d
+                        best = i
+                idx[key] = best
+        idx["Fullscreen"] = 1 if s.get("fullscreen", False) else 0
+        idx["VSync"] = 1 if s.get("vsync", True) else 0
+        try:
+            idx["Resolution"] = config.SETTING_OPTIONS["Resolution"].index(
+                s.get("resolution", "800x600"))
+        except (ValueError, KeyError):
+            idx["Resolution"] = 1
+        perf = s.get("performance_mode", "Medium")
+        try:
+            idx["Performance Mode"] = config.SETTING_OPTIONS["Performance Mode"].index(perf)
+        except (ValueError, KeyError):
+            idx["Performance Mode"] = 1
+        idx["CRT Effects"] = 1 if s.get("crt_enabled", True) else 0
+        idx["Scanlines"] = 1 if s.get("scanlines_enabled", True) else 0
+        idx["Vignette"] = 1 if s.get("vignette_enabled", True) else 0
+        idx["Dust"] = 1 if s.get("dust_enabled", True) else 0
+        idx["Static Line"] = 1 if s.get("static_line_enabled", True) else 0
+        idx["Tube Curvature"] = 1 if s.get("tube_curvature_enabled", True) else 0
+        idx["Phosphor Mask"] = 1 if s.get("phosphor_mask_enabled", True) else 0
+        idx["Reduce Flashes"] = 1 if s.get("disable_flashes", False) else 0
+        idx["Disable Screen Shake"] = 1 if s.get("disable_screen_shake", False) else 0
+        idx["Disable Webcam Scares"] = 1 if s.get("disable_webcam_scares", False) else 0
         return idx
 
     def _startup_badges(self):
@@ -746,6 +948,60 @@ class Game:
         source = config.SETTING_OPTIONS["AI Source"][self.settings_idx["AI Source"]]
         s["ai_source"] = source
         self._apply_ai_source(source)
+        if "Master Volume" in self.settings_idx:
+            s["master_volume"] = config.SETTING_MAPS["Master Volume"][self.settings_idx["Master Volume"]]
+        if "SFX Volume" in self.settings_idx:
+            s["sfx_volume"] = config.SETTING_MAPS["SFX Volume"][self.settings_idx["SFX Volume"]]
+        if "Ambience Volume" in self.settings_idx:
+            s["ambience_volume"] = config.SETTING_MAPS["Ambience Volume"][self.settings_idx["Ambience Volume"]]
+        if "Music Volume" in self.settings_idx:
+            s["music_volume"] = config.SETTING_MAPS["Music Volume"][self.settings_idx["Music Volume"]]
+        s["fullscreen"] = bool(self.settings_idx.get("Fullscreen", 0))
+        s["vsync"] = bool(self.settings_idx.get("VSync", 1))
+        s["resolution"] = config.SETTING_OPTIONS["Resolution"][
+            self.settings_idx.get("Resolution", 1)]
+        s["performance_mode"] = config.SETTING_OPTIONS["Performance Mode"][self.settings_idx.get("Performance Mode", 1)]
+        s["crt_enabled"] = bool(self.settings_idx.get("CRT Effects", 1))
+        if "CRT Intensity" in self.settings_idx:
+            s["crt_intensity"] = config.SETTING_MAPS["CRT Intensity"][self.settings_idx["CRT Intensity"]]
+        s["scanlines_enabled"] = bool(self.settings_idx.get("Scanlines", 1))
+        s["vignette_enabled"] = bool(self.settings_idx.get("Vignette", 1))
+        s["dust_enabled"] = bool(self.settings_idx.get("Dust", 1))
+        s["static_line_enabled"] = bool(self.settings_idx.get("Static Line", 1))
+        s["tube_curvature_enabled"] = bool(self.settings_idx.get("Tube Curvature", 1))
+        s["phosphor_mask_enabled"] = bool(self.settings_idx.get("Phosphor Mask", 1))
+        if "UI Scale" in self.settings_idx:
+            s["ui_scale"] = config.SETTING_MAPS["UI Scale"][self.settings_idx["UI Scale"]]
+        s["disable_flashes"] = bool(self.settings_idx.get("Reduce Flashes", 0))
+        s["disable_screen_shake"] = bool(self.settings_idx.get("Disable Screen Shake", 0))
+        s["disable_webcam_scares"] = bool(self.settings_idx.get("Disable Webcam Scares", 0))
+        try:
+            # The desktop window-jiggle is part of the screen shake, so the
+            # switch reaches the OS layer too.
+            os_layer.set_shake_enabled(not s["disable_screen_shake"])
+        except Exception:
+            pass
+        try:
+            # Fullscreen, the resolution and the UI scale are properties of
+            # the window, so they are applied by re-making it.
+            self._apply_video_settings()
+        except Exception:
+            pass
+        try:
+            # The module-level import is the package's own audio module — a
+            # local `import audio` would look for a *top-level* module and
+            # quietly fail, leaving the volumes at their defaults.
+            mv = float(s.get("master_volume", 1.0))
+            sv = float(s.get("sfx_volume", 1.0))
+            av = float(s.get("ambience_volume", 1.0))
+            muv = float(s.get("music_volume", 0.5))
+            audio.set_music_volume(muv * mv)
+            audio.set_ambience_volume(av * mv)
+            audio.set_sfx_volume(sv * mv)
+        except Exception:
+            pass
+        self._font_cache = None
+        self._font_cache_key = None
         persistence.save_game_state(self.game_state)
 
     def _apply_ai_source(self, source):
@@ -1091,7 +1347,7 @@ class Game:
             menu_states = menu_states + ("TITLE", "PLAYING")
         audio.set_sfx_duck(1.0)
         if self.state in menu_states:
-            audio.set_music_volume(config.MUSIC_VOLUME)
+            audio.set_music_level(config.MUSIC_VOLUME)
             audio.start_logs_music()
         else:
             audio.fade_logs_music(500)
@@ -1174,6 +1430,8 @@ class Game:
         self.session_history.append({"q": step["q"], "a": answer})
         persistence.save_answer(self.game_state, step["_id"], answer, elapsed)
         self._note_answer_meta(step, answer, elapsed)
+        # The eye is watching how you answer. It keeps its own tally.
+        self._eye_react_to_answer(answer, elapsed)
         # A hand-written question gets its answer reported back to its author.
         social_item = step.get("_social")
         if social_item:
@@ -1181,6 +1439,9 @@ class Game:
         result = self.handle_step_action(step.get("action"), step)
         scare = step.get("scare")
         if scare:
+            # The photosensitivity switches and the low-performance mode are
+            # applied inside apply_scare, so every effect that reaches the
+            # player goes through the same policy.
             if scares.apply_scare(self, scare):
                 self._scares_fired += 1
             # Remember it so the AI never fires the same effect twice in a run.
@@ -1219,6 +1480,23 @@ class Game:
                 persistence.record_lie(self.game_state, step["_id"])
 
     # --- input ---------------------------------------------------------------
+    def _bound_key(self, action, default):
+        """The key bound to an action, or the default if it is not bound.
+
+        The rebinds live in the save file, so they survive a restart. A name
+        the running pygame does not know falls back to the default rather than
+        breaking the key handler.
+        """
+        try:
+            s = self.game_state.get("settings", {}) or {}
+            kb = s.get("keybinds", {}) or {}
+            name = kb.get(action)
+            if not name:
+                return default
+            return pygame.key.key_code(name)
+        except Exception:
+            return default
+
     def _handle_key(self, key, unicode=""):
         # Android's system Back key/gesture arrives as K_AC_BACK — map it to
         # ESC so every "leave this screen" path works on a phone.
@@ -1242,24 +1520,40 @@ class Game:
                 audio.play_ui_select_sound()
                 self.start_fade("TITLE")
         elif self.state in ("PLAYING", "EXITFADE"):
+            if key == self._bound_key("back", pygame.K_ESCAPE):
+                if not getattr(self, "paused", False):
+                    self.paused = True
+                    self.pause_selected = 0
+                    audio.play_ui_nav_sound()
+                    return
+            if getattr(self, "paused", False):
+                self._pause_key(key)
+                return
             self._playing_key(key)
 
     def _title_key(self, key):
         self._check_cheat(key)
-        if key == pygame.K_TAB or key == pygame.K_DOWN or key == pygame.K_UP:
+        up = self._bound_key("up", pygame.K_UP)
+        down = self._bound_key("down", pygame.K_DOWN)
+        confirm = self._bound_key("confirm", pygame.K_RETURN)
+        if key == pygame.K_TAB or key == down or key == up:
             n = len(self.menu_options)
-            step = 1 if (key == pygame.K_DOWN or key == pygame.K_TAB) else -1
-            if key == pygame.K_UP:
+            step = 1 if (key == down or key == pygame.K_TAB) else -1
+            if key == up:
                 step = -1
             self.selected_option = (self.selected_option + step) % n
             audio.play_ui_nav_sound()
-        elif key == pygame.K_RETURN:
+        elif key == confirm:
             audio.play_ui_select_sound()
             option = self.menu_options[self.selected_option]
             if option == "PLAY":
                 self.start_fade("PLAYING")
             elif option == "SETTINGS":
+                self.settings_category_selected = 0
+                self.settings_options = self.settings_options_by_category[self.settings_categories[self.settings_category_selected]]
                 self.settings_selected = 0
+                self.settings_idx = self._load_settings_idx()
+                self._apply_settings()
                 self.start_fade("SETTINGS")
             elif option == "HELP":
                 self.start_fade("HELP")
@@ -1295,14 +1589,79 @@ class Game:
             self._cheat_buffer = []
 
     def _settings_key(self, key):
+        if getattr(self, "rebinding", None):
+            s = self.game_state.setdefault("settings", {})
+            kb = s.setdefault("keybinds", {})
+            keyname = pygame.key.name(key).upper()
+            # Avoid setting to modifiers in weird states, but just store
+            mapping = {
+                "Rebind: Up": "up",
+                "Rebind: Down": "down",
+                "Rebind: Confirm": "confirm",
+                "Rebind: Back/Pause": "back",
+            }
+            action = mapping.get(self.rebinding)
+            if action:
+                # A key can only drive one action. Reject the clash instead of
+                # letting it shadow the other binding.
+                clash = None
+                for other_action, other_key in kb.items():
+                    if other_action == action:
+                        continue
+                    if other_action == "pause" and action == "back":
+                        continue    # back and pause are one action
+                    if other_action == "back" and action == "pause":
+                        continue
+                    if other_key == keyname:
+                        clash = other_action
+                        break
+                if clash:
+                    self.rebind_error = "%s IS ALREADY BOUND" % keyname
+                    self.rebind_error_until = self.now + 3.0
+                    self.rebinding = None
+                    audio.play_ui_nav_sound()
+                    return
+                kb[action] = keyname
+                if action == "back":
+                    kb["pause"] = keyname
+                s["keybinds"] = kb
+                persistence.save_game_state(self.game_state)
+                self.rebind_error = ""
+            self.rebinding = None
+            audio.play_ui_select_sound()
+            return
         n = len(self.settings_options)
-        if key == pygame.K_TAB or key == pygame.K_UP or key == pygame.K_DOWN:
-            step = 1 if (key == pygame.K_DOWN or key == pygame.K_TAB) else -1
-            if key == pygame.K_UP:
-                step = -1
-            self.settings_selected = (self.settings_selected + step) % n
+        # Navigation honours the rebinds. The change key and the back key stay
+        # on ENTER and ESC here as well, so the player can never rebind
+        # themselves out of the screen they rebind in.
+        up = self._bound_key("up", pygame.K_UP)
+        down = self._bound_key("down", pygame.K_DOWN)
+        if key == pygame.K_TAB:
+            self.settings_category_selected = (self.settings_category_selected + 1) % len(self.settings_categories)
+            cat = self.settings_categories[self.settings_category_selected]
+            self.settings_options = self.settings_options_by_category[cat]
+            self.settings_selected = 0
             audio.play_ui_nav_sound()
-        elif key == pygame.K_RETURN:
+            return
+        if key == pygame.K_LEFT:
+            self.settings_category_selected = (self.settings_category_selected - 1) % len(self.settings_categories)
+            cat = self.settings_categories[self.settings_category_selected]
+            self.settings_options = self.settings_options_by_category[cat]
+            self.settings_selected = 0
+            audio.play_ui_nav_sound()
+            return
+        if key == pygame.K_RIGHT:
+            self.settings_category_selected = (self.settings_category_selected + 1) % len(self.settings_categories)
+            cat = self.settings_categories[self.settings_category_selected]
+            self.settings_options = self.settings_options_by_category[cat]
+            self.settings_selected = 0
+            audio.play_ui_nav_sound()
+            return
+        if key == up or key == down:
+            step = 1 if key == down else -1
+            self.settings_selected = (self.settings_selected + step) % len(self.settings_options)
+            audio.play_ui_nav_sound()
+        elif key == pygame.K_RETURN or key == self._bound_key("confirm", pygame.K_RETURN):
             name = self.settings_options[self.settings_selected]
             if name == "< Back":
                 audio.play_ui_select_sound()
@@ -1311,13 +1670,24 @@ class Game:
                 self.game_state = persistence.reset_all_data()
                 self.run_count = 1
                 self.settings_idx = dict(config.SETTING_DEFAULTS)
+                self.settings_idx = self._load_settings_idx()
+                self._apply_settings()
                 audio.play_error_sound()
+            elif name.startswith("Rebind:"):
+                self.rebinding = name
+                audio.play_ui_nav_sound()
             else:
-                opts = config.SETTING_OPTIONS[name]
-                self.settings_idx[name] = (self.settings_idx[name] + 1) % len(opts)
+                opts = config.SETTING_OPTIONS.get(name)
+                if not opts:
+                    return
+                self.settings_idx[name] = (self.settings_idx.get(name, 0) + 1) % len(opts)
                 self._apply_settings()
                 audio.play_ui_select_sound()
         elif key == pygame.K_ESCAPE:
+            if getattr(self, "rebinding", None):
+                self.rebinding = None
+                audio.play_ui_nav_sound()
+                return
             self.start_fade("TITLE")
 
     def _about_key(self, key):
@@ -1334,6 +1704,45 @@ class Game:
         elif key == pygame.K_ESCAPE:
             self.start_fade("TITLE")
 
+    def _pause_key(self, key):
+        up = self._bound_key("up", pygame.K_UP)
+        down = self._bound_key("down", pygame.K_DOWN)
+        confirm = self._bound_key("confirm", pygame.K_RETURN)
+        if key == pygame.K_TAB or key == up or key == down:
+            delta = 1 if key == down or key == pygame.K_TAB else -1
+            if key == up:
+                delta = -1
+            self.pause_selected = (self.pause_selected + delta) % len(self.pause_options)
+            audio.play_ui_nav_sound()
+            return
+        if key == confirm:
+            choice = self.pause_options[self.pause_selected]
+            audio.play_ui_select_sound()
+            if choice == "RESUME":
+                self.paused = False
+                return
+            if choice == "SETTINGS":
+                self.paused = False
+                self.settings_category_selected = 0
+                self.settings_options = self.settings_options_by_category[self.settings_categories[self.settings_category_selected]]
+                self.settings_selected = 0
+                self.settings_idx = self._load_settings_idx()
+                self._apply_settings()
+                self.start_fade("SETTINGS")
+                return
+            if choice == "MAIN MENU":
+                self.paused = False
+                self.pending_exit = True
+                self.exit_message_at = self.now
+                return
+            if choice == "EXIT":
+                self.paused = False
+                self.running = False
+                return
+        if key == pygame.K_ESCAPE:
+            self.paused = False
+            audio.play_ui_nav_sound()
+
     def _playing_key(self, key):
         if self.pending_exit:
             return
@@ -1342,14 +1751,17 @@ class Game:
             return
         if self.typing_state != "WAITING":
             return
-        if key == pygame.K_TAB or key == pygame.K_UP or key == pygame.K_DOWN:
-            delta = 1 if (key == pygame.K_DOWN or key == pygame.K_TAB) else -1
-            if key == pygame.K_UP:
+        up = self._bound_key("up", pygame.K_UP)
+        down = self._bound_key("down", pygame.K_DOWN)
+        confirm = self._bound_key("confirm", pygame.K_RETURN)
+        if key == pygame.K_TAB or key == up or key == down:
+            delta = 1 if (key == down or key == pygame.K_TAB) else -1
+            if key == up:
                 delta = -1
             opts = step["opts"]
             self.selected_answer = (self.selected_answer + delta) % len(opts)
             audio.play_ui_nav_sound()
-        elif key == pygame.K_RETURN:
+        elif key == confirm:
             audio.play_ui_select_sound()
             self._confirm_answer()
 
@@ -1415,10 +1827,29 @@ class Game:
         self._update_idle()
         self._update_process_awareness()
         self._poll_social()
+        self._supervise_overlay()
         if self.state in ("PLAYING", "EXITFADE") and not self.pending_exit:
             self._update_playing()
             self._maybe_comment_on_apps()
             self._update_background_interference()
+
+    def _supervise_overlay(self):
+        """Keep the desktop eye alive while the game is not the foreground
+        window. If the overlay process dies (or the player kills it) it is
+        quietly brought back, with a backoff so a hard failure cannot spin."""
+        ov = getattr(self, "_overlay", None)
+        if ov is None:
+            return
+        if getattr(self, "_window_focused", True):
+            return
+        if ov.supported and not ov.running:
+            self._overlay_retry_at = getattr(self, "_overlay_retry_at", 0.0)
+            if self.now >= self._overlay_retry_at:
+                self._overlay_retry_at = self.now + 5.0
+                try:
+                    ov.start()
+                except Exception:
+                    pass
 
     def _update_process_awareness(self):
         """It watches you open the Task Manager. Twice per second, no polls
@@ -1632,12 +2063,21 @@ class Game:
         # Background dressing goes down *before* the content so the text is
         # painted over it and stays crisp: rolling scan sweep, drifting ash,
         # breathing vignette, and the faint tape head line.
-        vhs = self.game_state.get("settings", {}).get("vhs_intensity", 1.0)
-        if vhs > 0:
+        sset = self.game_state.get("settings", {}) or {}
+        vhs = sset.get("vhs_intensity", 1.0)
+        perf = str(sset.get("performance_mode", "Medium")).lower()
+        crt_enabled = bool(sset.get("crt_enabled", True)) and perf != "low"
+        scanlines_enabled = bool(sset.get("scanlines_enabled", True)) and crt_enabled
+        vignette_enabled = bool(sset.get("vignette_enabled", True))
+        dust_enabled = bool(sset.get("dust_enabled", True)) and perf != "low"
+        static_line_enabled = bool(sset.get("static_line_enabled", True)) and perf != "low"
+        if vhs > 0 and scanlines_enabled:
             ui.draw_scan_sweep(self.screen, w, h, self.now)
-        ui.draw_dust(self.screen, w, h, self.now)
-        ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
-        if self.state in ("PLAYING", "EXITFADE") and config.VHS_STATIC_LINE > 0:
+        if dust_enabled:
+            ui.draw_dust(self.screen, w, h, self.now)
+        if vignette_enabled:
+            ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
+        if self.state in ("PLAYING", "EXITFADE") and config.VHS_STATIC_LINE > 0 and static_line_enabled:
             ui.draw_static_line(self.screen, w, h, self.now, config.VHS_STATIC_LINE)
 
         if self.state == "LOADING":
@@ -1656,6 +2096,9 @@ class Game:
             self._draw_logs(w, h)
         elif self.state in ("PLAYING", "EXITFADE"):
             self._draw_playing(w, h)
+        if self.state in ("PLAYING", "EXITFADE") and getattr(self, "paused", False):
+            self._draw_pause(w, h)
+        self._draw_watching_eye(w, h)
 
         self._draw_fade()
         if self.close_msg_until > self.now:
@@ -1675,9 +2118,19 @@ class Game:
         # Foreground CRT finish, applied over every state: VHS scanlines, then
         # the full stack (tracking, static, tube curvature, phosphor mask).
         # Last, so the tube look reads as being in front of the content.
-        ui.apply_vhs_effects(self.screen, w, h, self.game_state)
-        if config.CRT_ENABLED and vhs > 0:
-            ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs)
+        try:
+            ui.apply_vhs_effects(self.screen, w, h, self.game_state)
+        except Exception:
+            pass
+        if crt_enabled and vhs > 0:
+            try:
+                c_int = float(sset.get("crt_intensity", 1.0))
+                ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs * c_int, game_state=self.game_state)
+            except Exception:
+                try:
+                    ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs, game_state=self.game_state)
+                except Exception:
+                    ui.apply_vhs_pass(self.screen, w, h, self.now, intensity=vhs)
 
         # Present: the frame is the drawing target, the window is the real
         # surface. They are normally identical in size, so this is a straight
@@ -1779,7 +2232,8 @@ class Game:
         self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
 
         ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
-        self.screen.blit(ver, (w - ver.get_width() - 12, h - ver.get_height() - 8))
+        # Top-right: the bottom-right corner belongs to the eye now.
+        self.screen.blit(ver, (w - ver.get_width() - 12, 8))
 
     # --- online screens -----------------------------------------------------
     def _draw_notes_toast(self, w, h, font_med, font_small, limit=2):
@@ -1925,6 +2379,10 @@ class Game:
                              (cx, y))
             self._touch_zone(cx - 8, y - 3, int(w * 0.6) + 16,
                              font_med.get_linesize() + 4, "online", i)
+            if sel:
+                # The eye follows the highlight; the option list moves with
+                # the teaser above it, so remember where it landed.
+                self._eye_online_rect = (cx, y, int(w * 0.6), font_med.get_linesize() + 4)
             y += font_med.get_linesize() + 2
 
         # The result of the connection test, if there is one.
@@ -1971,23 +2429,66 @@ class Game:
     def _draw_settings(self, w, h):
         font_large, font_med, font_small = self._fonts()
         self._draw_heading("SETTINGS", w, h, font_large)
-        start_y = int(h * 0.22)
-        for i, option in enumerate(self.settings_options):
+        cat = self.settings_categories[self.settings_category_selected]
+        cat_surf = font_small.render("[ < ]  %s  [ > ]  (TAB to cycle)" % cat, True, (120, 120, 120))
+        self.screen.blit(cat_surf, (int(w * 0.08), int(h * 0.18)))
+        start_y = int(h * 0.24)
+        pitch = font_med.get_linesize() + 10
+        hint_y = h - 60
+        # Long categories (GRAPHICS has nine) can be taller than the screen on
+        # small displays, so the list scrolls and keeps the selection visible.
+        visible = max(1, int((hint_y - start_y) // pitch))
+        total = len(self.settings_options)
+        scroll = int(getattr(self, "settings_scroll", 0))
+        if self.settings_selected < scroll:
+            scroll = self.settings_selected
+        elif self.settings_selected >= scroll + visible:
+            scroll = self.settings_selected - visible + 1
+        scroll = max(0, min(scroll, max(0, total - visible)))
+        self.settings_scroll = scroll
+        s = self.game_state.get("settings", {})
+        kb = s.get("keybinds", {})
+        for row, i in enumerate(range(scroll, min(total, scroll + visible))):
+            option = self.settings_options[i]
             color = config.COLOR_WHITE if i == self.settings_selected else (110, 110, 110)
             prefix = "> " if i == self.settings_selected else "  "
             if option in config.SETTING_OPTIONS:
-                value = config.SETTING_OPTIONS[option][self.settings_idx[option]]
+                idx = self.settings_idx.get(option, 0)
+                value = config.SETTING_OPTIONS[option][idx % len(config.SETTING_OPTIONS[option])]
                 label = "%s%s   [%s]" % (prefix, option, value)
+            elif option.startswith("Rebind:"):
+                keymap = {
+                    "Rebind: Up": kb.get("up", "UP"),
+                    "Rebind: Down": kb.get("down", "DOWN"),
+                    "Rebind: Confirm": kb.get("confirm", "RETURN"),
+                    "Rebind: Back/Pause": kb.get("back", "ESCAPE"),
+                }
+                val = keymap.get(option, "?")
+                if getattr(self, "rebinding", None) == option and i == self.settings_selected:
+                    label = "%s%s   [PRESS KEY...]" % (prefix, option)
+                    color = (200, 60, 60)
+                else:
+                    label = "%s%s   [%s]" % (prefix, option, val)
             else:
                 label = prefix + option
             surf = font_med.render(label, True, color)
-            self.screen.blit(surf, (int(w * 0.08), start_y + i * (font_med.get_linesize() + 12)))
-            pitch = font_med.get_linesize() + 12
-            self._touch_zone(int(w * 0.08) - 8, start_y + i * pitch,
-                             int(w * 0.8) + 16, pitch - 2, "settings", i)
-        hint = font_small.render("TAP: CHANGE    BACK: RETURN" if IS_ANDROID
-                                 else "[ENTER] CHANGE    [ESC] BACK", True, (80, 80, 80))
+            y = start_y + row * pitch
+            self.screen.blit(surf, (int(w * 0.08), y))
+            self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.8) + 16,
+                             pitch - 2, "settings", i)
+        if total > visible:
+            more = font_small.render("(%d/%d)" % (self.settings_selected + 1, total), True, (90, 90, 90))
+            self.screen.blit(more, (w - more.get_width() - 12, int(h * 0.18)))
+        if getattr(self, "rebinding", None):
+            hint = font_small.render("Press any key to bind (ESC to cancel)", True, (160, 80, 80))
+        else:
+            hint = font_small.render("TAP: CHANGE/REBIND    [TAB/</>] CATEGORY    [ESC] BACK" if IS_ANDROID
+                                     else "[ENTER] CHANGE/REBIND    [TAB/LEFT/RIGHT] CATEGORY    [ESC] BACK", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        # A rejected rebind says so, and says why.
+        if getattr(self, "rebind_error", "") and self.now < getattr(self, "rebind_error_until", 0.0):
+            err = font_small.render("CANNOT BIND: %s" % self.rebind_error, True, (200, 60, 60))
+            self.screen.blit(err, (int(w * 0.08), h - 76))
 
     def _draw_about(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -2037,24 +2538,410 @@ class Game:
         self.screen.blit(hint, (int(w * 0.08), h - 50))
         self._touch_zone(0, 0, w, h, "back")   # read-only screen: any tap leaves
 
+    def _draw_pause(self, w, h):
+        font_large, font_med, font_small = self._fonts()
+        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        self.screen.blit(overlay, (0, 0))
+        title = font_large.render("PAUSED", True, config.COLOR_WHITE)
+        self.screen.blit(title, (w // 2 - title.get_width() // 2, int(h * 0.22)))
+        for i, opt in enumerate(self.pause_options):
+            color = config.COLOR_WHITE if i == self.pause_selected else (110, 110, 110)
+            prefix = "> " if i == self.pause_selected else "  "
+            surf = font_med.render(prefix + opt, True, color)
+            self.screen.blit(surf, (int(w * 0.08), int(h * 0.38) + i * (font_med.get_linesize() + 14)))
+        hint = font_small.render("[ESC] RESUME    [ENTER] SELECT", True, (80, 80, 80))
+        self.screen.blit(hint, (int(w * 0.08), h - 50))
+
+    # --- the watching eye ----------------------------------------------------
+    # The eye never goes away. It watches the cursor, it watches the option
+    # you have highlighted, and it blinks at you when you are not looking.
+    def _on_window_focus(self, gained):
+        """The game window gained or lost focus.
+
+        Losing focus hands the watch over to the desktop eye (Windows and
+        macOS only). Regaining focus brings it back into the window.
+        """
+        self._window_focused = bool(gained)
+        ov = getattr(self, "_overlay", None)
+        if ov is None:
+            return
+        try:
+            if gained:
+                ov.stop()
+            else:
+                ov.start()
+        except Exception:
+            pass
+
+    def _eye_cursor_in_window(self, w, h):
+        """Where the cursor is, in window coordinates.
+
+        Returns (x, y, inside). When the cursor has left the window but the
+        window still has focus, the coordinates are extrapolated so the pupil
+        keeps following it off the edge of the screen.
+        """
+        local = None
+        # Preferred: the OS knows where the cursor is even when it is outside
+        # our window.
+        try:
+            gx, gy = os_layer.get_global_cursor()
+            bounds = os_layer.get_window_bounds()
+            if bounds is not None:
+                left, top, bw, bh = bounds
+                # The window may be scaled; map desktop pixels onto the frame.
+                sx = float(w) / max(1, bw) if bw else 1.0
+                sy = float(h) / max(1, bh) if bh else 1.0
+                local = ((gx - left) * sx, (gy - top) * sy)
+        except Exception:
+            local = None
+        if local is None:
+            try:
+                local = pygame.mouse.get_pos()
+            except Exception:
+                local = (w // 2, h // 2)
+        mx, my = local
+        inside = (0 <= mx < w and 0 <= my < h)
+        return mx, my, inside
+
+    def _eye_anchor(self, w, h):
+        """Where the eye sits.
+
+        Bottom-right in the menus, top-right during the game: in gameplay the
+        top-right is where the picture scares and the camera feed want to be,
+        so the eye gets out of their way and sits above the action instead.
+        """
+        r = ui.eye_radius(w, h)
+        margin = int(r * 0.55)
+        if self.state in ("PLAYING", "EXITFADE"):
+            ex = w - r - margin
+            ey = int(r * 0.75)
+        else:
+            ex = w - r - margin
+            ey = h - r - margin
+        return (ex, ey), r
+
+    def _eye_look_target(self, w, h):
+        """What the pupil should be looking at.
+
+        Priority: the currently selected UI element (so the eye appears to
+        read your choices), then the cursor, then nothing (idle drift).
+        """
+        rect = self._eye_selected_rect(w, h)
+        if rect is not None:
+            return (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0)
+        return None
+
+    def _eye_selected_rect(self, w, h):
+        """The on-screen rect of whatever is currently highlighted."""
+        font_med = self._fonts()[1]
+        font_small = self._fonts()[2]
+        if self.state == "TITLE":
+            n = len(self.menu_options)
+            menu_y_start = h - 310 if n <= 5 else h - 348
+            i = getattr(self, "selected_option", 0)
+            if 0 <= i < n:
+                return (int(w * 0.08), menu_y_start + i * 45, 260, 30)
+        elif self.state == "SETTINGS":
+            opts = self.settings_options
+            i = self.settings_selected
+            if 0 <= i < len(opts):
+                start_y = int(h * 0.24)
+                pitch = font_med.get_linesize() + 10
+                scroll = int(getattr(self, "settings_scroll", 0))
+                return (int(w * 0.08), start_y + (i - scroll) * pitch, 300, pitch - 2)
+        elif self.state == "ABOUT":
+            i = getattr(self, "about_selected", 0)
+            y = int(h * 0.16) + i * (font_small.get_linesize() + 6)
+            return (int(w * 0.08), y, 260, font_small.get_linesize() + 4)
+        elif self.state == "ONLINE":
+            opts = getattr(self, "online_options", [])
+            i = getattr(self, "online_selected", 0)
+            rect = getattr(self, "_eye_online_rect", None)
+            if rect:
+                return rect
+            if 0 <= i < len(opts):
+                y = int(h * 0.80) + i * (font_med.get_linesize() + 12)
+                return (int(w * 0.08), y, 260, font_med.get_linesize())
+        elif self.state in ("PLAYING", "EXITFADE"):
+            if getattr(self, "paused", False):
+                i = getattr(self, "pause_selected", 0)
+                y = int(h * 0.38) + i * (font_med.get_linesize() + 14)
+                return (int(w * 0.08), y, 260, font_med.get_linesize())
+            step = None
+            try:
+                step = self.active_script[self.current_step]
+            except Exception:
+                step = None
+            if step and step.get("type") == "choice" and self.typing_state == "WAITING":
+                rect = getattr(self, "_eye_answer_rect", None)
+                if rect:
+                    return rect
+                return (int(w * 0.08), int(h * 0.62), 300, 40)
+        return None
+
+    def _eye_scare_active(self):
+        """Is something happening right now that the eye should react to?
+
+        Reads the effect timers the scare system writes, so it covers every
+        scare the game can fire without the eye having to know their names.
+        """
+        fx = getattr(self, "fx", None) or {}
+        now = getattr(self, "now", time.time())
+        for key, value in fx.items():
+            if not key.endswith("_until"):
+                continue
+            try:
+                if float(value) > now:
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
+
+    def _eye_react_to_answer(self, answer, elapsed=0.0):
+        """The eye notices how you answer.
+
+        Answer the same thing twice and it reacts: the pupil contracts, hard,
+        and holds that stare for a moment. Do it three times and the eye
+        swells and flushes red. Hesitate for a long time and it dilates,
+        because something was expected to happen and did not.
+        """
+        st = self._eye_state
+        now = time.time()
+        hist = st.setdefault("answers", [])
+        hist.append(answer)
+        if len(hist) > 6:
+            del hist[:-6]
+
+        repeats = 0
+        for a in reversed(hist[:-1]):
+            if a == answer:
+                repeats += 1
+            else:
+                break
+
+        if repeats >= 2:
+            st["reaction_until"] = now + 2.2
+            st["reaction_kind"] = "accuse"
+            st["reaction_dilation"] = 1.55
+            st["reaction_angry"] = True
+        elif repeats == 1:
+            st["reaction_until"] = now + 1.4
+            st["reaction_kind"] = "notice"
+            st["reaction_dilation"] = 0.62
+            st["reaction_angry"] = False
+        else:
+            st["reaction_until"] = now + 0.9
+            st["reaction_kind"] = "idle"
+            st["reaction_dilation"] = 1.0
+            st["reaction_angry"] = False
+
+        # A long hesitation gets its own reaction: the eye widens.
+        try:
+            if elapsed > config.HESITATION_THRESHOLD:
+                st["reaction_until"] = now + 1.2
+                st["reaction_kind"] = "hesitate"
+                st["reaction_dilation"] = 1.4
+        except Exception:
+            pass
+
+    def _eye_dilation(self, now):
+        """How open the pupil is right now.
+
+        The base is a slow, irregular pulse — a living pupil is never exactly
+        the same size twice. On top of that sits whatever reaction is
+        currently playing.
+        """
+        st = self._eye_state
+        session = max(1, int(getattr(self, "run_count", 1) or 1))
+        # Later sessions pulse faster and wider.
+        rate = 0.90 + 0.25 * (session - 1)
+        amp = 0.14 + 0.05 * (session - 1)
+        # The phase is measured from a fixed epoch, not from the raw clock, so
+        # the sine stays precise however far the clock has run.
+        epoch = float(st.get("pulse_epoch") or now or 0.0)
+        phase = float(st.get("pulse_phase", 0.0)) + (now - epoch) * rate
+        base = 1.0 + amp * math.sin(phase) + 0.05 * math.sin(phase * 2.7)
+
+        if now < st.get("reaction_until", 0.0):
+            target = float(st.get("reaction_dilation", 1.0))
+            # Ease towards the reaction, then relax back.
+            st["reaction_blend"] = min(1.0, st.get("reaction_blend", 0.0) + 0.35)
+        else:
+            st["reaction_blend"] = max(0.0, st.get("reaction_blend", 0.0) - 0.07)
+            target = 1.0
+        blend = st.get("reaction_blend", 0.0)
+        return base * ((1.0 - blend) + blend * target)
+
+    def _eye_end_active(self):
+        """Is the session over?
+
+        When it is, the small corner eye steps aside: there is only going to
+        be one eye now, and it is not in the corner.
+        """
+        if self.state not in ("PLAYING", "EXITFADE"):
+            return False
+        script = getattr(self, "active_script", None) or []
+        return bool(getattr(self, "pending_exit", False)) or \
+            self.current_step >= len(script)
+
+    def _draw_end_eye(self, w, h):
+        """The end of the session: one big eye, at the back, staring out.
+
+        Drawn behind the text so it reads as something behind the glass,
+        watching you read the message it is waiting for you to read.
+        """
+        st = self._eye_state
+        now = time.time()
+
+        # It swells very slowly while you sit there with the message.
+        age = max(0.0, now - float(getattr(self, "exit_message_at", now) or now))
+        grow = min(1.0, age / 3.0)
+        r = int(min(w, h) * (0.26 + 0.20 * grow))
+        cx = w // 2
+        cy = int(h * 0.46)
+
+        # It looks at you if the cursor is in the window. Otherwise it stares
+        # dead ahead, which is worse.
+        try:
+            mx, my, inside = self._eye_cursor_in_window(w, h)
+        except Exception:
+            inside = False
+        target = (mx, my) if inside else None
+        px, py = ui.eye_pupil_offset(cx, cy, r, target)
+
+        # A slow, wide pulse. It is not human any more.
+        dil = 1.0 + 0.20 * math.sin(now * 0.85) + 0.07 * math.sin(now * 2.4)
+
+        # It blinks, but rarely, and it takes its time opening again.
+        openness = 1.0
+        if now >= st["next_blink"] and now >= st["blink_until"]:
+            st["blink_start"] = now
+            st["blink_until"] = now + 0.45
+            st["next_blink"] = now + random.uniform(3.5, 8.0)
+        if st["blink_until"] > now:
+            t = (now - st["blink_start"]) / max(1e-6, st["blink_until"] - st["blink_start"])
+            openness = max(0.04, abs(2.0 * t - 1.0))
+
+        # Dimmed: it is behind the screen, not on it.
+        ui.draw_eye(self.screen, cx, cy, r, openness=openness,
+                    pupil=(px, py), angry=False, dilation=dil, shade=0.55)
+
+    def _draw_watching_eye(self, w, h):
+        """Draw the eye and animate its pupil, lid and blink."""
+        # At the end there is only the big one. Do not draw two.
+        if self._eye_end_active():
+            return
+        st = self._eye_state
+        (cx, cy), r = self._eye_anchor(w, h)
+        st["x"], st["y"], st["radius"] = cx, cy, r
+
+        now = time.time()
+        # Later sessions get twitchier: the eye blinks more, and it wanders.
+        session = max(1, int(getattr(self, "run_count", 1) or 1))
+        jitter = 1.0 + 0.55 * (session - 1)
+
+        # --- is something happening? -----------------------------------------
+        scared = self._eye_scare_active()
+        if scared:
+            st["scared_until"] = now + 0.9
+
+        angry = now < st.get("scared_until", 0.0)
+        # An answer the eye did not like also flushes it red.
+        reacting = now < st.get("reaction_until", 0.0)
+        if reacting and st.get("reaction_angry"):
+            angry = True
+
+        # --- blink timing ----------------------------------------------------
+        if now >= st["next_blink"] and now >= st["blink_until"]:
+            st["blink_start"] = now
+            st["blink_until"] = now + (0.22 if angry else 0.16)
+            if angry:
+                # A scare makes it blink urgently, over and over.
+                st["next_blink"] = now + random.uniform(0.12, 0.35)
+            else:
+                st["next_blink"] = now + random.uniform(3.5, 11.0) / jitter
+        openness = 1.0
+        if st["blink_until"] > now:
+            # A quick squeeze: fully shut at the midpoint.
+            t = (now - st["blink_start"]) / max(1e-6, st["blink_until"] - st["blink_start"])
+            openness = max(0.04, abs(2.0 * t - 1.0))
+
+        # --- pick the look target -------------------------------------------
+        focused = getattr(self, "_window_focused", True)
+        if not focused:
+            # The desktop eye has taken over; the in-game one just stares out
+            # of the screen, at wherever the player is not.
+            st["drift_phase"] += 0.004 * jitter
+            ang = math.sin(st["drift_phase"]) * 0.7
+            target = (cx + math.cos(ang) * r * 6.0, cy + math.sin(ang) * r * 6.0)
+        else:
+            target = self._eye_look_target(w, h)
+            if target is None:
+                mx, my, inside = self._eye_cursor_in_window(w, h)
+                st["last_mouse"] = (mx, my)
+                if inside:
+                    target = (mx, my)
+                else:
+                    # The cursor has left the window but the window still has
+                    # focus. The pupil slides to the edge of the iris and keeps
+                    # staring out of the screen, following the cursor.
+                    dx = mx - cx
+                    dy = my - cy
+                    dist = math.hypot(dx, dy) or 1.0
+                    target = (cx + dx / dist * r * 6.0, cy + dy / dist * r * 6.0)
+
+        # Later sessions: the eye does not hold a steady gaze. It drifts and
+        # darts, and it is more likely to look somewhere else entirely.
+        # A reaction overrides the wandering: when it has noticed something it
+        # holds very still and just looks at you.
+        if not angry and not reacting and session >= 2 and random.random() < 0.02 * jitter:
+            st["wander_until"] = now + random.uniform(0.25, 0.9)
+        if now < st.get("wander_until", 0.0) and not reacting:
+            st["drift_phase"] += 0.09 * jitter
+            ang = st["drift_phase"]
+            target = (cx + math.cos(ang) * r * 3.0,
+                      cy + math.sin(ang * 1.7) * r * 3.0)
+
+        # --- pupil offset ----------------------------------------------------
+        px, py = ui.eye_pupil_offset(cx, cy, r, target)
+        # Smooth the movement so the eye never snaps, but move fast enough
+        # that you can *see* it move when you change your selection.
+        rate = 0.34 if angry else 0.30
+        sx = st["pupil_x"] + (px - st["pupil_x"]) * rate
+        sy = st["pupil_y"] + (py - st["pupil_y"]) * rate
+        st["pupil_x"], st["pupil_y"] = sx, sy
+
+        # --- pupil size ------------------------------------------------------
+        dil = self._eye_dilation(now)
+
+        ui.draw_eye(self.screen, cx, cy, r, openness=openness,
+                    pupil=(sx, sy), angry=angry, dilation=dil)
+
     def _draw_playing(self, w, h):
         font_large, font_med, font_small = self._fonts()
         ui.update_webcam_surface()
 
         if self.pending_exit or self.current_step >= len(self.active_script):
             self.screen.blit(self._black_overlay(w, h), (0, 0))
-            if self.pending_exit:
-                # Make leaving explicit: the session is over, reopen for the next.
-                font_small = self._fonts()[2]
-                if self.run_count >= 3:
-                    msg = "close this window. do not open it again."
-                else:
-                    msg = "close this window, then open it again for the next session."
-                surf = font_small.render(msg, True, (120, 20, 20))
-                self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h // 2 + 30))
-                if self.now - self.exit_message_at > 2.0:
-                    self.running = False
-            elif self.current_step >= len(self.active_script):
+            # One big eye, at the back, staring from behind the screen. It goes
+            # down before the text so the text is painted over it.
+            self._draw_end_eye(w, h)
+            if not self.pending_exit:
+                # The script ran out without an explicit exit. The session is
+                # over anyway, so say it and let the eye be seen.
+                self.pending_exit = True
+                self.exit_message_at = self.now
+            # Make leaving explicit: the session is over, reopen for the next.
+            font_small = self._fonts()[2]
+            if self.run_count >= 3:
+                msg = "close this window. do not open it again."
+            else:
+                msg = "close this window, then open it again for the next session."
+            # Bright enough to read over the eye behind it.
+            surf = font_small.render(msg, True, (200, 32, 32))
+            self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h // 2 + 30))
+            if self.now - self.exit_message_at > 2.0:
                 self.running = False
             return
 
@@ -2138,6 +3025,11 @@ class Game:
                                  opts_x, opts_y + i * opts_gap)
                     self._touch_zone(opts_x - 10, opts_y + i * opts_gap,
                                      max_width + 20, opts_gap - 2, "answer", i)
+                # The eye looks at the answer you have highlighted. Remember
+                # where it actually landed: the option list moves with the
+                # length of the question, so a fixed guess would be wrong.
+                self._eye_answer_rect = (opts_x, opts_y + self.selected_answer * opts_gap,
+                                         max_width, opts_gap)
 
         # whisper reaction line
         if self.fx["whisper_text"] and self.fx["whisper_until"] > self.now:
@@ -2268,6 +3160,22 @@ class Game:
                                          getattr(event, "unicode", "") or "")
                 elif event.type == pygame.VIDEORESIZE and not config.WINDOW_LOCKED:
                     self._on_resize(event.w, event.h)
+                elif event.type in (getattr(pygame, "WINDOWFOCUSLOST", -1),
+                                    getattr(pygame, "WINDOWFOCUSGAINED", -1),
+                                    pygame.ACTIVEEVENT):
+                    # The window lost or regained focus. When it loses focus
+                    # the desktop eye takes over and follows the player around
+                    # their computer; the in-game one goes quiet.
+                    gained = getattr(event, "gain", None)
+                    if event.type == getattr(pygame, "WINDOWFOCUSGAINED", -1):
+                        gained = 1
+                    elif event.type == getattr(pygame, "WINDOWFOCUSLOST", -1):
+                        gained = 0
+                    else:
+                        # ACTIVEEVENT: gain is 0 (lost), 1 (gained) or
+                        # 2 (minimised). A minimised window has lost focus.
+                        gained = 1 if gained == 1 else 0
+                    self._on_window_focus(gained)
                 elif event.type == pygame.MOUSEMOTION:
                     # Subtle hover parallax — the window leans toward the cursor
                     sw, sh = self.screen.get_size()
@@ -2289,6 +3197,13 @@ class Game:
             self._draw()
 
         audio.stop_ambience()
+        # The desktop eye must not outlive the game.
+        ov = getattr(self, "_overlay", None)
+        if ov is not None:
+            try:
+                ov.stop()
+            except Exception:
+                pass
         pygame.quit()
 
 

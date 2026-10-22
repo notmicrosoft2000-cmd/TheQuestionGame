@@ -195,7 +195,83 @@ itself. The intensity dial controls how **long** the effect lasts.
 
 ---
 
-## 5. Where everything runs
+## 5. The settings screen
+
+The settings are seven tabs: `AUDIO`, `VIDEO`, `GRAPHICS`, `GAMEPLAY`,
+`ACCESSIBILITY`, `CONTROLS` and `OTHER`. Everything in them is written to the
+save file and comes back on the next run.
+
+- **AUDIO** — master, sound-effect, ambience and music volumes, each with a
+  mute. The player's volume and the game's own level are kept apart and
+  multiplied, so the game can still duck the effects under the music without
+  ever making the music louder than the player asked for.
+- **VIDEO** — fullscreen, vsync, the window resolution, and the UI scale. The
+  UI scale is a real scale: the game is drawn at another resolution and
+  stretched to the window, so the text and the layout grow together.
+- **GRAPHICS** — a performance preset, a CRT switch with its own intensity,
+  and a toggle for every post-processing layer (scanlines, vignette, dust, the
+  static line, tube curvature, the phosphor mask). `Low` turns the expensive
+  layers off by itself.
+- **GAMEPLAY** — font, text speed, text size, text sway and the AI source.
+- **ACCESSIBILITY** — reduce flashes, disable screen shake, disable webcam
+  scares. These are honoured in one place, the scare system, so no effect can
+  slip past them. "Disable screen shake" also stops the *window* from
+  moving, not just the picture inside it.
+- **CONTROLS** — rebind up, down, confirm and back/pause. A rebind that would
+  shadow another action is rejected, not accepted silently.
+- **OTHER** — the VHS effects, and the reset.
+
+`ESC` during the game opens a pause menu: resume, settings, main menu, exit.
+
+---
+
+## 6. The eye
+
+There is an eye in the corner of the screen the whole time you play. It is not
+an option and there is no switch to turn it off — that is the point of it.
+
+It is drawn in the game's own colours: a white almond, a black iris, a black
+pupil, a hard black ring around it. Nothing else. It blinks at irregular
+intervals, and it is always watching something.
+
+**What it watches.** Mostly you. Move the mouse and the pupil follows. When a
+menu option is highlighted, it turns and looks straight at that option. It
+sits in the bottom-right corner in the menus and moves to the top-right when
+the game starts, out of the way of the text.
+
+**When a scare fires** — a flicker, a corruption, a whisper, anything the game
+does to scare you — the eye blinks far more often and its iris turns red. It
+watches you get scared.
+
+**It keeps score.** Answer the same thing twice in a row and the pupil
+contracts and holds that stare. Do it a third time and the eye swells and
+flushes red. Hesitate on a question for long enough and it widens instead. It
+is counting.
+
+**Later sessions are worse.** The eye blinks faster, wanders more, and its
+pulse gets wider.
+
+**At the end of the session** the corner eye steps aside and **one big eye
+takes over the whole screen**, sitting behind the text and staring out at you.
+That is the last thing you see before the game closes.
+
+### The eye on your desktop
+
+On **Windows and macOS**, when you click away from the game window, a small
+borderless window with an eye in it appears on your desktop and follows your
+cursor around — into other windows, across the screen. It cannot be clicked
+on, and it goes away the moment you go back to the game.
+
+**Linux does not get the desktop version.** Wayland, the display server most
+Linux desktops use, deliberately keeps the pointer position private and does
+not let applications read it. There is no way around that and there never will
+be. The in-game eye still works on Linux: it follows the cursor, and it keeps
+following it even when the cursor leaves the game window, so the pupil slides
+to the edge of the iris and stares out of the screen at wherever you went.
+
+---
+
+## 7. Where everything runs
 
 | Thing | Where |
 |---|---|
@@ -214,7 +290,7 @@ needs your password) or copy the file and restart the service by hand.
 
 ---
 
-## 6. Common misunderstandings
+## 8. Common misunderstandings
 
 - *"The AI and the relay are different servers."* No — one program, one machine.
 - *"The API key is in the game somewhere."* No. The download holds no key.

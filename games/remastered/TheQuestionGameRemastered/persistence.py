@@ -49,11 +49,18 @@ def load_game_state():
         state.update(loaded)
         # Deep-copy every mutable container so we never mutate the module-level
         # DEFAULT_STATE by reference (a shallow dict() shares these objects).
-        state["answers"] = dict(loaded.get("answers", {}))
-        state["answer_times"] = dict(loaded.get("answer_times", {}))
-        state["lie_ids"] = list(loaded.get("lie_ids", []))
+        state["answers"] = dict(loaded.get("answers", {}) or {})
+        state["answer_times"] = dict(loaded.get("answer_times", {}) or {})
+        state["lie_ids"] = list(loaded.get("lie_ids", []) or [])
         settings = dict(config.DEFAULT_STATE["settings"])
-        settings.update(loaded.get("settings", {}))
+        loaded_settings = loaded.get("settings", {}) or {}
+        settings.update(loaded_settings)
+        if isinstance(settings.get("keybinds"), dict):
+            merged_keys = dict(config.DEFAULT_STATE["settings"].get("keybinds", {}))
+            merged_keys.update(settings["keybinds"])
+            settings["keybinds"] = merged_keys
+        else:
+            settings["keybinds"] = dict(config.DEFAULT_STATE["settings"].get("keybinds", {}))
         state["settings"] = settings
         return state
 

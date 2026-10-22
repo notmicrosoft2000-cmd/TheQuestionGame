@@ -3,10 +3,10 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
 
-  const REMASTER_TAG = "v5.1.0-beta-remastered";
+  const REMASTER_TAG = "v6.0.0-remastered";
   // The known-good release to fall back to if the API cannot be reached and no
   // bigger-versioned release can be resolved from the release list.
-  const REMASTER_FALLBACK_TAG = "v5.0.0-remastered";
+  const REMASTER_FALLBACK_TAG = "v6.0.0-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -2481,7 +2481,7 @@
     remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
-  // "v5.1.0-beta-remastered" -> [5, 1, 0, 0]  (a "beta" counts as 0)
+  // "v6.0.0-remastered" -> [6, 0, 0, 0]  (a "beta" counts as 0)
   function versionParts(tag) {
     const m = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?/.exec(String(tag || ""));
     if (!m) return null;

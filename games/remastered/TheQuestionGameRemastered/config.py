@@ -3,11 +3,12 @@ import platform
 import sys
 
 APP_NAME = "The Question Game Remastered"
-# v5.1.0-beta is the multiplayer alpha. This build is the *receiver* half: it joins
-# the room, plays the questions the operator sends, and reports its answers
-# back. Writing questions lives in the operator's separate sender app
-# (tools/sender) and is deliberately not part of this build.
-VERSION = "5.1.0-beta"
+# v6.0.0 is the settings/QoL/graphics release, and the one that brings the
+# watching eye. This build is still the *receiver* half of the multiplayer
+# alpha: it joins the room, plays the questions the operator sends, and
+# reports its answers back. Writing questions lives in the operator's separate
+# sender app (tools/sender) and is deliberately not part of this build.
+VERSION = "6.0.0"
 
 # --- Platform ---------------------------------------------------------------
 # python-for-android reports sys.platform == "android"; platform.system() is
@@ -321,31 +322,111 @@ DEFAULT_STATE = {
     "lie_ids": [],
     "logs_unlocked": False,
     "_ended": False,
-    "settings": {"text_speed": 0.04, "vhs_intensity": 1.0, "sway_intensity": 1.0, "text_size": 1.0},
+    "settings": {
+        "text_speed": 0.04,
+        "vhs_intensity": 1.0,
+        "sway_intensity": 1.0,
+        "text_size": 1.0,
+        "font": "Courier",
+        "ai_source": "Relay",
+        "master_volume": 1.0,
+        "sfx_volume": 1.0,
+        "ambience_volume": 1.0,
+        "music_volume": 0.5,
+        "fullscreen": False,
+        "vsync": True,
+        "resolution": "800x600",
+        "ui_scale": 1.0,
+        "disable_flashes": False,
+        "disable_screen_shake": False,
+        "disable_webcam_scares": False,
+        "performance_mode": "Medium",
+        "crt_enabled": True,
+        "crt_intensity": 1.0,
+        "scanlines_enabled": True,
+        "vignette_enabled": True,
+        "dust_enabled": True,
+        "static_line_enabled": True,
+        "tube_curvature_enabled": True,
+        "phosphor_mask_enabled": True,
+        "keybinds": {
+            "up": "UP",
+            "down": "DOWN",
+            "confirm": "RETURN",
+            "back": "ESCAPE",
+            "pause": "ESCAPE",
+        },
+    },
 }
 
 # Settings UI options -> numeric values.
 SETTING_OPTIONS = {
     "Font": ["Courier", "Terminal", "Mono", "Sans", "Serif"],
-    "Text Speed": ["Fast", "Normal", "Slow"],
-    "VHS Effects": ["Off", "Low", "Normal", "High"],
+    "Text Speed": ["Very Fast", "Fast", "Normal", "Slow", "Very Slow"],
+    "VHS Effects": ["Off", "Low", "Normal", "High", "Extreme"],
     "Text Sway": ["Off", "Low", "Normal", "High"],
     "Text Size": ["Small", "Normal", "Large", "Huge"],
     "AI Source": ["Relay", "Local", "Offline"],
+    "Master Volume": ["Mute", "25%", "50%", "75%", "100%"],
+    "SFX Volume": ["Mute", "25%", "50%", "75%", "100%"],
+    "Ambience Volume": ["Mute", "25%", "50%", "75%", "100%"],
+    "Music Volume": ["Mute", "25%", "50%", "75%", "100%"],
+    "Fullscreen": ["Off", "On"],
+    "VSync": ["Off", "On"],
+    "Resolution": ["640x480", "800x600", "1024x768", "1280x960", "1600x1200"],
+    "Performance Mode": ["Low", "Medium", "High"],
+    "CRT Effects": ["Off", "On"],
+    "CRT Intensity": ["0%", "25%", "50%", "75%", "100%"],
+    "Scanlines": ["Off", "On"],
+    "Vignette": ["Off", "On"],
+    "Dust": ["Off", "On"],
+    "Static Line": ["Off", "On"],
+    "Tube Curvature": ["Off", "On"],
+    "Phosphor Mask": ["Off", "On"],
+    "UI Scale": ["75%", "85%", "100%", "115%", "130%", "150%"],
+    "Reduce Flashes": ["Off", "On"],
+    "Disable Screen Shake": ["Off", "On"],
+    "Disable Webcam Scares": ["Off", "On"],
 }
 SETTING_MAPS = {
-    "Text Speed": [0.015, 0.04, 0.08],
-    "VHS Effects": [0.0, 0.4, 1.0, 2.0],
+    "Text Speed": [0.01, 0.025, 0.04, 0.08, 0.12],
+    "VHS Effects": [0.0, 0.4, 1.0, 2.0, 3.0],
     "Text Sway": [0.0, 0.4, 1.0, 1.8],
     "Text Size": [0.8, 1.0, 1.25, 1.6],
+    "Master Volume": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "SFX Volume": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "Ambience Volume": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "Music Volume": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "CRT Intensity": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "UI Scale": [0.75, 0.85, 1.0, 1.15, 1.3, 1.5],
 }
 SETTING_DEFAULTS = {
     "Font": 0,
-    "Text Speed": 1,
+    "Text Speed": 2,
     "VHS Effects": 2,
     "Text Sway": 2,
     "Text Size": 1,
     "AI Source": 0,
+    "Master Volume": 4,
+    "SFX Volume": 4,
+    "Ambience Volume": 4,
+    "Music Volume": 3,
+    "Fullscreen": 0,
+    "VSync": 1,
+    "Resolution": 1,
+    "Performance Mode": 1,
+    "CRT Effects": 1,
+    "CRT Intensity": 4,
+    "Scanlines": 1,
+    "Vignette": 1,
+    "Dust": 1,
+    "Static Line": 1,
+    "Tube Curvature": 1,
+    "Phosphor Mask": 1,
+    "UI Scale": 2,
+    "Reduce Flashes": 0,
+    "Disable Screen Shake": 0,
+    "Disable Webcam Scares": 0,
 }
 
 # "AI Source" label -> which provider the game selects on that choice.

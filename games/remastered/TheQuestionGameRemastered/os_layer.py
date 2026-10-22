@@ -25,6 +25,248 @@ from . import persistence
 
 SYSTEM = platform.system()
 
+# The player can switch screen shake off (ACCESSIBILITY -> Disable Screen
+# Shake). The desktop window-jiggle is part of that shake, so the flag lives
+# here and the scare system reads it through `set_shake_enabled`.
+_shake_enabled = True
+
+
+def set_shake_enabled(enabled):
+    """Allow or forbid shaking the game window on the desktop."""
+    global _shake_enabled
+    _shake_enabled = bool(enabled)
+
+
+# --- Global cursor + window bounds ------------------------------------------
+# The eye needs to know where the cursor is on the *desktop*, not just inside
+# the game window, so it can keep watching you when you move the mouse away.
+# Windows gets exact values from user32; macOS tries Quartz first and falls
+# back to System Events; Linux has no portable API here so the caller falls
+# back to pygame's own mouse position.
+_cursor_cache = {"pos": None, "at": 0.0}
+_cursor_cache_lock = threading.Lock()
+
+
+def get_global_cursor():
+    """(x, y) of the cursor in desktop coordinates, or None if unavailable."""
+    now = time.time()
+    with _cursor_cache_lock:
+        cached = _cursor_cache["pos"]
+        at = _cursor_cache["at"]
+    if cached is not None and now - at < 0.033:
+        return cached
+    pos = _query_global_cursor()
+    if pos is None:
+        return cached
+    with _cursor_cache_lock:
+        _cursor_cache["pos"] = pos
+        _cursor_cache["at"] = now
+    return pos
+
+
+def _query_global_cursor():
+    if SYSTEM == "Windows":
+        try:
+            pt = ctypes.wintypes.POINT()
+            if _user32().GetCursorPos(ctypes.byref(pt)):
+                return (int(pt.x), int(pt.y))
+        except Exception:
+            pass
+        return None
+    if SYSTEM == "Darwin":
+        try:
+            import Quartz  # pyobjc, if it happens to be installed
+            e = Quartz.CGEventCreate(None)
+            p = Quartz.CGEventGetLocation(e)
+            return (int(p.x), int(p.y))
+        except Exception:
+            pass
+        # Fallback: System Events is slow but works without extra packages.
+        try:
+            script = ('tell application "System Events" to get position of '
+                      'the first window of (first process whose frontmost is true)')
+            out = subprocess.check_output(["osascript", "-e", script],
+                                          stderr=subprocess.DEVNULL, text=True,
+                                          timeout=0.4)
+            parts = out.strip().split(",")
+            if len(parts) == 2:
+                return (int(float(parts[0].strip())), int(float(parts[1].strip())))
+        except Exception:
+            pass
+        return None
+    if SYSTEM == "Linux":
+        return _query_global_cursor_x11()
+    return None
+
+
+# --- X11 global cursor ------------------------------------------------------
+# On Linux the pointer belongs to the X server, and XWayland exposes the real
+# pointer even on a Wayland session, so this works for both. There is no
+# comparable API on pure Wayland, and there never will be one: compositors
+# deliberately keep the pointer position private.
+_x11 = {"lib": None, "display": None, "tried": False}
+
+
+def _x11_lib():
+    if _x11["tried"]:
+        return _x11["lib"]
+    _x11["tried"] = True
+    try:
+        lib = ctypes.cdll.LoadLibrary("libX11.so.6")
+    except Exception:
+        try:
+            lib = ctypes.cdll.LoadLibrary("libX11.so")
+        except Exception:
+            _x11["lib"] = None
+            return None
+    try:
+        lib.XOpenDisplay.restype = ctypes.c_void_p
+        lib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        lib.XDefaultRootWindow.restype = ctypes.c_ulong
+        lib.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        lib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        lib.XInitThreads.restype = ctypes.c_int
+        lib.XQueryPointer.restype = ctypes.c_int
+        lib.XQueryPointer.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_uint)]
+        lib.XTranslateCoordinates.restype = ctypes.c_int
+        lib.XTranslateCoordinates.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong,
+            ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ulong)]
+        try:
+            lib.XInitThreads()
+        except Exception:
+            pass
+    except Exception:
+        _x11["lib"] = None
+        return None
+    _x11["lib"] = lib
+    return lib
+
+
+def _x11_display():
+    lib = _x11_lib()
+    if lib is None:
+        return None, None
+    disp = _x11["display"]
+    if disp:
+        return lib, disp
+    try:
+        disp = lib.XOpenDisplay(None)
+    except Exception:
+        disp = None
+    if not disp:
+        return lib, None
+    _x11["display"] = disp
+    return lib, disp
+
+
+def _query_global_cursor_x11():
+    """The pointer position in desktop coordinates, via X11."""
+    lib, disp = _x11_display()
+    if lib is None or not disp:
+        return None
+    try:
+        root = lib.XDefaultRootWindow(ctypes.c_void_p(disp))
+        root_ret = ctypes.c_ulong(0)
+        child_ret = ctypes.c_ulong(0)
+        rx = ctypes.c_int(0)
+        ry = ctypes.c_int(0)
+        wx = ctypes.c_int(0)
+        wy = ctypes.c_int(0)
+        mask = ctypes.c_uint(0)
+        ok = lib.XQueryPointer(
+            ctypes.c_void_p(disp), ctypes.c_ulong(root),
+            ctypes.byref(root_ret), ctypes.byref(child_ret),
+            ctypes.byref(rx), ctypes.byref(ry),
+            ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(mask))
+        if ok:
+            return (int(rx.value), int(ry.value))
+    except Exception:
+        pass
+    return None
+
+
+def _x11_window_origin(xid):
+    """Top-left of an X window in desktop coordinates."""
+    lib, disp = _x11_display()
+    if lib is None or not disp or not xid:
+        return None
+    try:
+        root = lib.XDefaultRootWindow(ctypes.c_void_p(disp))
+        dst_x = ctypes.c_int(0)
+        dst_y = ctypes.c_int(0)
+        child = ctypes.c_ulong(0)
+        ok = lib.XTranslateCoordinates(
+            ctypes.c_void_p(disp), ctypes.c_ulong(xid), ctypes.c_ulong(root),
+            0, 0, ctypes.byref(dst_x), ctypes.byref(dst_y), ctypes.byref(child))
+        if ok:
+            return (int(dst_x.value), int(dst_y.value))
+    except Exception:
+        pass
+    return None
+
+
+def _pygame_window_xid():
+    """The X11 window id of the pygame window, if there is one."""
+    try:
+        import pygame
+        info = pygame.display.get_wm_info() or {}
+        xid = info.get("window")
+        if xid:
+            return int(xid)
+    except Exception:
+        pass
+    return None
+
+
+def get_window_bounds(hwnd=None):
+    """(left, top, width, height) of the game window in desktop coordinates."""
+    if SYSTEM == "Windows":
+        try:
+            if hwnd is None:
+                hwnd = get_hwnd()
+            if not hwnd:
+                return None
+            rect = ctypes.wintypes.RECT()
+            if _user32().GetWindowRect(hwnd, ctypes.byref(rect)):
+                return (int(rect.left), int(rect.top),
+                        int(rect.right - rect.left), int(rect.bottom - rect.top))
+        except Exception:
+            pass
+        return None
+    if SYSTEM == "Darwin":
+        try:
+            pos = _mac_window_position()
+            if pos is None:
+                return None
+            script = ('tell application "System Events" to get size of front window of '
+                      '(first process whose frontmost is true)')
+            out = subprocess.check_output(["osascript", "-e", script],
+                                          stderr=subprocess.DEVNULL, text=True,
+                                          timeout=0.4)
+            parts = out.strip().split(",")
+            if len(parts) == 2:
+                return (int(pos[0]), int(pos[1]),
+                        int(float(parts[0].strip())), int(float(parts[1].strip())))
+        except Exception:
+            pass
+        return None
+    if SYSTEM == "Linux":
+        # Only the origin is available from X11; the size comes from the
+        # caller (the pygame frame), which is what we want anyway.
+        origin = _x11_window_origin(_pygame_window_xid())
+        if origin is None:
+            return None
+        return (int(origin[0]), int(origin[1]), 0, 0)
+    return None
+
 
 # --- Desktop wallpaper -------------------------------------------------------
 def get_current_wallpaper_path():
@@ -627,6 +869,8 @@ def _jiggle_game_window(hwnd, cycles=6, amplitude=18, interval=0.06):
 
 
 def shake_game_window(cycles=8, amplitude=20):
+    if not _shake_enabled:
+        return
     pause_window_float(cycles * 0.3 + 0.6)
     if SYSTEM == "Windows":
         hwnd = get_hwnd()
@@ -1062,7 +1306,6 @@ def fetch_location():
     if geo.get("vpn_suspect") and not geo.get("city"):
         return "", ""
     return geo.get("city", ""), geo.get("country", "")
-
 
 
 def get_random_picture():

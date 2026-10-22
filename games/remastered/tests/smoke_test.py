@@ -10,6 +10,7 @@ Environment is forced to dummy video/audio and a throwaway data dir, so nothing
 touches the player's real save data.
 """
 import os
+import random
 import sys
 import tempfile
 import time
@@ -30,6 +31,7 @@ import pygame  # noqa: E402
 
 from TheQuestionGameRemastered import main as gmain        # noqa: E402
 from TheQuestionGameRemastered import audio, config, interjections, persistence  # noqa: E402
+from TheQuestionGameRemastered import os_layer  # noqa: E402
 from TheQuestionGameRemastered import scares as sc        # noqa: E402
 from TheQuestionGameRemastered import script, ui          # noqa: E402
 
@@ -291,6 +293,187 @@ fresh = persistence.reset_all_data()
 check("reset clears answers", fresh.get("answers") == {})
 check("reset resets run_count", fresh.get("run_count") == 1)
 check("badges survive reset", persistence.has_badge("patient_one"))
+
+# --- Settings overhaul ------------------------------------------------------
+# The settings screen is tabbed, every tab has options, and a change reaches
+# the game itself — not just the save file.
+_expected_tabs = {"AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY",
+                  "CONTROLS", "OTHER"}
+check("the settings screen has the tabs it promises",
+      _expected_tabs.issubset(set(game.settings_categories)),
+      str(game.settings_categories))
+check("every settings tab has options",
+      all(game.settings_options_by_category.get(c) for c in game.settings_categories))
+
+# Keep the old settings so the rest of the file is unaffected.
+_saved_idx = dict(game.settings_idx)
+_saved_settings = dict(game.game_state.get("settings", {}))
+
+game.settings_idx["Master Volume"] = 2      # 0.5
+game.settings_idx["SFX Volume"] = 1          # 0.25
+game.settings_idx["Music Volume"] = 2        # 0.5
+game.settings_idx["Ambience Volume"] = 1     # 0.25
+game._apply_settings()
+check("the master volume reaches the sound effects",
+      abs(audio._sfx_volume - 0.125) < 0.001, audio._sfx_volume)
+check("the music volume reaches the music",
+      abs(audio._music_volume - 0.25) < 0.001, audio._music_volume)
+check("the ambience volume reaches the ambience",
+      abs(audio._ambience_volume - 0.125) < 0.001, audio._ambience_volume)
+check("the music volume does not clobber the game's own level",
+      audio._music_level > 0.0, audio._music_level)
+
+# The setting is not just in the audio module: it is in the save file too.
+persistence.save_game_state(game.game_state)
+_reloaded = persistence.load_game_state()
+check("the settings survive a save/load round trip",
+      abs(float(_reloaded.get("settings", {}).get("sfx_volume", -1)) - 0.25) < 0.001,
+      _reloaded.get("settings", {}).get("sfx_volume"))
+_reidx = game._load_settings_idx()
+check("the volume sliders survive the round trip",
+      _reidx.get("SFX Volume") == 1 and _reidx.get("Master Volume") == 2,
+      (_reidx.get("SFX Volume"), _reidx.get("Master Volume")))
+
+# The video settings are properties of the window, so they change it.
+_win = game._display.get_size()
+game.settings_idx["Resolution"] = config.SETTING_OPTIONS["Resolution"].index("1024x768")
+game._apply_settings()
+check("the resolution setting resizes the window",
+      game._display.get_size() == (1024, 768), str(game._display.get_size()))
+game.settings_idx["Resolution"] = config.SETTING_OPTIONS["Resolution"].index("800x600")
+game._apply_settings()
+check("the window goes back to the old resolution",
+      game._display.get_size() == (800, 600), str(game._display.get_size()))
+
+# The UI scale is a real scale: the game is drawn at another resolution and
+# stretched, so the text and the layout grow together.
+game.settings_idx["UI Scale"] = 5           # 150%
+game._apply_settings()
+_frame = game._frame.get_size()
+check("the UI scale changes the render resolution",
+      _frame[0] < 800 and _frame[1] < 600, str(_frame))
+game.settings_idx["UI Scale"] = 2           # 100%
+game._apply_settings()
+check("the UI scale goes back to normal",
+      game._frame.get_size() == (800, 600), str(game._frame.get_size()))
+
+game.settings_idx["Fullscreen"] = 1
+game._apply_settings()
+check("fullscreen switches the window over",
+      bool(game._display.get_flags() & pygame.FULLSCREEN),
+      str(game._display.get_flags()))
+game.settings_idx["Fullscreen"] = 0
+game._apply_settings()
+check("fullscreen switches back",
+      not (game._display.get_flags() & pygame.FULLSCREEN),
+      str(game._display.get_flags()))
+
+# The CRT switch really switches the tube look off.
+_orig_random = random.random
+random.random = lambda: 0.99          # keep the random VHS bar out of the way
+
+
+def _rows(surf, w, h):
+    return [surf.get_at((w // 2, y))[0] for y in range(h)]
+
+
+try:
+    _on = pygame.Surface((64, 64))
+    _on.fill((120, 120, 120))
+    ui.apply_vhs_effects(_on, 64, 64, {"settings": {
+        "crt_enabled": True, "scanlines_enabled": True,
+        "vhs_intensity": 1.0, "crt_intensity": 1.0}})
+    _off = pygame.Surface((64, 64))
+    _off.fill((120, 120, 120))
+    ui.apply_vhs_effects(_off, 64, 64, {"settings": {
+        "crt_enabled": False, "scanlines_enabled": True,
+        "vhs_intensity": 1.0, "crt_intensity": 1.0}})
+    _on_rows = len(set(_rows(_on, 64, 64)))
+    _off_rows = len(set(_rows(_off, 64, 64)))
+    check("the CRT switch turns the scanlines off",
+          _on_rows > 1 and _off_rows == 1, (_on_rows, _off_rows))
+finally:
+    random.random = _orig_random
+
+# --- Photosensitivity switches ----------------------------------------------
+# They are honoured in one place — the scare system — so every effect that
+# reaches the player goes through the same policy.
+
+
+def _fire(name):
+    sc._last_applied.clear()
+    game.now = time.time()
+    return sc.apply_scare(game, name)
+
+
+game.game_state.setdefault("settings", {}).update({
+    "disable_flashes": True, "disable_screen_shake": False,
+    "disable_webcam_scares": False, "performance_mode": "Medium"})
+
+game.fx["flicker_until"] = 0.0
+game.fx["corrupt_until"] = 0.0
+check("a flash scare still fires with Reduce Flashes on",
+      _fire("flicker") is True)
+check("Reduce Flashes swaps the flicker for something that does not strobe",
+      game.fx.get("flicker_until", 0.0) <= game.now
+      and game.fx.get("corrupt_until", 0.0) > game.now,
+      (game.fx.get("flicker_until"), game.fx.get("corrupt_until")))
+
+game.game_state["settings"]["disable_flashes"] = False
+game.game_state["settings"]["disable_webcam_scares"] = True
+game.fx["webcam_flash_until"] = 0.0
+game.fx["corrupt_until"] = 0.0
+check("a webcam scare still fires with the webcam scares off",
+      _fire("webcam_flash") is True)
+check("the camera stays shut when the webcam scares are off",
+      game.fx.get("webcam_flash_until", 0.0) <= game.now
+      and game.fx.get("corrupt_until", 0.0) > game.now
+      and not ui.webcam_active,
+      (game.fx.get("webcam_flash_until"), ui.webcam_active))
+
+
+def _fake_shake(g):
+    g.fx["screen_shake_until"] = g.now + 2.0
+    g.fx["shake_amp"] = 40
+
+
+sc.SCARE_REGISTRY["_test_shake"] = _fake_shake
+try:
+    game.game_state["settings"]["disable_webcam_scares"] = False
+    game.game_state["settings"]["disable_screen_shake"] = True
+    game.fx["screen_shake_until"] = 0.0
+    game.fx["shake_amp"] = 0
+    check("a shake scare still fires with the screen shake off",
+          _fire("_test_shake") is True)
+    check("Disable Screen Shake leaves the picture still",
+          game.fx.get("screen_shake_until", 0.0) <= game.now
+          and game.fx.get("shake_amp", 0) == 0,
+          (game.fx.get("screen_shake_until"), game.fx.get("shake_amp")))
+finally:
+    sc.SCARE_REGISTRY.pop("_test_shake", None)
+
+# The switch reaches the desktop too: the window must not jiggle.
+game.settings_idx["Disable Screen Shake"] = 1
+game._apply_settings()
+check("Disable Screen Shake reaches the desktop window",
+      os_layer._shake_enabled is False, os_layer._shake_enabled)
+game.settings_idx["Disable Screen Shake"] = 0
+game._apply_settings()
+check("turning it back on lets the window move again",
+      os_layer._shake_enabled is True, os_layer._shake_enabled)
+
+# Low performance mode keeps the cheap scares and drops the expensive ones.
+game.game_state["settings"]["performance_mode"] = "Low"
+game.fx["corrupt_until"] = 0.0
+check("a scare still fires in low-performance mode", _fire("jumpscare") is True)
+check("low-performance mode drops the expensive scares",
+      game.fx.get("corrupt_until", 0.0) <= game.now,
+      game.fx.get("corrupt_until"))
+
+# Put the settings back the way they were.
+game.settings_idx = _saved_idx
+game.game_state["settings"] = _saved_settings
+game._apply_settings()
 
 # --- Script structure (Classic bite) ---------------------------------------
 st1 = script.build_session({"run_count": 1, "answers": {}}, None)
@@ -718,6 +901,184 @@ game.social = None
 game.compose = None
 game.name_edit = None
 game.social_notes = []
+
+# --- The watching eye --------------------------------------------------------
+# The eye is always on: it sits in a corner, it looks at whatever the player
+# is pointing at, it reacts to the scares, it reacts to the answers, and at
+# the very end it takes over the whole screen.
+_eye = game._eye_state
+_w, _h = game.screen.get_size()
+
+game.state = "TITLE"
+(_tx, _ty), _r = game._eye_anchor(_w, _h)
+check("the eye sits bottom-right in the menus",
+      _tx > _w * 0.7 and _ty > _h * 0.7, (_tx, _ty))
+
+game.state = "PLAYING"
+(_px, _py), _r = game._eye_anchor(_w, _h)
+check("the eye sits top-right during the game",
+      _px > _w * 0.7 and _py < _h * 0.3, (_px, _py))
+
+# The pupil has to actually travel when the selection moves.
+game.state = "TITLE"
+game.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
+game.selected_option = 0
+_first = game._eye_look_target(_w, _h)
+game.selected_option = 5
+_second = game._eye_look_target(_w, _h)
+check("the eye has a target for the selected option",
+      _first is not None and _second is not None)
+_eye["pupil_x"] = 0.0
+_eye["pupil_y"] = 0.0
+game.now = time.time()
+for _ in range(40):
+    game._draw_watching_eye(_w, _h)
+_travel = abs(_eye["pupil_x"]) + abs(_eye["pupil_y"])
+check("the pupil visibly moves when the selection changes",
+      _travel > _r * 0.25, "%.1fpx of a %dpx eye" % (_travel, _r))
+
+# A scare flushes the iris red and makes it blink urgently.
+# The pupil size is pinned for this check: the eye breathes, and a bigger
+# pupil would swallow the very ring of iris the test is looking at.
+_orig_dilation = game._eye_dilation
+game._eye_dilation = lambda now: 1.0
+try:
+    game.state = "PLAYING"
+    _eye["scared_until"] = 0.0
+    game.fx["corrupt_until"] = time.time() + 5.0
+    game.now = time.time()
+    game.screen.fill((0, 0, 0))
+    game._draw_watching_eye(_w, _h)
+    _cx = _eye["x"] + _eye["pupil_x"]
+    _cy = _eye["y"] + _eye["pupil_y"]
+    _ir = int(_eye["radius"] * 0.54)
+    _iris = game.screen.get_at((int(_cx), int(_cy - _ir * 0.6)))[:3]
+    check("the iris turns red during a scare", _iris[0] > 100 and _iris[1] < 60, _iris)
+    _eye["next_blink"] = 0.0
+    _eye["blink_until"] = 0.0
+    game.now = time.time()
+    game._draw_watching_eye(_w, _h)
+    check("it blinks urgently during a scare",
+          (_eye["next_blink"] - time.time()) < 0.5, _eye["next_blink"] - time.time())
+finally:
+    game._eye_dilation = _orig_dilation
+game.fx["corrupt_until"] = 0.0
+_eye["scared_until"] = 0.0
+
+# The pupil breathes.
+_base = time.time()
+_pulse = [game._eye_dilation(_base + t) for t in (0, 1, 2, 3, 4, 5, 6, 7)]
+check("the pupil swells and shrinks on its own",
+      (max(_pulse) - min(_pulse)) > 0.1,
+      "%.3f..%.3f" % (min(_pulse), max(_pulse)))
+
+# The eye keeps its own tally of the answers.
+def _reset_eye_answers():
+    _eye["answers"] = []
+    _eye["reaction_until"] = 0.0
+    _eye["reaction_blend"] = 0.0
+
+_reset_eye_answers()
+game._eye_react_to_answer("yes", 1.0)
+check("the first answer draws no reaction", _eye["reaction_kind"] == "idle",
+      _eye["reaction_kind"])
+game._eye_react_to_answer("yes", 1.0)
+check("the same answer twice makes the eye notice",
+      _eye["reaction_kind"] == "notice" and _eye["reaction_dilation"] < 1.0,
+      (_eye["reaction_kind"], _eye["reaction_dilation"]))
+game._eye_react_to_answer("yes", 1.0)
+check("the same answer three times makes the eye angry",
+      _eye["reaction_kind"] == "accuse" and _eye["reaction_angry"],
+      (_eye["reaction_kind"], _eye["reaction_angry"]))
+game._eye_react_to_answer("no", 1.0)
+check("a different answer clears the reaction", _eye["reaction_kind"] == "idle",
+      _eye["reaction_kind"])
+_reset_eye_answers()
+game._eye_react_to_answer("maybe", config.HESITATION_THRESHOLD + 5)
+check("hesitating makes the eye widen",
+      _eye["reaction_kind"] == "hesitate" and _eye["reaction_dilation"] > 1.0,
+      (_eye["reaction_kind"], _eye["reaction_dilation"]))
+
+# At the end of the session there is one big eye, and it is not in the corner.
+game.state = "PLAYING"
+game.pending_exit = True
+game.exit_message_at = time.time()
+game.active_script = [{"q": "q", "opts": ["a"], "_id": "1"}]
+game.current_step = 0
+check("the session end is recognised", game._eye_end_active())
+game.now = time.time()
+game.screen.fill((0, 0, 0))
+game._draw_playing(_w, _h)
+_bright = 0
+for _y in range(0, _h, 4):
+    for _x in range(0, _w, 4):
+        if game.screen.get_at((_x, _y))[0] > 40:
+            _bright += 1
+check("one big eye takes over the screen at the end",
+      _bright > 400, "%d lit pixels" % _bright)
+game.screen.fill((0, 0, 0))
+game._draw_watching_eye(_w, _h)
+check("the small eye stands down at the end",
+      game.screen.get_at((_w - 30, _h - 30))[:3] == (0, 0, 0))
+game.pending_exit = False
+game.current_step = 0
+
+# The overlay module has to import cleanly everywhere; it is what carries the
+# eye onto the desktop on Windows and macOS.
+try:
+    from TheQuestionGameRemastered import eye_overlay
+    _overlay_ok = hasattr(eye_overlay, "main")
+except Exception as _e:      # pragma: no cover - import guard
+    _overlay_ok = False
+    print("       eye_overlay import failed: %s" % _e)
+check("the desktop eye overlay is importable", _overlay_ok)
+
+# --- Key rebinding -----------------------------------------------------------
+# The rebinds have to actually drive the game, not just sit in the save file.
+game.game_state.setdefault("settings", {})["keybinds"] = {
+    "up": "W", "down": "S", "confirm": "SPACE", "back": "ESCAPE", "pause": "ESCAPE",
+}
+check("a rebound up key is used",
+      game._bound_key("up", pygame.K_UP) == pygame.K_w)
+check("a rebound confirm key is used",
+      game._bound_key("confirm", pygame.K_RETURN) == pygame.K_SPACE)
+
+game.state = "TITLE"
+game.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
+game.selected_option = 0
+game._handle_key(pygame.K_w)
+check("the rebound key moves the title selection",
+      game.selected_option == len(game.menu_options) - 1, game.selected_option)
+game._handle_key(pygame.K_s)
+check("the rebound key moves it back",
+      game.selected_option == 0, game.selected_option)
+
+# A key that is already bound is refused rather than shadowing the old action.
+game.state = "SETTINGS"
+game.settings_category_selected = game.settings_categories.index("CONTROLS")
+game.settings_options = game.settings_options_by_category["CONTROLS"]
+game.settings_selected = 0
+game.rebinding = "Rebind: Up"
+game._settings_key(pygame.K_s)          # "S" is already Down
+check("a conflicting rebind is refused",
+      game.rebinding is None and "ALREADY BOUND" in (game.rebind_error or ""),
+      (game.rebinding, game.rebind_error))
+check("the refused rebind did not change anything",
+      game._bound_key("up", pygame.K_UP) == pygame.K_w)
+
+game.rebinding = "Rebind: Up"
+game._settings_key(pygame.K_z)          # "Z" is free
+check("a free key binds",
+      game._bound_key("up", pygame.K_UP) == pygame.K_z,
+      game._bound_key("up", pygame.K_UP))
+check("the rebind is saved with the settings",
+      game.game_state["settings"]["keybinds"]["up"] == "Z")
+
+# Put the defaults back so the rest of the file is unaffected.
+game.game_state["settings"]["keybinds"] = {
+    "up": "UP", "down": "DOWN", "confirm": "RETURN",
+    "back": "ESCAPE", "pause": "ESCAPE",
+}
 
 game.state = "TITLE"
 game.running = False

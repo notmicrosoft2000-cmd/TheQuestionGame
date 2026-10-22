@@ -184,13 +184,29 @@ SCARE_REGISTRY = {
 _COOLDOWN = 6.0
 _last_applied = {}
 
-# Scares that work by hijacking the *desktop* (window moves, cursor theft,
-# wallpaper, minimized apps). On Android the os_layer versions are correct
-# no-ops — there is no desktop to hijack — so each gets an in-app stand-in
-# below and the hit still lands.
+# Scares that hijack the *desktop* (window moves, cursor theft, wallpaper,
+# minimized apps). On Android the os_layer versions are correct no-ops — there
+# is no desktop to hijack — so each gets an in-app stand-in below and the hit
+# still lands.
 _DESKTOP_SCARES = frozenset({
     "window_shake", "windows_shake", "windows_minimize",
     "window_teleport", "window_drift", "wallpaper", "mouse_move",
+})
+
+# Scares that flash the screen hard or fast. "Reduce Flashes" swaps them for
+# something slower and dimmer — the hit still lands, it just does not strobe.
+_FLASH_SCARES = frozenset({
+    "flicker", "webcam_flash", "rgb_split", "screen_tear", "jumpscare",
+})
+
+# Scares that turn the camera on. "Disable Webcam Scares" swaps them.
+_CAMERA_SCARES = frozenset({
+    "webcam_flash", "picture",
+})
+
+# The scares the low-performance mode is willing to keep.
+_LOW_PERF_SCARES = frozenset({
+    "flicker", "corruption", "whisper",
 })
 
 
@@ -234,6 +250,23 @@ def _android_stand_in(game, name):
 
 
 def apply_scare(game, name):
+    # The player's photosensitivity switches, and the low-performance mode, are
+    # honoured here — at the one point every scare passes through, whether it
+    # came from the model, the script or the operator in the room. No effect
+    # can slip past.
+    sset = {}
+    try:
+        sset = (getattr(game, "game_state", {}) or {}).get("settings", {}) or {}
+    except Exception:
+        sset = {}
+    if sset.get("disable_webcam_scares", False) and name in _CAMERA_SCARES:
+        name = "corruption"
+    elif sset.get("disable_flashes", False) and name in _FLASH_SCARES:
+        name = "corruption"
+    if str(sset.get("performance_mode", "Medium")).lower() == "low" \
+            and name not in _LOW_PERF_SCARES:
+        # Low mode keeps the cheap ones and drops the expensive ones.
+        name = "flicker"
     fn = SCARE_REGISTRY.get(name)
     if not fn:
         return False
@@ -255,6 +288,13 @@ def apply_scare(game, name):
         _android_stand_in(game, name)
     except Exception:
         return False
+    if sset.get("disable_screen_shake", False):
+        # The scare still lands. It just does not move the picture.
+        try:
+            game.fx["screen_shake_until"] = 0.0
+            game.fx["shake_amp"] = 0
+        except Exception:
+            pass
     if scale != 1.0:
         # Stretch every deadline the scare just wrote, relative to now, then
         # clamp to the future so a tiny scale cannot retire it instantly.

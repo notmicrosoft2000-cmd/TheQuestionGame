@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 setup(
     name="TheQuestionGameRemastered",
-    version="4.0.0",
+    version="6.0.0",
     description="The Question Game Remastered",
     app=[os.path.join(ROOT, "games", "remastered", "run_remastered.py")],
     options={
@@ -14,7 +14,9 @@ setup(
             "argv_emulation": True,
             "iconfile": os.path.join(ROOT, "icon.icns"),
             "packages": ["pygame", "numpy", "cv2", "requests"],
-            "excludes": ["tkinter", "PyQt5", "PySide2", "matplotlib", "scipy"],
+            # tkinter is NOT excluded: the desktop eye overlay is a Tk window.
+            # It only runs in the --eye-overlay child process.
+            "excludes": ["PyQt5", "PySide2", "matplotlib", "scipy"],
             "resources": [
                 os.path.join(ROOT, "games", "remastered", "TheQuestionGameRemastered", "assets"),
             ],
@@ -22,8 +24,8 @@ setup(
                 "CFBundleName": "The Question Game Remastered",
                 "CFBundleDisplayName": "The Question Game Remastered",
                 "CFBundleIdentifier": "com.notmicrosoft2000.thequestiongameremastered",
-                "CFBundleShortVersionString": "4.0.0",
-                "CFBundleVersion": "4.0.0",
+                "CFBundleShortVersionString": "6.0.0",
+                "CFBundleVersion": "6.0.0",
                 "LSApplicationCategoryType": "public.app-category.games",
                 "NSHighResolutionCapable": True,
                 "NSCameraUsageDescription": "The Question Game Remastered checks whether you are still paying attention during the session.",

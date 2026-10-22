@@ -179,15 +179,30 @@ def _get_scanline_overlay(w, h, step):
 
 
 def apply_vhs_effects(surface, w, h, game_state):
-    intensity = game_state.get("settings", {}).get("vhs_intensity", 1.0)
+    sset = game_state.get("settings", {}) or {}
+    intensity = sset.get("vhs_intensity", 1.0)
     if intensity <= 0:
         return
+    perf = str(sset.get("performance_mode", "Medium")).lower()
+    crt_enabled = bool(sset.get("crt_enabled", True)) and perf != "low"
+    scanlines_enabled = bool(sset.get("scanlines_enabled", True)) and crt_enabled
+    tube_curvature_enabled = bool(sset.get("tube_curvature_enabled", True)) and crt_enabled
+    phosphor_mask_enabled = bool(sset.get("phosphor_mask_enabled", True)) and crt_enabled
+    c_int = float(sset.get("crt_intensity", 1.0))
+    eff = intensity * c_int
+    if eff <= 0:
+        return
+    if perf == "low":
+        scanlines_enabled = False
+        tube_curvature_enabled = False
+        phosphor_mask_enabled = False
     bar_y = int(time.time() * 90) % h
-    if random.random() < 0.12 * intensity:
-        pygame.draw.rect(surface, (15, 15, 15), (0, bar_y, w, random.randint(int(15 * intensity), max(1, int(40 * intensity)))))
-    step = max(2, int(4 / intensity)) if intensity > 0 else 4
-    surface.blit(_get_scanline_overlay(w, h, step), (0, 0))
-    if intensity >= 1.5 and random.random() < 0.06:
+    if random.random() < 0.12 * eff:
+        pygame.draw.rect(surface, (15, 15, 15), (0, bar_y, w, random.randint(int(15 * eff), max(1, int(40 * eff)))))
+    if scanlines_enabled:
+        step = max(2, int(4 / eff)) if eff > 0 else 4
+        surface.blit(_get_scanline_overlay(w, h, step), (0, 0))
+    if eff >= 1.5 and random.random() < 0.06:
         gy = random.randint(0, h)
         pygame.draw.rect(surface, (30, 0, 0), (0, gy, w, random.randint(2, 8)))
 
@@ -958,20 +973,33 @@ def draw_static_line(surface, w, h, t=0.0, intensity=1.0):
         surface.blit(line, (random.randint(-4, 4), yy))
 
 
-def apply_vhs_pass(surface, w, h, t=0.0, intensity=1.0):
+def apply_vhs_pass(surface, w, h, t=0.0, intensity=1.0, game_state=None):
     """The full VHS stack. `intensity` 0..1+ scales everything."""
     if intensity <= 0:
         return
+    sset = {}
+    if game_state is not None:
+        sset = game_state.get("settings", {}) or {}
+    perf = str(sset.get("performance_mode", "Medium")).lower()
+    crt_enabled = bool(sset.get("crt_enabled", True))
+    if perf == "low":
+        crt_enabled = False
+    if not crt_enabled:
+        return
+    tube_curvature_enabled = bool(sset.get("tube_curvature_enabled", True))
+    phosphor_mask_enabled = bool(sset.get("phosphor_mask_enabled", True))
+    if perf == "low":
+        tube_curvature_enabled = False
+        phosphor_mask_enabled = False
     if config.VHS_TRACKING:
         apply_vhs_tracking(surface, w, h, t, intensity)
     apply_vhs_static(surface, w, h, t, intensity * config.VHS_STATIC)
-    if config.CRT_CURVATURE > 0:
+    if config.CRT_CURVATURE > 0 and tube_curvature_enabled:
         # Stronger settings bow the tube a bit harder, but gently enough that the
         # text column never gets pinched out.
         amount = config.CRT_CURVATURE * min(1.35, 0.7 + 0.3 * float(intensity))
         apply_vhs_curvature(surface, w, h, amount, config.CRT_CURVE_BANDS)
     apply_crt(surface, w, h, t, intensity)
-
 
 
 # --- Menu decoration --------------------------------------------------------
@@ -1425,3 +1453,118 @@ def draw_location_card(surface, geo, w, h, alpha=255):
     surface.blit(box, (w - box.get_width() - 20, 20))
 
 
+# --- The watching eye -------------------------------------------------------
+# A procedural eye drawn straight to the screen: sclera, iris, pupil, lid.
+# No art assets, so it scales cleanly and can be animated per-frame.
+#
+# Behaviour:
+#   * sits in a corner of the screen, avoiding the busy middle of the UI
+#   * the pupil tracks the mouse cursor
+#   * when a UI element is "selected", the pupil looks at that instead
+#   * it blinks on a random timer
+#   * when the cursor leaves the window (but the window still has focus) the
+#     pupil slides to the edge of the iris and keeps staring that way
+#
+# The desktop overlay (Windows/macOS) lives in `eye_overlay.py`; this is the
+# in-game half and runs on every platform.
+
+_eye_geometry = {"radius": 0}
+
+
+def eye_radius(w, h):
+    """Eye size scales with the window but stays sane on tiny windows."""
+    r = int(min(w, h) * 0.055)
+    return max(24, min(72, r))
+
+
+def eye_pupil_offset(cx, cy, r, target, max_frac=0.52):
+    """Clamp a look-at vector into the iris."""
+    if target is None:
+        return (0, 0)
+    tx, ty = target
+    dx = tx - cx
+    dy = ty - cy
+    dist = math.hypot(dx, dy)
+    if dist < 1e-6:
+        return (0, 0)
+    max_off = r * max_frac
+    if dist <= max_off:
+        return (dx, dy)
+    scale = max_off / dist
+    return (dx * scale, dy * scale)
+
+
+def draw_eye(surface, cx, cy, r, openness=1.0, pupil=(0.0, 0.0), angry=False,
+             dilation=1.0, shade=1.0):
+    """Draw the eye: sclera, iris, pupil, highlight.
+
+    Barebone on purpose. The game is a black-and-white terminal, so the eye is
+    drawn in the same language: a white almond, a black iris, a black pupil.
+    Nothing else. When `angry` is set the iris goes red, which is what the eye
+    does while something is happening.
+
+    `openness` 1.0 = wide open, 0.0 = shut. `pupil` is the (x, y) offset of
+    the iris centre from the eye centre, already clamped by
+    `eye_pupil_offset`. `dilation` scales the iris and pupil together: below
+    1.0 the pupil shrinks (constriction), above 1.0 it swells. `shade`
+    dims the white, so an eye can sit back behind the glass.
+    """
+    openness = max(0.03, min(1.0, float(openness)))
+    ry = max(1, int(r * 0.56 * openness))
+    px, py = pupil
+    try:
+        dil = max(0.35, min(2.0, float(dilation)))
+    except (TypeError, ValueError):
+        dil = 1.0
+    try:
+        shade = max(0.0, min(1.0, float(shade)))
+    except (TypeError, ValueError):
+        shade = 1.0
+    white = (int(238 * shade), int(238 * shade), int(234 * shade))
+    crease = (int(235 * shade), int(235 * shade), int(235 * shade))
+
+    iris_col = (168, 12, 12) if angry else (14, 12, 12)
+    iris_edge = (60, 4, 4) if angry else (0, 0, 0)
+
+    # --- socket --------------------------------------------------------------
+    # A hard black ring so the eye reads as a drawn shape, not a blur.
+    pygame.draw.ellipse(surface, (0, 0, 0),
+                         (cx - r - 2, cy - ry - 2, (r + 2) * 2, (ry + 2) * 2))
+
+    if openness <= 0.06:
+        # Fully shut: a lid crease, nothing else.
+        pygame.draw.line(surface, crease,
+                         (cx - r, cy), (cx + r, cy), max(1, r // 10))
+        return
+
+    # --- sclera --------------------------------------------------------------
+    pygame.draw.ellipse(surface, white,
+                         (cx - r, cy - ry, r * 2, ry * 2))
+
+    # --- iris ----------------------------------------------------------------
+    ir = max(3, int(r * 0.54 * dil))
+    # The iris never grows past the sclera, and it always leaves a rim of
+    # sclera showing so a dilated pupil still reads as an iris.
+    ir = min(ir, int(r * 0.80))
+    pygame.draw.ellipse(surface, iris_col,
+                         (cx + px - ir, cy + py - ir, ir * 2, ir * 2))
+    if not angry:
+        # A single white speck, so the black iris is not a dead hole.
+        sp = max(1, int(ir * 0.16))
+        pygame.draw.ellipse(surface, white,
+                             (cx + px - sp - int(ir * 0.30),
+                              cy + py - sp - int(ir * 0.34), sp * 2, sp * 2))
+    pygame.draw.ellipse(surface, iris_edge,
+                         (cx + px - ir, cy + py - ir, ir * 2, ir * 2), 1)
+
+    # --- pupil ---------------------------------------------------------------
+    pr = max(2, int(ir * 0.50 * min(1.25, dil)))
+    pygame.draw.ellipse(surface, (0, 0, 0),
+                         (cx + px - pr, cy + py - pr, pr * 2, pr * 2))
+
+    # --- lid shadow ----------------------------------------------------------
+    if openness < 0.98:
+        lid = int(r * 0.56 * (1.0 - openness))
+        if lid > 0:
+            pygame.draw.ellipse(surface, (0, 0, 0),
+                                 (cx - r, cy - ry, r * 2, lid * 2))
