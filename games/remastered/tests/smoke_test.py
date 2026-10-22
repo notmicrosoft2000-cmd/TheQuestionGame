@@ -902,6 +902,34 @@ game.compose = None
 game.name_edit = None
 game.social_notes = []
 
+# --- The Wayland landmine ---------------------------------------------------
+# pygame 2.6's get_wm_info() kills the interpreter on Wayland: it builds a
+# capsule from the window's shell surface, which is NULL for a plain window,
+# and PyDict_SetItemString does not check for a NULL value. It cannot be
+# caught from Python. The OS layer must never ask for it off X11.
+_wm_calls = []
+_orig_wm_info = pygame.display.get_wm_info
+
+
+def _tracking_wm_info():
+    _wm_calls.append(1)
+    return _orig_wm_info()
+
+
+pygame.display.get_wm_info = _tracking_wm_info
+try:
+    os_layer.reset_window_cache()
+    _xid = os_layer._x11_window_id()
+    _bounds = os_layer.get_window_bounds()
+    _cursor = os_layer.get_global_cursor()
+finally:
+    pygame.display.get_wm_info = _orig_wm_info
+check("the OS layer never asks pygame for the WM info off X11",
+      not _wm_calls, len(_wm_calls))
+check("no window id is invented off X11", _xid is None, _xid)
+check("no desktop bounds are invented off X11", _bounds is None, _bounds)
+check("no desktop cursor is invented off X11", _cursor is None, _cursor)
+
 # --- The watching eye --------------------------------------------------------
 # The eye is always on: it sits in a corner, it looks at whatever the player
 # is pointing at, it reacts to the scares, it reacts to the answers, and at

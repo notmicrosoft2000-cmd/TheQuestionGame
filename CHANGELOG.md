@@ -90,6 +90,21 @@ game needed one — **an eye that watches you the whole time**.
 - `Text Speed` and `VHS Effects` gained more steps (`Very Fast` …
   `Very Slow`, and `Extreme`).
 
+### Fixed
+
+- The eye asked pygame for the window's system information every frame. On
+  Wayland that call is **fatal** — pygame 2.6 builds a capsule from the
+  window's shell surface, which is `NULL` for a plain window, and
+  `PyDict_SetItemString` does not check for a `NULL` value, so the interpreter
+  died with `SIGSEGV` and there was no way to catch it from Python. The
+  desktop cursor is now only asked for under X11, where the answer can be
+  mapped onto the window. On Wayland the eye follows the pointer inside the
+  window, which is all the compositor allows anyway.
+- The eye asked the OS where the game window was on *every frame*. On macOS
+  that answer cost a process spawn (AppleScript) sixty times a second. The
+  window position is now cached for a fraction of a second, and the cursor is
+  read through Quartz only, never through AppleScript.
+
 ### Notes
 
 - The desktop eye is **Windows and macOS only**. The in-game eye is on every

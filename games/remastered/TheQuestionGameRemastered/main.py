@@ -263,6 +263,9 @@ class Game:
         except Exception:
             return
         try:
+            # The window is a new one, so its id (and the driver's) may have
+            # changed. Forget what the OS layer cached about the old one.
+            os_layer.reset_window_cache()
             self._frame = self._new_frame(self._render_size(self._display.get_size()))
             self._font_cache_key = None
             self._black_overlay_key = None

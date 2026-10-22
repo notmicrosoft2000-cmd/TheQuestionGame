@@ -74,6 +74,10 @@ def _query_global_cursor():
             pass
         return None
     if SYSTEM == "Darwin":
+        # Quartz is cheap. The AppleScript fallback is *not*: it is a process
+        # spawn, and the eye asks for the cursor every frame, so it is not
+        # used here. Without Quartz the eye simply follows the pointer
+        # inside the window.
         try:
             import Quartz  # pyobjc, if it happens to be installed
             e = Quartz.CGEventCreate(None)
@@ -81,20 +85,15 @@ def _query_global_cursor():
             return (int(p.x), int(p.y))
         except Exception:
             pass
-        # Fallback: System Events is slow but works without extra packages.
-        try:
-            script = ('tell application "System Events" to get position of '
-                      'the first window of (first process whose frontmost is true)')
-            out = subprocess.check_output(["osascript", "-e", script],
-                                          stderr=subprocess.DEVNULL, text=True,
-                                          timeout=0.4)
-            parts = out.strip().split(",")
-            if len(parts) == 2:
-                return (int(float(parts[0].strip())), int(float(parts[1].strip())))
-        except Exception:
-            pass
         return None
     if SYSTEM == "Linux":
+        # The X11 pointer is only useful when the game window is an X11
+        # window too: under the Wayland driver the window has no X11
+        # position, so desktop coordinates could not be mapped onto it and
+        # the eye would look in the wrong direction. The in-window cursor
+        # is used instead.
+        if _pygame_driver() != "x11":
+            return None
         return _query_global_cursor_x11()
     return None
 
@@ -213,21 +212,87 @@ def _x11_window_origin(xid):
     return None
 
 
-def _pygame_window_xid():
-    """The X11 window id of the pygame window, if there is one."""
+# --- The pygame window, without asking pygame the wrong way ------------------
+# `pygame.display.get_wm_info()` is a minefield on Wayland. pygame 2.6 builds
+# a capsule from the window's shell surface, which is NULL for a plain
+# window, and then puts that NULL into the result dictionary — and
+# PyDict_SetItemString does not check for a NULL value, so the interpreter
+# dies with SIGSEGV. There is no way to catch that from Python.
+#
+# So it is only ever called when the SDL driver really is X11, where the one
+# thing we want from it is the window id. The answer is cached because the
+# window id does not change while the window lives.
+_wm_info = {"driver": None, "xid": None, "fetched": False}
+
+
+def _pygame_driver():
+    """The SDL video driver pygame is using: 'x11', 'wayland', 'windows'..."""
+    try:
+        import pygame
+        return str(pygame.display.get_driver() or "").lower()
+    except Exception:
+        return ""
+
+
+def _x11_window_id():
+    """The X11 id of the pygame window, or None.
+
+    Only X11 has one. Under the Wayland driver the window is a native
+    Wayland surface, and asking pygame for the WM info there is not merely
+    useless but fatal (see the note above).
+    """
+    global _wm_info
+    if _wm_info["fetched"]:
+        return _wm_info["xid"]
+    _wm_info["fetched"] = True
+    _wm_info["driver"] = _pygame_driver()
+    if _wm_info["driver"] != "x11":
+        return None
     try:
         import pygame
         info = pygame.display.get_wm_info() or {}
         xid = info.get("window")
         if xid:
-            return int(xid)
+            _wm_info["xid"] = int(xid)
     except Exception:
         pass
-    return None
+    return _wm_info["xid"]
+
+
+def reset_window_cache():
+    """Forget the cached window id and bounds — the window was re-made."""
+    global _wm_info, _bounds_cache
+    _wm_info = {"driver": None, "xid": None, "fetched": False}
+    _bounds_cache = {"value": None, "at": 0.0}
+
+
+def _pygame_window_xid():
+    """The X11 window id of the pygame window, if there is one."""
+    return _x11_window_id()
+
+
+_bounds_cache = {"value": None, "at": 0.0}
+_BOUNDS_TTL = 0.15        # seconds; the eye does not need 60 Hz window moves
 
 
 def get_window_bounds(hwnd=None):
-    """(left, top, width, height) of the game window in desktop coordinates."""
+    """(left, top, width, height) of the game window in desktop coordinates.
+
+    Cached for a fraction of a second: the eye asks for this every frame, and
+    on macOS the answer costs a process spawn (AppleScript), which is far too
+    expensive to do sixty times a second.
+    """
+    now = time.time()
+    if _bounds_cache["value"] is not None and now - _bounds_cache["at"] < _BOUNDS_TTL:
+        return _bounds_cache["value"]
+    value = _query_window_bounds(hwnd)
+    if value is not None:
+        _bounds_cache["value"] = value
+        _bounds_cache["at"] = now
+    return value
+
+
+def _query_window_bounds(hwnd=None):
     if SYSTEM == "Windows":
         try:
             if hwnd is None:
@@ -261,7 +326,9 @@ def get_window_bounds(hwnd=None):
     if SYSTEM == "Linux":
         # Only the origin is available from X11; the size comes from the
         # caller (the pygame frame), which is what we want anyway.
-        origin = _x11_window_origin(_pygame_window_xid())
+        if _pygame_driver() != "x11":
+            return None
+        origin = _x11_window_origin(_x11_window_id())
         if origin is None:
             return None
         return (int(origin[0]), int(origin[1]), 0, 0)
@@ -359,6 +426,10 @@ def restore_original_wallpaper(game_state):
 def get_hwnd():
     try:
         import pygame
+        # `get_wm_info()` is fatal on Wayland (see the note by _x11_window_id),
+        # so it is only asked on Windows and under X11.
+        if SYSTEM != "Windows" and _pygame_driver() != "x11":
+            return None
         return pygame.display.get_wm_info()["window"]
     except Exception:
         return None
@@ -517,7 +588,9 @@ def _mac_window_position():
     try:
         script = ('tell application "System Events" to get position of front window of '
                   '(first process whose frontmost is true)')
-        out = subprocess.check_output(["osascript", "-e", script], stderr=subprocess.DEVNULL, text=True)
+        out = subprocess.check_output(["osascript", "-e", script],
+                                      stderr=subprocess.DEVNULL, text=True,
+                                      timeout=0.4)
         parts = out.strip().split(",")
         if len(parts) == 2:
             return int(parts[0].strip()), int(parts[1].strip())
