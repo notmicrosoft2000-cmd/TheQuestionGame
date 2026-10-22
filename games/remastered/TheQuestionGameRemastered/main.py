@@ -212,7 +212,8 @@ class Game:
                 return disp
         sset = self.game_state.get("settings", {}) or {}
         size = self._window_size()
-        if sset.get("fullscreen", False):
+        fullscreen = bool(sset.get("fullscreen", False))
+        if fullscreen:
             flags |= pygame.FULLSCREEN
         vsync = 1 if sset.get("vsync", True) else 0
         disp = None
@@ -227,7 +228,19 @@ class Game:
                 disp = None
         if disp is None:
             disp = pygame.display.get_surface()
-        if not config.WINDOW_LOCKED and not sset.get("fullscreen", False):
+        if disp is not None and not fullscreen and getattr(self, "_leaving_fullscreen", False):
+            # SDL throws away a size request that arrives while the window is
+            # still fullscreen, so on some versions (2.28 on Linux, for one) a
+            # window that has just come out of fullscreen keeps the
+            # fullscreen size and the game is left drawing into a window the
+            # player never asked for. Asking again, now that the window is a
+            # window again, fixes it. The position is kept: pygame retains it
+            # when the size does not change.
+            try:
+                disp = pygame.display.set_mode(size, flags)
+            except Exception:
+                pass
+        if not config.WINDOW_LOCKED and not fullscreen:
             try:
                 self._apply_resize_limits()
             except Exception:
@@ -250,6 +263,7 @@ class Game:
         window: the frame is simply drawn at another resolution.
         """
         want = self._video_wanted()
+        applied = getattr(self, "_video_applied", None)
         if getattr(self, "_video_applied", None) == want:
             # Only the UI scale changed: resize the frame, not the window.
             try:
@@ -257,6 +271,9 @@ class Game:
             except Exception:
                 pass
             return
+        # Was the window fullscreen and is it not any more? Then it has to be
+        # asked for its size again once it is a window (see _create_display).
+        self._leaving_fullscreen = bool(applied and applied[0]) and not bool(want[0])
         self._video_applied = want
         try:
             self._display = self._create_display()
@@ -291,6 +308,7 @@ class Game:
         except Exception:
             self.settings_idx = dict(config.SETTING_DEFAULTS)
         self.ai = ai_client.ScaryAI()
+        self._leaving_fullscreen = False
         self._display = self._create_display()
         # Everything from here on draws into this surface; _draw() copies it
         # onto the window. See the `screen` property above for why.

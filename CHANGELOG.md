@@ -92,6 +92,10 @@ game needed one — **an eye that watches you the whole time**.
 
 ### Fixed
 
+- Turning fullscreen off left the window at its fullscreen size on some SDL
+  versions (2.28 on Linux, for one). SDL throws away a size request that
+  arrives while the window is still fullscreen, so the game was left drawing
+  into a window the player never asked for. It asks for the size again now.
 - The eye asked pygame for the window's system information every frame. On
   Wayland that call is **fatal** — pygame 2.6 builds a capsule from the
   window's shell surface, which is `NULL` for a plain window, and

@@ -362,11 +362,62 @@ game._apply_settings()
 check("fullscreen switches the window over",
       bool(game._display.get_flags() & pygame.FULLSCREEN),
       str(game._display.get_flags()))
-game.settings_idx["Fullscreen"] = 0
-game._apply_settings()
+# Leaving fullscreen must ask the driver for the window size again. SDL 2.28
+# throws away a size request that arrives while the window is still
+# fullscreen, so a window that has just come out of fullscreen would keep
+# the fullscreen size, and the game would be left drawing into a window the
+# player never asked for.
+_set_mode_calls.clear()
+pygame.display.set_mode = _tracking_set_mode
+try:
+    game.settings_idx["Fullscreen"] = 0
+    game._apply_settings()
+    _left_fullscreen_calls = list(_set_mode_calls)
+finally:
+    pygame.display.set_mode = _orig_set_mode
 check("fullscreen switches back",
       not (game._display.get_flags() & pygame.FULLSCREEN),
       str(game._display.get_flags()))
+check("the window is asked for its size again when it leaves fullscreen",
+      len(_left_fullscreen_calls) >= 2, len(_left_fullscreen_calls))
+check("the window goes back to its own size after fullscreen",
+      game._display.get_size() == (800, 600), str(game._display.get_size()))
+
+# The same thing, with SDL's actual quirk emulated: on SDL 2.28 (Linux, and
+# other versions with the same behaviour) a size request that arrives while
+# the window is still fullscreen is thrown away, so a window that has just
+# come out of fullscreen keeps the fullscreen size. The game has to ask for
+# the size again, or it is left drawing into a window the player never asked
+# for.
+_fs_state = {"fullscreen": False, "dropped": False}
+
+
+def _sdl228_set_mode(size, flags=0, *a, **kw):
+    fs = bool(flags & pygame.FULLSCREEN)
+    if _fs_state["fullscreen"] and not fs:
+        _fs_state["fullscreen"] = False
+        if not _fs_state["dropped"]:
+            _fs_state["dropped"] = True
+            return _orig_set_mode((1024, 768), flags)
+    _fs_state["fullscreen"] = fs
+    return _orig_set_mode(size, flags, *a, **kw)
+
+
+pygame.display.set_mode = _sdl228_set_mode
+try:
+    game.settings_idx["Fullscreen"] = 1
+    game._apply_settings()
+    game.settings_idx["Fullscreen"] = 0
+    game._apply_settings()
+    _fs_display = game._display.get_size()
+    _fs_frame = game._frame.get_size()
+finally:
+    pygame.display.set_mode = _orig_set_mode
+check("the SDL fullscreen quirk is emulated", _fs_state["dropped"])
+check("the window survives a dropped size request",
+      _fs_display == (800, 600), str(_fs_display))
+check("the frame survives a dropped size request",
+      _fs_frame == (800, 600), str(_fs_frame))
 
 # The CRT switch really switches the tube look off.
 _orig_random = random.random
@@ -804,12 +855,19 @@ check("effects leave no notice on screen — nothing announces them",
 game.social = _saved_social
 
 # The layout must still fit the default window with a full room on screen.
+# The frame is forced to the default size for the test: a HiDPI display gives
+# a 2x frame, and the numbers would then mean nothing.
 game.state = "ONLINE"
 game.online_edit = None
 game.online_selected = 0
 game.online_test = {"state": "ok", "detail": "THE RELAY ANSWERED IN 42 MS", "ms": 42}
 game.social = _RoomStub(6)
-game._draw()
+_saved_frame = game._frame
+game._frame = game._new_frame((config.WINDOW_W, config.WINDOW_H))
+try:
+    game._draw_online(config.WINDOW_W, config.WINDOW_H)
+finally:
+    game._frame = _saved_frame
 check("ONLINE fits the default window",
       game.online_layout_bottom <= config.WINDOW_H - 40,
       (game.online_layout_bottom, config.WINDOW_H))
