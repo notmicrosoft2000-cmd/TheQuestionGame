@@ -2,8 +2,7 @@
   "use strict";
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
-  // The multiplayer alpha. This release ships the receiver build only — the
-  // operator's sender app is never published here.
+
   const REMASTER_TAG = "v5.0.0-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
