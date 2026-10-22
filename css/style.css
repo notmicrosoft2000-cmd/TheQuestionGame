@@ -1147,6 +1147,19 @@ body.touch-device .signal-keys,
 .release,.side{border:1px solid var(--line);background:var(--panel);position:relative}
 .releases-col{display:grid;gap:1.6rem;min-width:0}
 .release{overflow:hidden}
+/* The Classic edition is the archive card: it starts folded so the current
+   Remastered build is the first thing on the page. Everything except the
+   header is hidden until the player asks for it. */
+.classic-release.is-collapsed > :not(.release-top){display:none}
+.release-toggle{
+  margin-top:1rem;display:inline-flex;align-items:center;gap:.5rem;
+  font-family:var(--vt);font-size:1.05rem;letter-spacing:.12em;
+  color:var(--green);border:1px solid var(--green);background:transparent;
+  padding:.4rem 1rem;cursor:pointer;transition:all .2s;
+}
+.release-toggle::before{content:"▸";font-size:.9em}
+.classic-release:not(.is-collapsed) .release-toggle::before{content:"▾"}
+.release-toggle:hover{background:rgba(0,220,0,.1);box-shadow:var(--glow-green);text-shadow:var(--glow-green)}
 .release.rem::before{background:repeating-linear-gradient(90deg,#b00000 0 14px,#4a0000 14px 20px)}
 .release::before{
   content:"";position:absolute;top:0;left:0;right:0;height:3px;

@@ -8,7 +8,7 @@ APP_NAME = "The Question Game Remastered"
 # alpha: it joins the room, plays the questions the operator sends, and
 # reports its answers back. Writing questions lives in the operator's separate
 # sender app (tools/sender) and is deliberately not part of this build.
-VERSION = "6.0.0"
+VERSION = "6.1-alpha"
 
 # --- Platform ---------------------------------------------------------------
 # python-for-android reports sys.platform == "android"; platform.system() is

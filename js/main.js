@@ -3,10 +3,10 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
 
-  const REMASTER_TAG = "v6.0.0-remastered";
+  const REMASTER_TAG = "v6.1-alpha-remastered";
   // The known-good release to fall back to if the API cannot be reached and no
   // bigger-versioned release can be resolved from the release list.
-  const REMASTER_FALLBACK_TAG = "v6.0.0-remastered";
+  const REMASTER_FALLBACK_TAG = "v6.1-alpha-remastered";
   const CLASSIC_TAG = "v2.02-classic";
 
 
@@ -2095,6 +2095,22 @@
     applySiteTheme(btn.getAttribute("data-theme") || "");
   });
 
+  // The Classic edition is kept as an archive card at the bottom of the
+  // download stack. Its downloads start collapsed so the current Remastered
+  // build is the first thing a player sees; the button is the only way in.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-collapse]");
+    if (!btn) return;
+    const card = document.getElementById(btn.getAttribute("data-collapse"));
+    if (!card) return;
+    const collapsed = card.classList.toggle("is-collapsed");
+    btn.setAttribute("aria-expanded", String(!collapsed));
+    const label = btn.querySelector(".release-toggle-label");
+    if (label) {
+      label.textContent = collapsed ? "SHOW CLASSIC DOWNLOADS" : "HIDE CLASSIC DOWNLOADS";
+    }
+  });
+
   const CALM_VIEWS = { story: "paper", forum: "forum" };
 
   function showView(name) {
@@ -2481,7 +2497,7 @@
     remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
   };
 
-  // "v6.0.0-remastered" -> [6, 0, 0, 0]  (a "beta" counts as 0)
+  // "v6.1-alpha-remastered" -> [6, 1, 0, 0]  (a "beta" counts as 0)
   function versionParts(tag) {
     const m = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?/.exec(String(tag || ""));
     if (!m) return null;

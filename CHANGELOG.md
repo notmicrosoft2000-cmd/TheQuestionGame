@@ -6,11 +6,11 @@ This file covers the **games and the server**. The website has its own long
 history in the git log; only version-bearing site changes are listed here.
 
 Version numbers follow the game's `config.VERSION`. Release tags look like
-`v6.0.0-remastered`; the site picks the newest one automatically.
+`v6.1-alpha-remastered`; the site picks the newest one automatically.
 
 ---
 
-## Unreleased
+## v6.1-alpha — 2026-10-22
 
 ### Changed
 
@@ -56,6 +56,12 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 ### Fixed
 
 - The relay and the operator sender now recognise all eight new effect names.
+
+### Site
+
+- The download page now leads with the Remastered build. The stable Classic
+  v2.02 card is the last card and starts collapsed, so the current release is
+  the first thing a player sees; the Classic downloads open on click.
 
 ---
 
