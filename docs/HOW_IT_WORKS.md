@@ -230,26 +230,30 @@ save file and comes back on the next run.
 There is an eye in the corner of the screen the whole time you play. It is not
 an option and there is no switch to turn it off — that is the point of it.
 
-It is drawn in the game's own colours: a white almond, a black iris, a black
-pupil, a hard black ring around it. Nothing else. It blinks at irregular
-intervals, and it is always watching something.
+It is drawn in the game's own colours: two pale almond lid outlines, a dark-red
+iris ring, and a black pupil. There is no filled white eyeball, so the game
+shows through the middle of it. It blinks at irregular intervals, and it is
+always watching something.
 
-**What it watches.** Mostly you. Move the mouse and the pupil follows. When a
-menu option is highlighted, it turns and looks straight at that option. It
-sits in the bottom-right corner in the menus and moves to the top-right when
-the game starts, out of the way of the text.
+**What it watches.** The thing you have selected. Highlight a menu entry, a
+setting, or an answer and the pupil turns towards it. If nothing is
+highlighted, it looks straight out of the screen at you. Move the mouse out of
+the game window and the pupil follows it out of the frame instead, so the eye
+watches wherever you went. It sits in the bottom-right corner in the menus and
+moves to the top-right when the game starts, out of the way of the text.
 
 **When a scare fires** — a flicker, a corruption, a whisper, anything the game
 does to scare you — the eye blinks far more often and its iris turns red. It
 watches you get scared.
 
 **It keeps score.** Answer the same thing twice in a row and the pupil
-contracts and holds that stare. Do it a third time and the eye swells and
-flushes red. Hesitate on a question for long enough and it widens instead. It
+tightens and holds that stare. Do it a third time and the eye flushes red.
+Hesitate on a question for long enough and it broadens slightly instead. It
 is counting.
 
-**Later sessions are worse.** The eye blinks faster, wanders more, and its
-pulse gets wider.
+**Later sessions are worse.** The eye blinks faster and its pupil pulses a
+little quicker. It is still a small, steady movement — it should feel alive,
+not like a cartoon eye zooming in and out.
 
 **At the end of the session** the corner eye steps aside and **one big eye
 takes over the whole screen**, sitting behind the text and staring out at you.
@@ -265,13 +269,37 @@ on, and it goes away the moment you go back to the game.
 **Linux does not get the desktop version.** Wayland, the display server most
 Linux desktops use, deliberately keeps the pointer position private and does
 not let applications read it. There is no way around that and there never will
-be. The in-game eye still works on Linux: it follows the cursor, and it keeps
-following it even when the cursor leaves the game window, so the pupil slides
+be. The in-game eye still works on Linux: it watches your selection, and when
+the cursor leaves the game window it keeps following it, so the pupil slides
 to the edge of the iris and stares out of the screen at wherever you went.
 
 ---
 
-## 7. Where everything runs
+## 7. How updates arrive
+
+The game checks GitHub for a newer **Remastered** release when it starts, and
+again every six hours while it stays open. That check happens in the background,
+so a slow or missing connection never freezes a frame. If the check fails — no
+internet, GitHub busy, a firewall — the game says nothing and simply tries again
+later. Nothing about the game changes because a check failed.
+
+When a newer release exists, a small notice appears and the title screen keeps a
+line near the bottom: **UPDATE 6.2-alpha AVAILABLE — [U] DOWNLOAD**. Press `U`
+(or tap that line on a phone) and the release page opens in your browser, where
+you can pick the download for your platform.
+
+The game **never downloads or installs an update by itself**. There is no silent
+replacement and no restart prompt; you stay in control. It also does not check
+drafts, and it ignores the older Classic edition, so an unfinished build cannot
+be advertised by accident.
+
+The last check is remembered in the game's data folder, so closing and reopening
+the game does not ask GitHub again immediately. If you want the check off
+entirely, set `TQG_NO_UPDATE_CHECK=1` before starting the game.
+
+---
+
+## 8. Where everything runs
 
 | Thing | Where |
 |---|---|
@@ -290,7 +318,7 @@ needs your password) or copy the file and restart the service by hand.
 
 ---
 
-## 8. Common misunderstandings
+## 9. Common misunderstandings
 
 - *"The AI and the relay are different servers."* No — one program, one machine.
 - *"The API key is in the game somewhere."* No. The download holds no key.

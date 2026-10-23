@@ -4,6 +4,7 @@ import math
 import os
 import queue
 import random
+import sys
 import threading
 import time
 
@@ -852,7 +853,8 @@ def render_glitch_block(surface, text, font, color, start_x, start_y, max_width,
 # --- VHS distortion pass -----------------------------------------------------
 # Tracking slips, a drifting tracking bar, head-switching snow at the bottom,
 # drifting static, tube curvature, then the CRT phosphor/edge mask. Everything
-# uses cached assets; the only per-frame cost is the curvature slices.
+# uses cached assets. Curvature is one continuous remap; the old strip method
+# survives only as the no-OpenCV fallback.
 _vhs_snow_cache = {}
 
 
@@ -876,9 +878,122 @@ def _get_vhs_snow(seed, size=96):
     return tile
 
 
-def apply_vhs_curvature(surface, w, h, amount=0.10, bands=26):
-    """Bow the frame like a tube: slice it and width-scale each slice so the
-    top/bottom pinch inward (a cheap fake barrel)."""
+_cv2_state = {"loaded": False, "module": None}
+_curve_cache = {
+    "key": None, "map1": None, "map2": None,
+    "size": None, "size_at": 0.0,
+}
+
+
+def _get_cv2():
+    """Import OpenCV lazily. It is bundled with every packaged build; a source
+    checkout without it still runs, just with the old strip curvature."""
+    if not _cv2_state["loaded"]:
+        _cv2_state["loaded"] = True
+        try:
+            import cv2
+            _cv2_state["module"] = cv2
+        except Exception:
+            _cv2_state["module"] = None
+    return _cv2_state["module"]
+
+
+def _vhs_curve_key(w, h, amount):
+    ax = max(0.0, min(0.45, float(amount)))
+    ay = max(0.0, min(0.45, ax * config.CRT_CURVE_Y_RATIO))
+    return (int(w), int(h), round(ax, 5), round(ay, 5))
+
+
+def _build_vhs_curve_maps(w, h, amount):
+    """Build one smooth source-coordinate map for the whole tube.
+
+    The map bends both axes with an edge-preserving barrel curve:
+
+        src = n * (1 - k * (1 - n^2) * (1 - m^2))
+
+    where n is the axis being sampled and m the other axis. At n = +/-1 the
+    factor is exactly 1, so the outer frame is never sampled outside the
+    surface and no content (in particular the eye, which sits close to the
+    top-right corner) is pushed off-screen or cut. Near the centre the same
+    expression bulges the image, which is what makes the whole frame read as
+    a curved tube instead of a flat picture with shifted strips.
+
+    Maps are plain float32 arrays (h, w). OpenCV's fixed-point conversion is
+    deliberately not used: its return shape changed between OpenCV versions
+    (4.x vs 5.x), which previously produced mismatched maps and black frames.
+    """
+    cv2 = _get_cv2()
+    if cv2 is None:
+        return None
+    _, _, ax, ay = _vhs_curve_key(w, h, amount)
+    xs = ((np.arange(w, dtype=np.float32) + 0.5) * (2.0 / max(1, w)) - 1.0)
+    ys = ((np.arange(h, dtype=np.float32) + 0.5) * (2.0 / max(1, h)) - 1.0)
+    nx = xs.reshape(1, -1)
+    ny = ys.reshape(-1, 1)
+    nx2 = nx * nx
+    ny2 = ny * ny
+    # Broadcast to the full (h, w) destination grid.
+    src_x = nx * (1.0 - ax * (1.0 - nx2) * (1.0 - ny2))
+    src_y = ny * (1.0 - ay * (1.0 - ny2) * (1.0 - nx2))
+    map_x = np.broadcast_to((src_x + 1.0) * (w * 0.5) - 0.5, (h, w))
+    map_y = np.broadcast_to((src_y + 1.0) * (h * 0.5) - 0.5, (h, w))
+    map_x = np.ascontiguousarray(map_x, dtype=np.float32)
+    map_y = np.ascontiguousarray(map_y, dtype=np.float32)
+    return map_x, map_y
+
+
+def _apply_smooth_curvature(surface, w, h, map_x, map_y):
+    """Remap the frame once. Returns False if this surface cannot be read."""
+    cv2 = _get_cv2()
+    if cv2 is None:
+        return False
+    if map_x is None or map_y is None:
+        return False
+
+    def _try(src):
+        return cv2.remap(
+            src, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+
+    # Fast path: the game's frame is a 24-bit BGR surface. Reading its locked
+    # buffer directly avoids a full-frame copy. The buffer reference must be
+    # gone before we blit, or pygame refuses with "Surfaces must not be locked
+    # during blit". BGR order matches get_masks() == (0xRR0000, 0x00GG00,
+    # 0x0000BB) on little-endian machines.
+    try:
+        if (surface.get_bitsize() == 24
+                and surface.get_pitch() == w * 3
+                and surface.get_masks()[:3] == (0x00FF0000, 0x0000FF00, 0x000000FF)
+                and sys.byteorder == "little"):
+            buf = surface.get_buffer()
+            src = np.frombuffer(buf, dtype=np.uint8, count=w * h * 3).reshape(h, w, 3)
+            out = _try(src)
+            del src, buf
+            surface.blit(pygame.image.frombuffer(out, (w, h), "BGR"), (0, 0))
+            return True
+    except Exception:
+        # A non-standard surface falls through to the explicit RGB copy. Drop
+        # any buffer view first, otherwise the surface stays locked.
+        try:
+            del src
+        except Exception:
+            pass
+        try:
+            del buf
+        except Exception:
+            pass
+    try:
+        raw = pygame.image.tobytes(surface, "RGB")
+        src = np.frombuffer(raw, dtype=np.uint8).reshape(h, w, 3)
+        out = _try(src)
+        surface.blit(pygame.image.frombuffer(out, (w, h), "RGB"), (0, 0))
+        return True
+    except Exception:
+        return False
+
+
+def _apply_vhs_curvature_bands(surface, w, h, amount, bands=26):
+    """Old strip fallback for environments without OpenCV."""
     if amount <= 0 or bands < 2:
         return
     try:
@@ -900,6 +1015,55 @@ def apply_vhs_curvature(surface, w, h, amount=0.10, bands=26):
         except Exception:
             continue
         surface.blit(scaled, ((w - nw) // 2, y0))
+
+
+def apply_vhs_curvature(surface, w, h, amount=0.10, bands=26):
+    """Bow the frame like a CRT tube with one continuous bilinear warp.
+
+    This replaces the old 26 independently-scaled strips: every output pixel
+    samples a smoothly-varying source coordinate, so there are no band seams
+    and no integer-width snaps. If OpenCV is unavailable, or while the window
+    is actively being resized, the old strip method is used as a fallback.
+    """
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return
+    w = int(w)
+    h = int(h)
+    if amount <= 0 or w < 4 or h < 4:
+        return
+    cv2 = _get_cv2()
+    if cv2 is None:
+        _apply_vhs_curvature_bands(surface, w, h, amount, bands)
+        return
+
+    now = time.monotonic()
+    if (w, h) != _curve_cache["size"]:
+        _curve_cache["size"] = (w, h)
+        _curve_cache["size_at"] = now
+    key = _vhs_curve_key(w, h, amount)
+    if key != _curve_cache["key"]:
+        # A resize can fire dozens of times while the player drags the edge.
+        # Do not build a large map on every event; use the cheap fallback for
+        # a moment and build once the size settles.
+        just_resized = (now - float(_curve_cache.get("size_at", 0.0))) < 0.18
+        if _curve_cache["map1"] is not None and just_resized:
+            _apply_vhs_curvature_bands(surface, w, h, amount, bands)
+            return
+        try:
+            maps = _build_vhs_curve_maps(w, h, amount)
+        except Exception:
+            maps = None
+        if not maps:
+            _apply_vhs_curvature_bands(surface, w, h, amount, bands)
+            return
+        _curve_cache["key"] = key
+        _curve_cache["map1"], _curve_cache["map2"] = maps
+
+    if not _apply_smooth_curvature(
+            surface, w, h, _curve_cache["map1"], _curve_cache["map2"]):
+        _apply_vhs_curvature_bands(surface, w, h, amount, bands)
 
 
 def apply_vhs_tracking(surface, w, h, t=0.0, intensity=1.0):
@@ -1460,16 +1624,16 @@ def draw_location_card(surface, geo, w, h, alpha=255):
 
 
 # --- The watching eye -------------------------------------------------------
-# A procedural eye drawn straight to the screen: sclera, iris, pupil, lid.
-# No art assets, so it scales cleanly and can be animated per-frame.
+# A procedural eye drawn straight to the screen as line art: a lid outline,
+# an iris ring, and a black pupil. There is no filled sclera, so the game shows
+# through the middle of it. No art assets, so it scales cleanly and can be
+# animated per-frame.
 #
 # Behaviour:
 #   * sits in a corner of the screen, avoiding the busy middle of the UI
-#   * the pupil tracks the mouse cursor
-#   * when a UI element is "selected", the pupil looks at that instead
-#   * it blinks on a random timer
-#   * when the cursor leaves the window (but the window still has focus) the
-#     pupil slides to the edge of the iris and keeps staring that way
+#   * while the cursor is inside the window it looks straight out at the player
+#   * once the cursor leaves the window the pupil follows it out of the frame
+#   * it blinks on a random timer; the lid really covers the pupil
 #
 # The desktop overlay (Windows/macOS) lives in `eye_overlay.py`; this is the
 # in-game half and runs on every platform.
@@ -1483,97 +1647,140 @@ def eye_radius(w, h):
     return max(24, min(72, r))
 
 
-def eye_pupil_offset(cx, cy, r, target, max_frac=0.52):
-    """Clamp a look-at vector into the iris."""
+def eye_pupil_offset(cx, cy, r, target, max_frac=0.46):
+    """Clamp a look-at vector into the eye's almond.
+
+    The eye is wider than it is tall, so the vertical travel is deliberately
+    smaller than the horizontal travel. A target of `None` means "look
+    straight out of the screen" — the player-facing stare.
+    """
     if target is None:
         return (0, 0)
-    tx, ty = target
-    dx = tx - cx
-    dy = ty - cy
-    dist = math.hypot(dx, dy)
-    if dist < 1e-6:
+    try:
+        tx, ty = target
+        dx = float(tx) - cx
+        dy = float(ty) - cy
+    except (TypeError, ValueError):
         return (0, 0)
-    max_off = r * max_frac
-    if dist <= max_off:
+    if abs(dx) < 1e-6 and abs(dy) < 1e-6:
+        return (0, 0)
+    max_x = max(1.0, r * max_frac)
+    max_y = max(1.0, r * max_frac * 0.55)
+    # Scale the vector until it fits the ellipse (not a circle), so a pupil
+    # chasing a cursor in the corner does not slide outside the lids.
+    ex = dx / max_x
+    ey = dy / max_y
+    mag = math.hypot(ex, ey)
+    if mag <= 1.0:
         return (dx, dy)
-    scale = max_off / dist
-    return (dx * scale, dy * scale)
+    return (dx / mag, dy / mag)
+
+
+def _eye_lid_points(cx, cy, r, lid_y, upper, steps=32):
+    """Points along one eyelid. A quadratic through the corners with its
+    control at twice `lid_y` peaks at exactly `lid_y` in the middle."""
+    sign = -1.0 if upper else 1.0
+    out = []
+    for i in range(steps + 1):
+        t = i / float(steps)
+        x = cx + r * (2.0 * t - 1.0)
+        y = cy + sign * 4.0 * lid_y * t * (1.0 - t)
+        out.append((int(round(x)), int(round(y))))
+    return out
+
+
+def _eye_stroke(surface, points, color, width):
+    """A line-art stroke with a dark under-stroke so it reads on any scene."""
+    if len(points) < 2:
+        return
+    under = max(1, width + max(1, width // 2))
+    pygame.draw.lines(surface, (0, 0, 0), False, points, under)
+    pygame.draw.lines(surface, color, False, points, max(1, width))
 
 
 def draw_eye(surface, cx, cy, r, openness=1.0, pupil=(0.0, 0.0), angry=False,
              dilation=1.0, shade=1.0):
-    """Draw the eye: sclera, iris, pupil, highlight.
+    """Draw the watching eye as line art.
 
-    Barebone on purpose. The game is a black-and-white terminal, so the eye is
-    drawn in the same language: a white almond, a black iris, a black pupil.
-    Nothing else. When `angry` is set the iris goes red, which is what the eye
-    does while something is happening.
+    There is no filled sclera and no painted iris: the eye is an almond
+    outline, a single iris ring, and a black pupil. The transparent middle
+    lets the game show through, which is what makes it look like something
+    behind the screen rather than a cartoon eye pasted on top.
 
-    `openness` 1.0 = wide open, 0.0 = shut. `pupil` is the (x, y) offset of
-    the iris centre from the eye centre, already clamped by
-    `eye_pupil_offset`. `dilation` scales the iris and pupil together: below
-    1.0 the pupil shrinks (constriction), above 1.0 it swells. `shade`
-    dims the white, so an eye can sit back behind the glass.
+    `openness` 1.0 = wide open, 0.0 = shut. The iris and pupil are clipped to
+    the opening between the lids, so a blink really covers the pupil.
+    `pupil` is the (x, y) offset of the iris centre. `dilation` changes only
+    the pupil, by a small amount. `shade` dims the lines for the end eye.
     """
-    openness = max(0.03, min(1.0, float(openness)))
-    ry = max(1, int(r * 0.56 * openness))
-    px, py = pupil
     try:
-        dil = max(0.35, min(2.0, float(dilation)))
+        openness = max(0.0, min(1.0, float(openness)))
+    except (TypeError, ValueError):
+        openness = 1.0
+    try:
+        px, py = pupil
+        px = float(px)
+        py = float(py)
+    except (TypeError, ValueError):
+        px = py = 0.0
+    try:
+        dil = max(0.60, min(1.40, float(dilation)))
     except (TypeError, ValueError):
         dil = 1.0
     try:
         shade = max(0.0, min(1.0, float(shade)))
     except (TypeError, ValueError):
         shade = 1.0
-    white = (int(238 * shade), int(238 * shade), int(234 * shade))
-    crease = (int(235 * shade), int(235 * shade), int(235 * shade))
 
-    iris_col = (168, 12, 12) if angry else (14, 12, 12)
-    iris_edge = (60, 4, 4) if angry else (0, 0, 0)
+    r = max(3, int(r))
+    outer_ry = r * 0.56
+    lid_y = outer_ry * openness
+    width = max(1, min(10, int(round(r * 0.035))))
+    white = (int(230 * shade), int(230 * shade), int(224 * shade))
+    iris_col = ((int(210 * shade), int(16 * shade), int(16 * shade))
+                if angry else
+                (int(126 * shade), int(18 * shade), int(18 * shade)))
 
-    # --- socket --------------------------------------------------------------
-    # A hard black ring so the eye reads as a drawn shape, not a blur.
-    pygame.draw.ellipse(surface, (0, 0, 0),
-                         (cx - r - 2, cy - ry - 2, (r + 2) * 2, (ry + 2) * 2))
+    # The iris and pupil live on their own transparent layer, then get masked
+    # to the open almond. This is the bit that makes the lid cover the pupil
+    # instead of merely drawing a line over it.
+    if openness > 0.015:
+        pad = max(3, width + 2)
+        sw = r * 2 + pad * 2
+        sh = int(round(outer_ry * 2)) + pad * 2
+        layer = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        layer.fill((0, 0, 0, 0))
+        mask = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        mask.fill((0, 0, 0, 0))
 
-    if openness <= 0.06:
-        # Fully shut: a lid crease, nothing else.
-        pygame.draw.line(surface, crease,
-                         (cx - r, cy), (cx + r, cy), max(1, r // 10))
-        return
+        lcx = sw // 2
+        lcy = sh // 2
+        ir = max(3, int(r * 0.44))
+        pr = max(2, int(ir * 0.52 * dil))
+        icx = int(round(lcx + px))
+        icy = int(round(lcy + py))
 
-    # --- sclera --------------------------------------------------------------
-    pygame.draw.ellipse(surface, white,
-                         (cx - r, cy - ry, r * 2, ry * 2))
+        # A single iris ring, then the pupil as an actual void. The thin rim
+        # keeps the void readable on a black background without filling it.
+        pygame.draw.circle(layer, iris_col, (icx, icy), ir, width=max(1, width))
+        pygame.draw.circle(layer, (0, 0, 0), (icx, icy), pr)
+        if pr > 3:
+            pygame.draw.circle(layer, iris_col, (icx, icy), pr,
+                               width=max(1, width // 2))
 
-    # --- iris ----------------------------------------------------------------
-    ir = max(3, int(r * 0.54 * dil))
-    # The iris never grows past the sclera, and it always leaves a rim of
-    # sclera showing so a dilated pupil still reads as an iris.
-    ir = min(ir, int(r * 0.80))
-    pygame.draw.ellipse(surface, iris_col,
-                         (cx + px - ir, cy + py - ir, ir * 2, ir * 2))
-    if not angry:
-        # A single white speck, so the black iris is not a dead hole.
-        sp = max(1, int(ir * 0.16))
-        pygame.draw.ellipse(surface, white,
-                             (cx + px - sp - int(ir * 0.30),
-                              cy + py - sp - int(ir * 0.34), sp * 2, sp * 2))
-    pygame.draw.ellipse(surface, iris_edge,
-                         (cx + px - ir, cy + py - ir, ir * 2, ir * 2), 1)
+        steps = max(16, min(64, int(r)))
+        upper = _eye_lid_points(lcx, lcy, r, lid_y, True, steps)
+        lower = _eye_lid_points(lcx, lcy, r, lid_y, False, steps)
+        pygame.draw.polygon(mask, (255, 255, 255, 255), upper + list(reversed(lower)))
+        layer.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(layer, (cx - lcx, cy - lcy))
 
-    # --- pupil ---------------------------------------------------------------
-    pr = max(2, int(ir * 0.50 * min(1.25, dil)))
-    pygame.draw.ellipse(surface, (0, 0, 0),
-                         (cx + px - pr, cy + py - pr, pr * 2, pr * 2))
-
-    # --- lid shadow ----------------------------------------------------------
-    if openness < 0.98:
-        lid = int(r * 0.56 * (1.0 - openness))
-        if lid > 0:
-            pygame.draw.ellipse(surface, (0, 0, 0),
-                                 (cx - r, cy - ry, r * 2, lid * 2))
+        # The eyelid outlines go on last so they cover the hard edge of the
+        # mask, and so the pupil disappears underneath them.
+        _eye_stroke(surface, _eye_lid_points(cx, cy, r, lid_y, True), white, width)
+        _eye_stroke(surface, _eye_lid_points(cx, cy, r, lid_y, False), white, width)
+    else:
+        # Fully shut: one crease, no pupil at all.
+        _eye_stroke(surface, _eye_lid_points(cx, cy, r, 0.0, True), white, width)
 
 
 # --- Malware-theme overlays --------------------------------------------------

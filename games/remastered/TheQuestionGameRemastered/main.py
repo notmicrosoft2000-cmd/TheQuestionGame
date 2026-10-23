@@ -22,6 +22,7 @@ from . import scares
 from . import script
 from . import social
 from . import ui
+from . import updater
 
 # Touch/fullscreen platform switch (see config.IS_ANDROID). Kept as a module
 # global so tests can flip it and drive the touch paths headlessly.
@@ -433,12 +434,7 @@ class Game:
             "blink_until": 0.0,
             "blink_start": 0.0,
             "next_blink": time.time() + random.uniform(4.0, 9.0),
-            "last_mouse": (0, 0),
-            "drift_phase": random.random() * 6.28,
-            "look_target": None,
-            "offscreen_angle": 0.0,
             "scared_until": 0.0,
-            "wander_until": 0.0,
             # Answer reactions and pupil size.
             "answers": [],
             "reaction_until": 0.0,
@@ -449,10 +445,10 @@ class Game:
             "pulse_phase": 0.0,
             "pulse_epoch": time.time(),
         }
-        # Where the eye should look. Filled in by the screens that draw a
-        # highlighted option, because the option lists move around.
-        self._eye_answer_rect = None
-        self._eye_online_rect = None
+        # Filled in by whichever screen draws the current highlight. The eye
+        # reads it after the frame is drawn, so it looks at the real option,
+        # not at a guessed screen coordinate.
+        self._eye_focus_rect = None
         self.about_selected = 0
         self.credits_scroll_y = 0
 
@@ -472,6 +468,15 @@ class Game:
         self._social_poll_at = 0.0
         self._social_pending_cache = None
         self._init_social()
+
+        # --- updates --------------------------------------------------------
+        # The background checker only reports; opening the download page is the
+        # player's choice. It is started from run(), not from __init__, so tests
+        # and tools that construct a Game never touch the network.
+        self.update_checker = updater.UpdateChecker(
+            state_path=os.path.join(config.APP_DATA_DIR, "update_check.json"))
+        self.update_available = None
+        self._update_checker_started = False
 
         self.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25, "alpha": 255, "target": None}
 
@@ -1155,6 +1160,50 @@ class Game:
         self._social_pending_cache = pending
         self._play_social_effects()
 
+    # --- updates -------------------------------------------------------------
+    def _poll_update_check(self):
+        """Harvest the background checker's result (cheap; once when due)."""
+        info = self.update_checker.poll()
+        if info:
+            self.update_available = info
+            self._note("UPDATE AVAILABLE: v%s — OPEN THE TITLE SCREEN"
+                       % info.get("version", "?"), "good", 12.0)
+
+    def _open_update_page(self):
+        """Open the release page in the player's browser. Never auto-installs."""
+        info = self.update_available or {}
+        url = info.get("url") or config.UPDATE_RELEASE_PAGE
+        opened = False
+        try:
+            import webbrowser
+            opened = bool(webbrowser.open(url))
+        except Exception:
+            opened = False
+        if opened:
+            self._note("OPENING THE DOWNLOAD PAGE...", "info", 4.0)
+        else:
+            # No browser (or a locked-down device): show the address instead of
+            # pretending the click worked.
+            self._note("DOWNLOAD: " + url, "info", 12.0)
+
+    def _start_update_check(self):
+        """Start the automatic checker once, from the real game loop."""
+        if self._update_checker_started:
+            return
+        self._update_checker_started = True
+        try:
+            self.update_checker.start()
+        except Exception:
+            pass
+
+    def _maybe_check_updates(self):
+        if not self._update_checker_started:
+            return
+        try:
+            self.update_checker.maybe_check()
+        except Exception:
+            pass
+
     def _play_social_effects(self):
         """Play any scare/glitch the operator fired at us.
 
@@ -1598,6 +1647,11 @@ class Game:
 
     def _title_key(self, key):
         self._check_cheat(key)
+        # U opens the download page, but only while an update is actually on
+        # offer; otherwise it stays an ordinary unused key.
+        if key == pygame.K_u and self.update_available:
+            self._open_update_page()
+            return
         up = self._bound_key("up", pygame.K_UP)
         down = self._bound_key("down", pygame.K_DOWN)
         confirm = self._bound_key("confirm", pygame.K_RETURN)
@@ -1880,6 +1934,8 @@ class Game:
             self._handle_key(pygame.K_RETURN)
         elif kind == "back":
             self._handle_key(pygame.K_ESCAPE)
+        elif kind == "update":
+            self._open_update_page()
         elif kind == "online":
             # The ONLINE screen has two real options now; a tap runs the
             # one that was tapped, exactly like the key would.
@@ -1892,6 +1948,7 @@ class Game:
         self._update_idle()
         self._update_process_awareness()
         self._poll_social()
+        self._poll_update_check()
         self._supervise_overlay()
         if self.state in ("PLAYING", "EXITFADE") and not self.pending_exit:
             self._update_playing()
@@ -2145,6 +2202,10 @@ class Game:
         if self.state in ("PLAYING", "EXITFADE") and config.VHS_STATIC_LINE > 0 and static_line_enabled:
             ui.draw_static_line(self.screen, w, h, self.now, config.VHS_STATIC_LINE)
 
+        # Each screen declares the highlighted option while drawing, so the
+        # eye can look at the real thing. Clear it first: a screen with no
+        # selection must not inherit the previous state's target.
+        self._eye_focus_rect = None
         if self.state == "LOADING":
             self._draw_loading(w, h)
         elif self.state == "TITLE":
@@ -2283,6 +2344,9 @@ class Game:
                 ui.render_glitch_text(self.screen, prefix, font_med,
                                       int(w * 0.08), menu_y_start + i * 45,
                                       self.now, color=base_col)
+                tw, th = font_med.size(prefix)
+                self._eye_focus_rect = (int(w * 0.08), menu_y_start + i * 45,
+                                        max(1, tw), max(1, th))
             else:
                 surf = font_med.render(prefix, True, base_col)
                 try:
@@ -2292,6 +2356,18 @@ class Game:
                 self.screen.blit(surf, (int(w * 0.08), menu_y_start + i * 45))
             self._touch_zone(int(w * 0.08) - 8, menu_y_start + i * 45,
                              int(w * 0.6) + 16, 44, "title", i)
+
+        if self.update_available:
+            version = str(self.update_available.get("version") or "?")
+            label = ("UPDATE %s AVAILABLE — TAP TO DOWNLOAD" % version
+                     if IS_ANDROID
+                     else "UPDATE %s AVAILABLE — [U] DOWNLOAD" % version)
+            update_surf = font_small.render(label, True, (210, 185, 80))
+            ux = w // 2 - update_surf.get_width() // 2
+            uy = h - 50
+            self.screen.blit(update_surf, (ux, uy))
+            self._touch_zone(ux - 8, uy - 4, update_surf.get_width() + 16,
+                             update_surf.get_height() + 8, "update")
 
         cred = font_small.render("NEPTUNE PRODUCTIONS (C)", True, (60, 60, 60))
         self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
@@ -2440,14 +2516,13 @@ class Game:
             sel = (i == self.online_selected)
             prefix = "> " if sel else "  "
             col = config.COLOR_WHITE if sel else (110, 110, 110)
-            self.screen.blit(font_med.render(prefix + option, True, col),
-                             (cx, y))
+            surf = font_med.render(prefix + option, True, col)
+            self.screen.blit(surf, (cx, y))
+            if sel:
+                self._eye_focus_rect = (cx, y, max(1, surf.get_width()),
+                                        max(1, surf.get_height()))
             self._touch_zone(cx - 8, y - 3, int(w * 0.6) + 16,
                              font_med.get_linesize() + 4, "online", i)
-            if sel:
-                # The eye follows the highlight; the option list moves with
-                # the teaser above it, so remember where it landed.
-                self._eye_online_rect = (cx, y, int(w * 0.6), font_med.get_linesize() + 4)
             y += font_med.get_linesize() + 2
 
         # The result of the connection test, if there is one.
@@ -2539,6 +2614,10 @@ class Game:
             surf = font_med.render(label, True, color)
             y = start_y + row * pitch
             self.screen.blit(surf, (int(w * 0.08), y))
+            if i == self.settings_selected:
+                self._eye_focus_rect = (int(w * 0.08), y,
+                                        max(1, surf.get_width()),
+                                        max(1, surf.get_height()))
             self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.8) + 16,
                              pitch - 2, "settings", i)
         if total > visible:
@@ -2565,11 +2644,22 @@ class Game:
             surf = font_small.render(prefix + option, True, color)
             y = int(h * 0.16) + i * (font_small.get_linesize() + 6)
             self.screen.blit(surf, (int(w * 0.08), y))
+            if i == self.about_selected:
+                self._eye_focus_rect = (int(w * 0.08), y,
+                                        max(1, surf.get_width()),
+                                        max(1, surf.get_height()))
             self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.6) + 16,
                              font_small.get_linesize() + 4, "about", i)
 
         if self.about_selected == 0:
-            ui.render_text_block(self.screen, self.about_text, font_small, config.COLOR_WHITE,
+            about_text = self.about_text
+            if self.update_available:
+                about_text += ("\n\nUPDATE AVAILABLE\nv%s is ready. %s"
+                               % (self.update_available.get("version", "?"),
+                                  "Tap the banner on the title screen to download."
+                                  if IS_ANDROID else
+                                  "Press U on the title screen to open the download page."))
+            ui.render_text_block(self.screen, about_text, font_small, config.COLOR_WHITE,
                                  int(w * 0.08), int(h * 0.30), int(w * 0.8))
         elif self.about_selected == 1:
             ui.render_text_block(self.screen, CREDITS_TEXT, font_small, config.COLOR_WHITE,
@@ -2614,13 +2704,20 @@ class Game:
             color = config.COLOR_WHITE if i == self.pause_selected else (110, 110, 110)
             prefix = "> " if i == self.pause_selected else "  "
             surf = font_med.render(prefix + opt, True, color)
-            self.screen.blit(surf, (int(w * 0.08), int(h * 0.38) + i * (font_med.get_linesize() + 14)))
+            y = int(h * 0.38) + i * (font_med.get_linesize() + 14)
+            self.screen.blit(surf, (int(w * 0.08), y))
+            if i == self.pause_selected:
+                self._eye_focus_rect = (int(w * 0.08), y,
+                                        max(1, surf.get_width()),
+                                        max(1, surf.get_height()))
         hint = font_small.render("[ESC] RESUME    [ENTER] SELECT", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
 
     # --- the watching eye ----------------------------------------------------
-    # The eye never goes away. It watches the cursor, it watches the option
-    # you have highlighted, and it blinks at you when you are not looking.
+    # The eye never goes away. While the cursor is in the window it watches the
+    # option you have highlighted; with nothing highlighted it stares straight
+    # at the player. Once the cursor leaves the window the pupil follows it out
+    # of the frame. It blinks at you when you are not looking.
     def _on_window_focus(self, gained):
         """The game window gained or lost focus.
 
@@ -2687,62 +2784,35 @@ class Game:
         return (ex, ey), r
 
     def _eye_look_target(self, w, h):
-        """What the pupil should be looking at.
+        """Where the pupil should point, or None to look at the player.
 
-        Priority: the currently selected UI element (so the eye appears to
-        read your choices), then the cursor, then nothing (idle drift).
+        Priority, highest first:
+
+        1. The cursor, if it has left the window. The pupil follows it out of
+           the frame, so the eye watches where you went.
+        2. The highlighted option, declared by the screen that drew it. This
+           is the real rect, so scrolling Settings and moving answer blocks
+           are followed correctly.
+        3. The player, when the cursor is inside but nothing is selected.
+
+        The cursor check comes before the focus check: a cursor that has left
+        the window is followed even when the window is not focused, which is
+        what keeps the eye working on Linux where there is no desktop overlay.
         """
-        rect = self._eye_selected_rect(w, h)
-        if rect is not None:
-            return (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0)
-        return None
-
-    def _eye_selected_rect(self, w, h):
-        """The on-screen rect of whatever is currently highlighted."""
-        font_med = self._fonts()[1]
-        font_small = self._fonts()[2]
-        if self.state == "TITLE":
-            n = len(self.menu_options)
-            menu_y_start = h - 310 if n <= 5 else h - 348
-            i = getattr(self, "selected_option", 0)
-            if 0 <= i < n:
-                return (int(w * 0.08), menu_y_start + i * 45, 260, 30)
-        elif self.state == "SETTINGS":
-            opts = self.settings_options
-            i = self.settings_selected
-            if 0 <= i < len(opts):
-                start_y = int(h * 0.24)
-                pitch = font_med.get_linesize() + 10
-                scroll = int(getattr(self, "settings_scroll", 0))
-                return (int(w * 0.08), start_y + (i - scroll) * pitch, 300, pitch - 2)
-        elif self.state == "ABOUT":
-            i = getattr(self, "about_selected", 0)
-            y = int(h * 0.16) + i * (font_small.get_linesize() + 6)
-            return (int(w * 0.08), y, 260, font_small.get_linesize() + 4)
-        elif self.state == "ONLINE":
-            opts = getattr(self, "online_options", [])
-            i = getattr(self, "online_selected", 0)
-            rect = getattr(self, "_eye_online_rect", None)
-            if rect:
-                return rect
-            if 0 <= i < len(opts):
-                y = int(h * 0.80) + i * (font_med.get_linesize() + 12)
-                return (int(w * 0.08), y, 260, font_med.get_linesize())
-        elif self.state in ("PLAYING", "EXITFADE"):
-            if getattr(self, "paused", False):
-                i = getattr(self, "pause_selected", 0)
-                y = int(h * 0.38) + i * (font_med.get_linesize() + 14)
-                return (int(w * 0.08), y, 260, font_med.get_linesize())
-            step = None
-            try:
-                step = self.active_script[self.current_step]
-            except Exception:
-                step = None
-            if step and step.get("type") == "choice" and self.typing_state == "WAITING":
-                rect = getattr(self, "_eye_answer_rect", None)
-                if rect:
-                    return rect
-                return (int(w * 0.08), int(h * 0.62), 300, 40)
+        try:
+            mx, my, inside = self._eye_cursor_in_window(w, h)
+        except Exception:
+            inside = True
+        if not inside:
+            return (mx, my)
+        if not getattr(self, "_window_focused", True):
+            return None
+        rect = getattr(self, "_eye_focus_rect", None)
+        try:
+            if rect is not None and rect[2] > 0 and rect[3] > 0:
+                return (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0)
+        except (TypeError, IndexError):
+            pass
         return None
 
     def _eye_scare_active(self):
@@ -2766,10 +2836,10 @@ class Game:
     def _eye_react_to_answer(self, answer, elapsed=0.0):
         """The eye notices how you answer.
 
-        Answer the same thing twice and it reacts: the pupil contracts, hard,
-        and holds that stare for a moment. Do it three times and the eye
-        swells and flushes red. Hesitate for a long time and it dilates,
-        because something was expected to happen and did not.
+        Answer the same thing twice and the pupil tightens a little, and the
+        eye holds that stare. Do it three times and it flushes red. Hesitate
+        for a long time and it broadens very slightly, because something was
+        expected to happen and did not.
         """
         st = self._eye_state
         now = time.time()
@@ -2788,12 +2858,12 @@ class Game:
         if repeats >= 2:
             st["reaction_until"] = now + 2.2
             st["reaction_kind"] = "accuse"
-            st["reaction_dilation"] = 1.55
+            st["reaction_dilation"] = 1.14
             st["reaction_angry"] = True
         elif repeats == 1:
             st["reaction_until"] = now + 1.4
             st["reaction_kind"] = "notice"
-            st["reaction_dilation"] = 0.62
+            st["reaction_dilation"] = 0.88
             st["reaction_angry"] = False
         else:
             st["reaction_until"] = now + 0.9
@@ -2801,12 +2871,12 @@ class Game:
             st["reaction_dilation"] = 1.0
             st["reaction_angry"] = False
 
-        # A long hesitation gets its own reaction: the eye widens.
+        # A long hesitation gets its own reaction: the pupil broadens a touch.
         try:
             if elapsed > config.HESITATION_THRESHOLD:
                 st["reaction_until"] = now + 1.2
                 st["reaction_kind"] = "hesitate"
-                st["reaction_dilation"] = 1.4
+                st["reaction_dilation"] = 1.08
         except Exception:
             pass
 
@@ -2814,19 +2884,19 @@ class Game:
         """How open the pupil is right now.
 
         The base is a slow, irregular pulse — a living pupil is never exactly
-        the same size twice. On top of that sits whatever reaction is
-        currently playing.
+        the same size twice. The whole range is deliberately small: the eye
+        should feel alive, not like a cartoon pupil zooming in and out.
         """
         st = self._eye_state
         session = max(1, int(getattr(self, "run_count", 1) or 1))
-        # Later sessions pulse faster and wider.
-        rate = 0.90 + 0.25 * (session - 1)
-        amp = 0.14 + 0.05 * (session - 1)
+        # Later sessions pulse a little faster, but never much wider.
+        rate = 0.82 + 0.10 * (session - 1)
+        amp = 0.032 + 0.008 * (session - 1)
         # The phase is measured from a fixed epoch, not from the raw clock, so
         # the sine stays precise however far the clock has run.
         epoch = float(st.get("pulse_epoch") or now or 0.0)
         phase = float(st.get("pulse_phase", 0.0)) + (now - epoch) * rate
-        base = 1.0 + amp * math.sin(phase) + 0.05 * math.sin(phase * 2.7)
+        base = 1.0 + amp * math.sin(phase) + 0.010 * math.sin(phase * 2.7)
 
         if now < st.get("reaction_until", 0.0):
             target = float(st.get("reaction_dilation", 1.0))
@@ -2866,17 +2936,20 @@ class Game:
         cx = w // 2
         cy = int(h * 0.46)
 
-        # It looks at you if the cursor is in the window. Otherwise it stares
-        # dead ahead, which is worse.
+        # It looks at you while the cursor is in the window. Once the cursor
+        # leaves, the pupil follows it out of the frame.
         try:
-            mx, my, inside = self._eye_cursor_in_window(w, h)
+            if getattr(self, "_window_focused", True):
+                mx, my, inside = self._eye_cursor_in_window(w, h)
+            else:
+                inside = True
         except Exception:
-            inside = False
-        target = (mx, my) if inside else None
+            inside = True
+        target = None if inside else (mx, my)
         px, py = ui.eye_pupil_offset(cx, cy, r, target)
 
-        # A slow, wide pulse. It is not human any more.
-        dil = 1.0 + 0.20 * math.sin(now * 0.85) + 0.07 * math.sin(now * 2.4)
+        # A slow pulse, but only a slight one. It is not human any more.
+        dil = 1.0 + 0.028 * math.sin(now * 0.85) + 0.010 * math.sin(now * 2.4)
 
         # It blinks, but rarely, and it takes its time opening again.
         openness = 1.0
@@ -2886,7 +2959,7 @@ class Game:
             st["next_blink"] = now + random.uniform(3.5, 8.0)
         if st["blink_until"] > now:
             t = (now - st["blink_start"]) / max(1e-6, st["blink_until"] - st["blink_start"])
-            openness = max(0.04, abs(2.0 * t - 1.0))
+            openness = max(0.0, abs(2.0 * t - 1.0))
 
         # Dimmed: it is behind the screen, not on it.
         ui.draw_eye(self.screen, cx, cy, r, openness=openness,
@@ -2902,7 +2975,7 @@ class Game:
         st["x"], st["y"], st["radius"] = cx, cy, r
 
         now = time.time()
-        # Later sessions get twitchier: the eye blinks more, and it wanders.
+        # Later sessions get twitchier: the eye blinks more often.
         session = max(1, int(getattr(self, "run_count", 1) or 1))
         jitter = 1.0 + 0.55 * (session - 1)
 
@@ -2930,48 +3003,18 @@ class Game:
         if st["blink_until"] > now:
             # A quick squeeze: fully shut at the midpoint.
             t = (now - st["blink_start"]) / max(1e-6, st["blink_until"] - st["blink_start"])
-            openness = max(0.04, abs(2.0 * t - 1.0))
+            openness = max(0.0, abs(2.0 * t - 1.0))
 
         # --- pick the look target -------------------------------------------
-        focused = getattr(self, "_window_focused", True)
-        if not focused:
-            # The desktop eye has taken over; the in-game one just stares out
-            # of the screen, at wherever the player is not.
-            st["drift_phase"] += 0.004 * jitter
-            ang = math.sin(st["drift_phase"]) * 0.7
-            target = (cx + math.cos(ang) * r * 6.0, cy + math.sin(ang) * r * 6.0)
-        else:
-            target = self._eye_look_target(w, h)
-            if target is None:
-                mx, my, inside = self._eye_cursor_in_window(w, h)
-                st["last_mouse"] = (mx, my)
-                if inside:
-                    target = (mx, my)
-                else:
-                    # The cursor has left the window but the window still has
-                    # focus. The pupil slides to the edge of the iris and keeps
-                    # staring out of the screen, following the cursor.
-                    dx = mx - cx
-                    dy = my - cy
-                    dist = math.hypot(dx, dy) or 1.0
-                    target = (cx + dx / dist * r * 6.0, cy + dy / dist * r * 6.0)
-
-        # Later sessions: the eye does not hold a steady gaze. It drifts and
-        # darts, and it is more likely to look somewhere else entirely.
-        # A reaction overrides the wandering: when it has noticed something it
-        # holds very still and just looks at you.
-        if not angry and not reacting and session >= 2 and random.random() < 0.02 * jitter:
-            st["wander_until"] = now + random.uniform(0.25, 0.9)
-        if now < st.get("wander_until", 0.0) and not reacting:
-            st["drift_phase"] += 0.09 * jitter
-            ang = st["drift_phase"]
-            target = (cx + math.cos(ang) * r * 3.0,
-                      cy + math.sin(ang * 1.7) * r * 3.0)
+        # None means straight out of the screen at the player. The eye only
+        # chases the cursor after it has left the window.
+        target = self._eye_look_target(w, h)
 
         # --- pupil offset ----------------------------------------------------
         px, py = ui.eye_pupil_offset(cx, cy, r, target)
         # Smooth the movement so the eye never snaps, but move fast enough
-        # that you can *see* it move when you change your selection.
+        # that the pupil visibly leaves the player's face when the cursor
+        # crosses the window edge.
         rate = 0.34 if angry else 0.30
         sx = st["pupil_x"] + (px - st["pupil_x"]) * rate
         sy = st["pupil_y"] + (py - st["pupil_y"]) * rate
@@ -3088,14 +3131,12 @@ class Game:
                     prefix = "> " if i == self.selected_answer else "  "
                     ui.draw_text(self.screen, prefix + option, font_med, color,
                                  opts_x, opts_y + i * opts_gap)
+                    if i == self.selected_answer:
+                        tw, th = font_med.size(prefix + option)
+                        self._eye_focus_rect = (opts_x, opts_y + i * opts_gap,
+                                                max(1, tw), max(1, th))
                     self._touch_zone(opts_x - 10, opts_y + i * opts_gap,
                                      max_width + 20, opts_gap - 2, "answer", i)
-                # The eye looks at the answer you have highlighted. Remember
-                # where it actually landed: the option list moves with the
-                # length of the question, so a fixed guess would be wrong.
-                self._eye_answer_rect = (opts_x, opts_y + self.selected_answer * opts_gap,
-                                         max_width, opts_gap)
-
         # whisper reaction line
         if self.fx["whisper_text"] and self.fx["whisper_until"] > self.now:
             ui.draw_text(self.screen, self.fx["whisper_text"].replace("\n", " "),
@@ -3264,6 +3305,7 @@ class Game:
     # --- main loop ------------------------------------------------------------
     def run(self):
         os_layer.start_window_float()
+        self._start_update_check()
         while self.running:
             self.clock.tick(config.FRAMERATE)
             for event in pygame.event.get():
@@ -3318,6 +3360,7 @@ class Game:
 
             self._update()
             self._draw()
+            self._maybe_check_updates()
 
         audio.stop_ambience()
         # The desktop eye must not outlive the game.

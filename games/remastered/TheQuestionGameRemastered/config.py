@@ -10,6 +10,19 @@ APP_NAME = "The Question Game Remastered"
 # sender app (tools/sender) and is deliberately not part of this build.
 VERSION = "6.1-alpha"
 
+# --- Updates ----------------------------------------------------------------
+# The automatic check reads the newest published release whose tag contains
+# "remastered". It only ever *reports* a newer version; downloading and
+# installing remain the player's choice. Release assets are built by the
+# GitHub workflow, never by a running game.
+UPDATE_REPO = "notmicrosoft2000-cmd/TheQuestionGame"
+UPDATE_API_URL = "https://api.github.com/repos/%s/releases" % UPDATE_REPO
+UPDATE_RELEASE_PAGE = "https://github.com/%s/releases" % UPDATE_REPO
+UPDATE_CHECK_ENABLED = os.environ.get("TQG_NO_UPDATE_CHECK", "").strip().lower() not in (
+    "1", "true", "yes", "on")
+UPDATE_CHECK_INTERVAL = 6 * 60 * 60      # seconds between background checks
+UPDATE_CHECK_TIMEOUT = 6.0               # network timeout for one check
+
 # --- Platform ---------------------------------------------------------------
 # python-for-android reports sys.platform == "android"; platform.system() is
 # kept as a belt-and-braces check because some SDL builds only report Linux.
@@ -231,7 +244,8 @@ MUSIC_VOLUME_IN_GAME = 0.32   # (only used if MUSIC_MENUS_ONLY is off)
 CRT_ENABLED = True
 CRT_INTENSITY = 1.0           # scaled by the VHS Effects setting at runtime
 CRT_CURVATURE = 0.16          # 0 = flat panel, 0.16 = strongly bowed tube
-CRT_CURVE_BANDS = 26          # horizontal slices used to fake the bow (costly if high)
+CRT_CURVE_Y_RATIO = 0.55      # vertical bow as a fraction of the horizontal bow
+CRT_CURVE_BANDS = 26          # fallback-only slices if OpenCV is unavailable
 VHS_TRACKING = True           # horizontal slips + tracking bars
 VHS_STATIC = 1.0              # drifting static/snow density multiplier
 VHS_STATIC_LINE = 1.0         # faint drifting head line on the main screen

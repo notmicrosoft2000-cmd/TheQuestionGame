@@ -100,19 +100,28 @@ is **no toggle** and there must not be one — it is the feature.
 
 | Piece | Where |
 |---|---|
-| the drawing | `ui.draw_eye()` — sclera, iris, pupil, socket ring. Procedural, no art assets |
+| the drawing | `ui.draw_eye()` — line-art almond lids, one iris ring, black pupil. Procedural, no art assets |
 | where it sits | `main._eye_anchor()` — bottom-right in the menus, top-right in `PLAYING`/`EXITFADE` |
-| what it looks at | `main._eye_look_target()` — the highlighted option, else the cursor |
+| what it looks at | `main._eye_look_target()` — the cursor if it left the window, else the highlighted option, else the player |
+| the highlight rect | `_eye_focus_rect`, declared by the screen that drew the selection (title, settings, about, online, pause, answer options) |
 | the pupil | `main._eye_state["pupil_x"/"pupil_y"]`, smoothed towards the target at ~0.30/frame |
 | blinking | `main._eye_state["next_blink"/"blink_until"]` — 3.5–11s calm, 0.12–0.35s during a scare |
 | the scare reaction | `main._eye_scare_active()` reads the `fx` timers, so it covers every scare without naming them |
-| the answer reaction | `main._eye_react_to_answer()` — same answer twice → the pupil contracts; three times → it swells and flushes red; a long hesitation → it widens |
-| the pulse | `main._eye_dilation()` — a slow sine swell, wider and faster in later sessions |
+| the answer reaction | `main._eye_react_to_answer()` — same answer twice → the pupil tightens; three times → it flushes red; a long hesitation → it broadens slightly |
+| the pulse | `main._eye_dilation()` — a slow, deliberately small sine swell |
 | the ending | `main._draw_end_eye()` — at the end of the session one big eye takes over the whole screen, drawn *before* the text so the text sits on top of it |
 
-The eye is drawn in the game's own black-and-white language: white sclera,
-black iris, black pupil, a hard black socket ring. Only the scare state and
-the "accuse" reaction turn the iris red.
+The eye is line art in the game's black-and-white language: two almond lid
+outlines, a single dark-red iris ring, and a black pupil. There is no filled
+sclera, so the scene shows through the middle. Only the scare state and the
+"accuse" reaction turn the iris red.
+
+**The look order matters.** The cursor wins only after it leaves the window.
+Inside the window the eye reads `_eye_focus_rect`; if a screen set no rect it
+looks straight out at the player. Each drawing screen sets the rect from the
+surface it actually blitted, so scrolling Settings and answer blocks whose
+height depends on the question stay correct. Do not replace this with a
+hardcoded per-screen position; that is what made the old eye miss the target.
 
 **The desktop overlay.** On Windows and macOS the game re-executes itself with
 `--eye-overlay`, which runs `eye_overlay.main()` in a second process: a
@@ -129,6 +138,37 @@ edge of the window on Linux too.
 
 Every overlay failure path degrades to "no overlay". It must never crash the
 game — the overlay is a toy, the game is not.
+
+### The CRT tube
+
+`ui.apply_vhs_curvature()` is one continuous 2D warp, not a stack of scaled
+horizontal strips. It builds two float32 source-coordinate maps once per frame
+size and strength (`_build_vhs_curve_maps()`) and feeds them to `cv2.remap()`
+with bilinear sampling. The curve is:
+
+    src = n * (1 - k * (1 - n^2) * (1 - m^2))
+
+where `n` is the axis being sampled and `m` the other axis. The `(1 - n^2)`
+term pins the outer frame (`src == n` at the edge), so the warp bends the
+picture inward but never samples outside the surface. That is deliberate: the
+eye sits near the top-right corner and an earlier non-edge-preserving map cut
+it in half. Black rounded corners are *not* worth losing content for.
+`config.CRT_CURVE_Y_RATIO` scales the vertical strength.
+
+Use plain float32 maps. Do not use `cv2.convertMaps(..., CV_16SC2)`: its
+return shape changed between OpenCV 4.x and 5.x, and a mismatched second map
+silently produced a nearly black frame. The float path works on both.
+
+OpenCV is imported lazily. It is in every packaged build, but a source
+checkout without it still runs: `_apply_vhs_curvature_bands()` is the old
+26-strip fallback, used only when `cv2` is missing or the frame surface cannot
+be read. A window resize defers the map rebuild for ~0.18s and uses the cheap
+fallback in the meantime, so dragging the edge does not hitch.
+
+Do not go back to per-strip `pygame.transform.scale()` for the normal path:
+integer strip widths are what produced the visible seams that cut through
+text and vertical lines. The 24-bit frame's BGR buffer is read directly in the
+fast path; other surface formats fall back to `pygame.image.tobytes()`.
 
 ---
 
@@ -623,6 +663,7 @@ python3 games/remastered/run_remastered.py
 
 # test
 python3 games/remastered/tests/smoke_test.py
+python3 games/remastered/tests/updater_test.py
 python3 server/test_site.py
 python3 server/test_relay.py
 python3 tools/sender/test_sender.py
@@ -639,9 +680,9 @@ gh release list
 gh release view v5.1.0-beta-remastered --json assets
 ```
 
-Current versions: game **5.1.0-beta** (multiplayer alpha, receiver build),
-classic **2.02**, pinned site tag `v5.1.0-beta-remastered`, fallback tag
-`v5.0.0-remastered`.
+Current versions: game **6.1-alpha** (multiplayer alpha, receiver build),
+classic **2.02**, pinned site tag `v6.1-alpha-remastered`, fallback tag
+`v6.1-alpha-remastered`.
 
 ### Cutting a release
 
@@ -662,6 +703,26 @@ than the pinned one, so a release published while the page is live becomes the
 download button immediately. `REMASTER_FALLBACK_TAG` is only what the buttons
 use if the GitHub API cannot be reached at all.
 
-The tag naming matters: `v5.1.0-beta-remastered` is a valid release tag *and*
-parses as version 5.1.0. `versionParts()` stops at the first non-numeric
-component, so `beta` and `remastered` cost nothing.
+The tag naming matters: `v6.1-alpha-remastered` is a valid release tag *and*
+parses as version 6.1.0. `versionParts()` stops at the first non-numeric
+component, so `alpha` and `remastered` cost nothing.
+
+### Automatic update check
+
+`updater.UpdateChecker` (in `TheQuestionGameRemastered/updater.py`) reads the
+published releases on a background thread at launch and every six hours
+(`config.UPDATE_CHECK_INTERVAL`). It keeps only non-draft tags containing
+`remastered`, compares the newest with `config.VERSION` (alpha < beta < rc <
+final), and exposes a result through `poll()`. `main._poll_update_check()`
+turns that into a toast plus a title-screen banner; `U` / tapping the banner
+opens the release's `html_url` in the browser.
+
+It deliberately never downloads or installs anything. The last check time is
+kept in `APP_DATA_DIR/update_check.json` so restarting the game does not hammer
+the GitHub API, and `TQG_NO_UPDATE_CHECK=1` disables it entirely. The test
+fakes the API, so it does not need the network:
+
+    python3 games/remastered/tests/updater_test.py
+
+Publishing is still the trigger: a draft release is invisible, and a newer
+release only reaches players once it is published under a `remastered` tag.

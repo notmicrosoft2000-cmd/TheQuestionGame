@@ -10,6 +10,47 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- **The CRT tube has no more seams and no longer cuts the eye.** The curvature
+  pass used to slice the frame into 26 horizontal strips and scale each one to
+  its own integer width. Adjacent strips could differ by a pixel, so vertical
+  lines and text crossing a seam split and shifted, and the "tube" was flat at
+  the top and bottom. The frame is now warped once through a cached coordinate
+  map with bilinear sampling. The curve is edge-preserving: it bends both axes
+  smoothly but samples the outer frame from the outer frame, so nothing (in
+  particular the eye near the top-right corner) is pushed off-screen or cut in
+  half. The old strip method survives only as the fallback for a source
+  checkout without OpenCV and for the brief moment while a window resize
+  settles.
+
+### Added
+
+- **Automatic update check.** On launch, and every six hours afterwards, the
+  game asks GitHub for the newest published `remastered` release and compares
+  it with `config.VERSION`. A newer release is announced with a toast and a
+  line on the title screen; `U` (or tapping the line) opens the release page.
+  Nothing is downloaded or installed automatically, and the check runs on a
+  background thread, so an offline machine never stalls. Set
+  `TQG_NO_UPDATE_CHECK=1` to turn it off.
+
+### Changed
+
+- **The eye is line art now.** Two almond lid outlines, a single iris ring and
+  a black pupil, with no filled white eyeball, so the game shows through the
+  middle. A blink really covers the pupil instead of drawing a line beside it.
+- **The eye watches what you have selected.** Highlighted menu entries,
+  settings (including the scrolled list), pause options and answer options all
+  declare their real on-screen rect while they are drawn, and the pupil turns
+  towards it. With nothing selected it looks straight at the player. Once the
+  cursor leaves the game window the pupil follows the cursor out of the frame.
+- **The pupil no longer overacts.** The idle pulse and the answer reactions
+  are much smaller; the eye feels alive rather than zooming in and out.
+
+---
+
 ## v6.1-alpha — 2026-10-22
 
 ### Changed

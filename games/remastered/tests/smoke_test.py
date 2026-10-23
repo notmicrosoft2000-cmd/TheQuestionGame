@@ -449,6 +449,106 @@ try:
 finally:
     random.random = _orig_random
 
+# The tube bow is a continuous warp, not 26 independently scaled strips. The
+# warp is edge-preserving on purpose: it may bend the picture but must never
+# push part of the frame (in particular the eye near the top-right corner)
+# outside the surface, where it would be cut off by the black border.
+if ui._get_cv2() is not None:
+    ui._curve_cache.update(key=None, map1=None, map2=None, size=None, size_at=0.0)
+    _tube = pygame.Surface((160, 120), 0, 24)
+    _tube.fill((255, 255, 255))
+    pygame.draw.rect(_tube, (0, 0, 0), (0, 0, 48, 120))
+    ui.apply_vhs_curvature(_tube, 160, 120, config.CRT_CURVATURE,
+                           config.CRT_CURVE_BANDS)
+    _interp = 0
+    for _yy in range(120):
+        for _xx in range(160):
+            _v = _tube.get_at((_xx, _yy))[0]
+            if 20 < _v < 235:
+                _interp += 1
+    check("the CRT tube edge is smoothly interpolated", _interp > 50, _interp)
+
+    def _left_edge(y):
+        for x in range(160):
+            if _tube.get_at((x, y))[0] > 128:
+                return x
+        return 0
+
+    _edges = [_left_edge(y) for y in range(4, 116)]
+    _max_bend = max(abs(_edges[i + 1] - 2 * _edges[i] + _edges[i - 1])
+                    for i in range(1, len(_edges) - 1))
+    check("the CRT tube edge has no stepped bands", _max_bend <= 2, _max_bend)
+
+    _corner_frame = pygame.Surface((160, 120), 0, 24)
+    _corner_frame.fill((255, 255, 255))
+    ui._curve_cache.update(key=None, map1=None, map2=None, size=None, size_at=0.0)
+    ui.apply_vhs_curvature(_corner_frame, 160, 120, config.CRT_CURVATURE,
+                           config.CRT_CURVE_BANDS)
+    _corners = [_corner_frame.get_at(p)[:3] for p in
+                ((0, 0), (159, 0), (0, 119), (159, 119))]
+    check("the CRT warp keeps the frame corners visible",
+          all(c[0] > 235 for c in _corners), _corners)
+
+    # A marker in the middle of the screen stays in the middle: the curve has
+    # to bend the sides without sliding the whole picture around.
+    _centre_frame = pygame.Surface((160, 120), 0, 24)
+    _centre_frame.fill((255, 255, 255))
+    pygame.draw.rect(_centre_frame, (0, 0, 0), (77, 57, 6, 6))
+    ui._curve_cache.update(key=None, map1=None, map2=None, size=None, size_at=0.0)
+    ui.apply_vhs_curvature(_centre_frame, 160, 120, config.CRT_CURVATURE,
+                           config.CRT_CURVE_BANDS)
+    _centre = _centre_frame.get_at((80, 60))[:3]
+    check("the CRT warp leaves the centre alone", _centre[0] < 20, _centre)
+
+    # Left/right symmetry: mirror the black block and compare the curved edge.
+    _mirror = pygame.Surface((160, 120), 0, 24)
+    _mirror.fill((255, 255, 255))
+    pygame.draw.rect(_mirror, (0, 0, 0), (112, 0, 48, 120))
+    ui._curve_cache.update(key=None, map1=None, map2=None, size=None, size_at=0.0)
+    ui.apply_vhs_curvature(_mirror, 160, 120, config.CRT_CURVATURE,
+                           config.CRT_CURVE_BANDS)
+
+    def _right_edge(y):
+        for x in range(159, -1, -1):
+            if _mirror.get_at((x, y))[0] > 128:
+                return x
+        return 159
+
+    _asym = max(abs((159 - _right_edge(y)) - (_left_edge(y) - 1))
+                for y in range(10, 110))
+    check("the CRT tube is left/right symmetrical", _asym <= 2, _asym)
+
+    # The watching eye also gets warped, but it must survive whole. Count its
+    # red iris pixels before and after the warp; losing most of them (or the
+    # top of the almond) is exactly the "eye cut in half" regression.
+    _eye_before = pygame.Surface((160, 120), 0, 24)
+    _eye_before.fill((8, 8, 8))
+    _er = ui.eye_radius(160, 120)
+    _ecx, _ecy = 160 - _er - 6, int(_er * 0.8)
+    ui.draw_eye(_eye_before, _ecx, _ecy, _er, openness=1.0,
+                pupil=(0, 0), dilation=1.0)
+
+    def _red_pixels(surface):
+        return [(x, y) for y in range(120) for x in range(160)
+                if surface.get_at((x, y))[0] > 70
+                and surface.get_at((x, y))[1] < 110]
+
+    _eye_pts_before = _red_pixels(_eye_before)
+    ui._curve_cache.update(key=None, map1=None, map2=None, size=None, size_at=0.0)
+    ui.apply_vhs_curvature(_eye_before, 160, 120, config.CRT_CURVATURE,
+                           config.CRT_CURVE_BANDS)
+    _eye_pts_after = _red_pixels(_eye_before)
+    check("the CRT warp keeps the eye whole",
+          len(_eye_pts_after) >= len(_eye_pts_before) * 0.75,
+          (len(_eye_pts_before), len(_eye_pts_after)))
+    if _eye_pts_before and _eye_pts_after:
+        _top_before = min(y for x, y in _eye_pts_before)
+        _top_after = min(y for x, y in _eye_pts_after)
+        check("the CRT warp does not clip the top of the eye",
+              _top_after <= _top_before + 1, (_top_before, _top_after))
+else:
+    print("SKIP: OpenCV not available; strip-curvature fallback in use")
+
 # --- Photosensitivity switches ----------------------------------------------
 # They are honoured in one place — the scare system — so every effect that
 # reaches the player goes through the same policy.
@@ -1063,23 +1163,111 @@ game.state = "PLAYING"
 check("the eye sits top-right during the game",
       _px > _w * 0.7 and _py < _h * 0.3, (_px, _py))
 
-# The pupil has to actually travel when the selection moves.
+# While the cursor is in the window the pupil watches the highlighted option.
+# With nothing highlighted it looks straight out at the player, and once the
+# cursor leaves the window it follows the cursor out of the frame instead.
 game.state = "TITLE"
 game.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
-game.selected_option = 0
-_first = game._eye_look_target(_w, _h)
-game.selected_option = 5
-_second = game._eye_look_target(_w, _h)
-check("the eye has a target for the selected option",
-      _first is not None and _second is not None)
-_eye["pupil_x"] = 0.0
-_eye["pupil_y"] = 0.0
+game.selected_option = 2
+game._eye_focus_rect = None
+game._draw_title(_w, _h)
+_selected_rect = game._eye_focus_rect
+check("the screen declares where the highlighted option is",
+      _selected_rect is not None and _selected_rect[2] > 0
+      and _selected_rect[3] > 0, _selected_rect)
+_selected_target = (_selected_rect[0] + _selected_rect[2] / 2.0,
+                    _selected_rect[1] + _selected_rect[3] / 2.0)
+
+_orig_cursor_in_window = game._eye_cursor_in_window
+_orig_focus = game._window_focused
+try:
+    game._window_focused = True
+    game._eye_cursor_in_window = lambda w, h: (w // 2, h // 2, True)
+    _target = game._eye_look_target(_w, _h)
+    check("the eye looks at the highlighted option while the cursor is inside",
+          _target == _selected_target, (_target, _selected_target))
+
+    _eye["pupil_x"] = 0.0
+    _eye["pupil_y"] = 0.0
+    game.now = time.time()
+    for _ in range(40):
+        game._draw_watching_eye(_w, _h)
+    _travel = abs(_eye["pupil_x"]) + abs(_eye["pupil_y"])
+    check("the pupil visibly turns towards the selected option",
+          _travel > _r * 0.20, "%.1fpx of a %dpx eye" % (_travel, _r))
+
+    _eye["pupil_x"] = 0.0
+    _eye["pupil_y"] = 0.0
+    game._eye_cursor_in_window = lambda w, h: (w + 300, h + 200, False)
+    _target = game._eye_look_target(_w, _h)
+    check("the eye follows the cursor once it leaves the window",
+          _target == (_w + 300, _h + 200), _target)
+    _was_focused = game._window_focused
+    game._window_focused = False
+    _target = game._eye_look_target(_w, _h)
+    check("the eye still follows an off-window cursor when unfocused",
+          _target == (_w + 300, _h + 200), _target)
+    game._window_focused = _was_focused
+    game.now = time.time()
+    for _ in range(40):
+        game._draw_watching_eye(_w, _h)
+    _travel = abs(_eye["pupil_x"]) + abs(_eye["pupil_y"])
+    check("the pupil follows the cursor out of the window",
+          _travel > _r * 0.25, "%.1fpx of a %dpx eye" % (_travel, _r))
+
+    game._eye_focus_rect = None
+    game._eye_cursor_in_window = lambda w, h: (w // 2, h // 2, True)
+    check("with nothing selected the eye looks at the player",
+          game._eye_look_target(_w, _h) is None)
+    _eye["pupil_x"] = _r * 0.40
+    _eye["pupil_y"] = -_r * 0.20
+    game.now = time.time()
+    for _ in range(40):
+        game._draw_watching_eye(_w, _h)
+    _home = abs(_eye["pupil_x"]) + abs(_eye["pupil_y"])
+    check("the pupil returns to the player's face when nothing is selected",
+          _home < _r * 0.03, "%.1fpx from centre" % _home)
+finally:
+    game._eye_cursor_in_window = _orig_cursor_in_window
+    game._window_focused = _orig_focus
+
+# Answer options are highlighted the same way, so the eye has to know where
+# the selected answer was actually drawn (the block moves with the question).
+game.state = "PLAYING"
+game.pending_exit = False
+game.paused = False
+game.current_step = 0
+game.active_script = [{"type": "choice", "q": "Pick one.", "opts": ["A", "B", "C"],
+                       "_id": "eye-rect"}]
+game.typing_state = "WAITING"
+game.selected_answer = 2
+game._eye_focus_rect = None
 game.now = time.time()
-for _ in range(40):
-    game._draw_watching_eye(_w, _h)
-_travel = abs(_eye["pupil_x"]) + abs(_eye["pupil_y"])
-check("the pupil visibly moves when the selection changes",
-      _travel > _r * 0.25, "%.1fpx of a %dpx eye" % (_travel, _r))
+game._draw_playing(_w, _h)
+_answer_rect = game._eye_focus_rect
+check("the eye knows where the highlighted answer is",
+      _answer_rect is not None and _answer_rect[2] > 0
+      and _answer_rect[3] > 0, _answer_rect)
+check("the highlighted answer sits in the answer block",
+      _answer_rect is not None and _answer_rect[1] > _h * 0.2, _answer_rect)
+
+# The eye is line art: no filled sclera. The middle of the almond stays the
+# colour of whatever is behind it, except for the iris/pupil themselves.
+_outline = pygame.Surface((220, 160))
+_outline.fill((190, 190, 190))
+ui.draw_eye(_outline, 110, 80, 60, openness=1.0, pupil=(0, 0), dilation=1.0)
+_open_bg = _outline.get_at((81, 76))[:3]
+check("the eye is outline-only, with no white sclera",
+      _open_bg[0] > 140 and _open_bg[1] > 140 and _open_bg[2] > 140, _open_bg)
+
+# A blink has to cover the pupil, not paint a line beside it.
+_open_pupil = _outline.get_at((110, 76))[:3]
+_outline.fill((190, 190, 190))
+ui.draw_eye(_outline, 110, 80, 60, openness=0.0, pupil=(0, 0), dilation=1.0)
+_shut_pupil = _outline.get_at((110, 76))[:3]
+check("the eyelid covers the pupil when the eye shuts",
+      _open_pupil[0] < 40 and _shut_pupil[0] > 140,
+      (_open_pupil, _shut_pupil))
 
 # A scare flushes the iris red and makes it blink urgently.
 # The pupil size is pinned for this check: the eye breathes, and a bigger
@@ -1093,11 +1281,13 @@ try:
     game.now = time.time()
     game.screen.fill((0, 0, 0))
     game._draw_watching_eye(_w, _h)
-    _cx = _eye["x"] + _eye["pupil_x"]
-    _cy = _eye["y"] + _eye["pupil_y"]
-    _ir = int(_eye["radius"] * 0.54)
-    _iris = game.screen.get_at((int(_cx), int(_cy - _ir * 0.6)))[:3]
-    check("the iris turns red during a scare", _iris[0] > 100 and _iris[1] < 60, _iris)
+    _red = 0
+    for _yy in range(max(0, _eye["y"] - _r), min(_h, _eye["y"] + _r + 1)):
+        for _xx in range(max(0, _eye["x"] - _r), min(_w, _eye["x"] + _r + 1)):
+            _p = game.screen.get_at((_xx, _yy))
+            if _p[0] > 80 and _p[0] > _p[1] * 2 + 20 and _p[0] > _p[2] * 2 + 20:
+                _red += 1
+    check("the iris turns red during a scare", _red > 20, _red)
     _eye["next_blink"] = 0.0
     _eye["blink_until"] = 0.0
     game.now = time.time()
@@ -1112,8 +1302,8 @@ _eye["scared_until"] = 0.0
 # The pupil breathes.
 _base = time.time()
 _pulse = [game._eye_dilation(_base + t) for t in (0, 1, 2, 3, 4, 5, 6, 7)]
-check("the pupil swells and shrinks on its own",
-      (max(_pulse) - min(_pulse)) > 0.1,
+check("the pupil swells and shrinks on its own, subtly",
+      (max(_pulse) - min(_pulse)) > 0.02,
       "%.3f..%.3f" % (min(_pulse), max(_pulse)))
 
 # The eye keeps its own tally of the answers.
@@ -1159,7 +1349,7 @@ for _y in range(0, _h, 4):
         if game.screen.get_at((_x, _y))[0] > 40:
             _bright += 1
 check("one big eye takes over the screen at the end",
-      _bright > 400, "%d lit pixels" % _bright)
+      _bright > 80, "%d lit pixels" % _bright)
 game.screen.fill((0, 0, 0))
 game._draw_watching_eye(_w, _h)
 check("the small eye stands down at the end",
@@ -1223,6 +1413,39 @@ game.game_state["settings"]["keybinds"] = {
     "up": "UP", "down": "DOWN", "confirm": "RETURN",
     "back": "ESCAPE", "pause": "ESCAPE",
 }
+
+# --- Automatic update banner -------------------------------------------------
+# Version parsing and release selection are covered offline in updater_test.py.
+# Here we check the in-game wiring: a found update is announced, drawn on the
+# title screen as a tappable zone, and U opens the release page.
+game.update_available = None
+game.update_checker.available = {"version": "9.9-alpha",
+                                 "tag": "v9.9-alpha-remastered",
+                                 "url": "https://example.invalid/release"}
+game.update_checker._reported = False
+game._poll_update_check()
+check("a found update is announced",
+      bool(game.update_available) and game.update_available.get("version") == "9.9-alpha",
+      game.update_available)
+
+game.state = "TITLE"
+game._touch_zones = []
+game._draw_title(*game.screen.get_size())
+check("the title screen advertises the update",
+      any(kind == "update" for _rect, kind, _idx in game._touch_zones))
+
+import webbrowser as _webbrowser
+_orig_open = _webbrowser.open
+_webbrowser.open = lambda url: True
+try:
+    _notes_before = len(game.social_notes)
+    game._title_key(pygame.K_u)
+    check("U opens the download page", len(game.social_notes) > _notes_before,
+          game.social_notes[-1] if game.social_notes else None)
+finally:
+    _webbrowser.open = _orig_open
+    game.update_available = None
+    game.update_checker.available = None
 
 game.state = "TITLE"
 game.running = False
