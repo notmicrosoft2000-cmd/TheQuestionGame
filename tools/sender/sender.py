@@ -76,12 +76,15 @@ COLOR_DIMMER = (80, 80, 80)
 COLOR_PANEL = (14, 14, 16)
 COLOR_EDGE = (64, 64, 70)
 COLOR_TEXT = (205, 205, 205)
+COLOR_FOCUS = (40, 38, 30)
+COLOR_TRIGGER = (200, 120, 90)
 
 WIN_W, WIN_H = 960, 700
 FPS = 60
 
 # The tab order. "to" is first so the recipient is always one key away.
-FIELD_ORDER = ["to", "q", "o0", "o1", "o2", "o3", "correct", "send", "back"]
+FIELD_ORDER = ["to", "q", "o0", "o1", "o2", "o3", "correct", "triggers",
+               "send", "back"]
 OPTION_KEYS = ["o0", "o1", "o2", "o3"]
 OPTION_LETTERS = ["A", "B", "C", "D"]
 TEXT_KEYS = ["q"] + OPTION_KEYS
@@ -162,6 +165,9 @@ HELP_KEYS = [
     ("MOUSE WHEEL      scroll the form", COLOR_TEXT),
     ("F1 or H          this help", COLOR_TEXT),
     ("F2               effects: fire a scare or glitch", COLOR_TEXT),
+    ("F3               scare triggers: pick an option,", COLOR_TEXT),
+    ("                 pick what happens when it is chosen", COLOR_TEXT),
+    ("J                fire JUMPSCARE at the recipient now", COLOR_TEXT),
     ("ESC              quit", COLOR_TEXT),
     ("CTRL+X           forget the saved token", COLOR_TEXT),
     ("", COLOR_DIM),
@@ -190,6 +196,14 @@ HELP_KEYS = [
     ("The room only knows about the games that are", COLOR_DIM),
     ("polling right now. A closed game is not in the", COLOR_DIM),
     ("room and cannot be reached.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("SCARE TRIGGERS — F3", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("Attach a scare to an answer option. When the", COLOR_DIM),
+    ("player picks that option, the game fires the", COLOR_DIM),
+    ("scare locally — no toast, no warning, exactly", COLOR_DIM),
+    ("as if it had chosen the effect itself. One", COLOR_DIM),
+    ("rule per option A-D; NONE clears one.", COLOR_DIM),
 ]
 
 
@@ -433,6 +447,14 @@ class Sender:
         self.effect_index = 0
         self.effect_intensity = 1.0      # 0.5 gentle .. 2.0 hard
 
+        # Scare triggers: one optional rule per answer option. A rule is
+        # {"effect": name, "intensity": level} or None. The rules travel with
+        # the question and fire on the player's machine when that option is
+        # picked — no separate effect send, no announcement.
+        self.triggers_screen = False
+        self.triggers = [None] * len(OPTION_LETTERS)
+        self.trigger_slot = 0
+
         # Compose state.
         self.fields = {
             "q": "", "o0": "", "o1": "", "o2": "", "o3": "",
@@ -603,7 +625,8 @@ class Sender:
         ok = False
         try:
             ok = self.social.send_question(to.get("id", "all"), question,
-                                           opts, correct)
+                                           opts, correct,
+                                           scare_triggers=self._trigger_rules())
         except Exception:
             ok = False
         if ok:
@@ -616,6 +639,34 @@ class Sender:
                       + " ...", "info", 3.0)
         else:
             self.note("COULD NOT QUEUE THE QUESTION", "bad")
+
+    def _trigger_rules(self):
+        """The configured per-option scare rules, in wire form."""
+        rules = []
+        for idx, rule in enumerate(self.triggers):
+            if not rule or not rule.get("effect"):
+                continue
+            rules.append({"option": idx, "effect": rule["effect"],
+                          "intensity": float(rule.get("intensity", 1.0))})
+        return rules
+
+    def _fire_jumpscare(self):
+        """One-key jumpscare at the current recipient — no compose needed."""
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        try:
+            ok = self.social.send_effect(to.get("id", "all"), "jumpscare", 1.5)
+        except Exception:
+            ok = False
+        if ok:
+            self.sent_log.insert(0, {
+                "to": str(to.get("name", "EVERYONE")).upper(),
+                "q": "EFFECT: JUMPSCARE",
+                "at": self.now, "state": "SENDING", "n": 0})
+            del self.sent_log[8:]
+            self.note("JUMPSCARE FIRED AT "
+                      + str(to.get("name", "EVERYONE")).upper(), "bad", 4.0)
+        else:
+            self.note("COULD NOT QUEUE THE JUMPSCARE", "bad")
 
     def _fire_effect(self):
         """Fire the selected effect at the current recipient."""
@@ -702,6 +753,11 @@ class Sender:
             return
         if key == pygame.K_F2:
             self.effects_screen = not self.effects_screen
+            self.triggers_screen = False
+            return
+        if key == pygame.K_F3:
+            self.triggers_screen = not self.triggers_screen
+            self.effects_screen = False
             return
         if self.help:
             if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
@@ -710,6 +766,9 @@ class Sender:
             return
         if self.effects_screen:
             self._handle_effects_key(event)
+            return
+        if self.triggers_screen:
+            self._handle_triggers_key(event)
             return
         if self.unlocking:
             self._handle_unlock_key(event)
@@ -734,6 +793,10 @@ class Sender:
                 limit = config.SOCIAL_Q_MAX if fkey == "q" else config.SOCIAL_OPT_MAX
                 if len(self.fields[fkey]) < limit:
                     self.fields[fkey] += unicode
+            return
+
+        if key == pygame.K_j:
+            self._fire_jumpscare()
             return
 
         fkey = FIELD_ORDER[self.focus]
@@ -779,6 +842,59 @@ class Sender:
             self._fire_effect()
         return
 
+    def _trigger_choices(self):
+        return ["NONE"] + list(self.effects)
+
+    def _cycle_trigger(self, step):
+        choices = self._trigger_choices()
+        rule = self.triggers[self.trigger_slot]
+        name = rule.get("effect") if rule else "NONE"
+        try:
+            idx = choices.index(name)
+        except ValueError:
+            idx = 0
+        idx = (idx + step) % len(choices)
+        if idx == 0:
+            self.triggers[self.trigger_slot] = None
+        else:
+            level = float(rule.get("intensity", 1.0)) if rule else 1.0
+            self.triggers[self.trigger_slot] = {
+                "effect": choices[idx], "intensity": level}
+
+    def _trigger_intensity(self, step):
+        rule = self.triggers[self.trigger_slot]
+        if not rule:
+            self.note("PICK AN EFFECT FIRST", "info", 3.0)
+            return
+        rule["intensity"] = max(0.5, min(2.0,
+                                         round(float(rule.get("intensity", 1.0))
+                                               + step, 2)))
+
+    def _handle_triggers_key(self, event):
+        """The option -> scare editor on F3."""
+        key = event.key
+        n = len(OPTION_LETTERS)
+        if key in (pygame.K_UP, pygame.K_LEFT):
+            if key == pygame.K_UP:
+                self.trigger_slot = (self.trigger_slot - 1) % n
+            else:
+                self._cycle_trigger(-1)
+        elif key in (pygame.K_DOWN, pygame.K_RIGHT, pygame.K_TAB):
+            if key == pygame.K_DOWN:
+                self.trigger_slot = (self.trigger_slot + 1) % n
+            else:
+                self._cycle_trigger(1)
+        elif key in (pygame.K_LEFTBRACKET, pygame.K_9):
+            self._trigger_intensity(-0.25)
+        elif key in (pygame.K_RIGHTBRACKET, pygame.K_0):
+            self._trigger_intensity(0.25)
+        elif key in (pygame.K_BACKSPACE, pygame.K_DELETE):
+            self.triggers[self.trigger_slot] = None
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE,
+                     pygame.K_F3):
+            self.triggers_screen = False
+        return
+
     def _handle_unlock_key(self, event):
         key = event.key
         unicode = event.unicode
@@ -817,6 +933,8 @@ class Sender:
         elif fkey == "correct":
             n = max(2, len(self._options()))
             self.fields["correct"] = (self.fields["correct"] + 1) % n
+        elif fkey == "triggers":
+            self.triggers_screen = True
         elif fkey == "send":
             self.fire()
         elif fkey == "back":
@@ -880,6 +998,8 @@ class Sender:
             self._draw_help(s, w, h)
         elif self.effects_screen:
             self._draw_effects(s, w, h)
+        elif self.triggers_screen:
+            self._draw_triggers(s, w, h)
         else:
             self._draw_room(s, self.rect_room)
             if self.unlocking:
@@ -935,10 +1055,12 @@ class Sender:
             tok_txt, tok_col = "TOKEN: MISSING", COLOR_BAD
 
         n = len(self._others())
+        ntrig = len(self._trigger_rules())
         lines = [
             (relay_txt, relay_col),
             (tok_txt, tok_col),
-            ("%d PLAYER%s ONLINE" % (n, "" if n == 1 else "S"),
+            ("%d PLAYER%s  |  %d TRIGGER%s"
+             % (n, "" if n == 1 else "S", ntrig, "" if ntrig == 1 else "S"),
              COLOR_TEXT if n else COLOR_DIM),
         ]
         y = int(h * 0.03)
@@ -1013,6 +1135,17 @@ class Sender:
             value = "-"
         rows.append({"key": "correct", "label": "CORRECT ANSWER",
                      "value": value, "color": COLOR_ACCENT})
+        rules = self._trigger_rules()
+        if rules:
+            trig = "  ".join("%s>%s x%.2f"
+                             % (OPTION_LETTERS[r["option"]],
+                                r["effect"].replace("_", " "), r["intensity"])
+                             for r in rules)
+            trig_color = COLOR_TRIGGER
+        else:
+            trig, trig_color = "NONE  (press ENTER to edit)", COLOR_DIM
+        rows.append({"key": "triggers", "label": "SCARE TRIGGER",
+                     "value": trig, "color": trig_color})
         rows.append({"key": "send", "label": "SEND",
                      "value": "FIRE IT" if self._can_send_now() else "NO TOKEN",
                      "color": COLOR_GOOD if self._can_send_now() else COLOR_BAD})
@@ -1071,6 +1204,10 @@ class Sender:
             y = inner.y + item["y"] - off
             if y + item["h"] < inner.y - 4 or y > inner.bottom + 4:
                 continue
+            if item["focused"]:
+                band = pygame.Rect(inner.x - 6, y - 3,
+                                   inner.width + 8, item["h"] + 6)
+                pygame.draw.rect(s, COLOR_FOCUS, band)
             r = item["r"]
             color = r.get("color") or (
                 COLOR_TEXT if item["focused"] else COLOR_DIM)
@@ -1302,6 +1439,58 @@ class Sender:
             "[F2/ESC] BACK", True, COLOR_DIMMER),
             (inner.x, inner.bottom - self.font_small.get_linesize()))
 
+    def _draw_triggers(self, s, w, h):
+        """Configure which scare fires when the player picks a given option."""
+        rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
+                           int(w * 0.90), int(h * 0.94))
+        inner = self._panel(s, rect, "SCARE TRIGGERS — THE ANSWER BITES BACK")
+
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        s.blit(self.font_med.render(
+            "TARGET: " + str(to.get("name", "EVERYONE")).upper(),
+            True, COLOR_TEXT), (inner.x, inner.y))
+        y = inner.y + self.font_med.get_linesize() + 4
+        s.blit(self.font_small.render(
+            "When they choose this option, the scare fires on their machine.",
+            True, COLOR_DIM), (inner.x, y))
+        y += self.font_small.get_linesize() + 12
+
+        for i, letter in enumerate(OPTION_LETTERS):
+            rule = self.triggers[i]
+            sel = (i == self.trigger_slot)
+            if rule:
+                label = "%s)  %s   x%.2f" % (
+                    letter, rule["effect"].upper().replace("_", " "),
+                    float(rule.get("intensity", 1.0)))
+                col = COLOR_TRIGGER if sel else COLOR_TEXT
+            else:
+                label = "%s)  NONE" % letter
+                col = COLOR_ACCENT if sel else COLOR_DIM
+            if sel:
+                bar = pygame.Rect(inner.x - 8, y - 4, inner.width + 6,
+                                  self.font_med.get_linesize() + 8)
+                pygame.draw.rect(s, COLOR_FOCUS, bar)
+                label = "> " + label
+            s.blit(self.font_med.render(
+                _fit(label, self.font_med, inner.width), True, col),
+                (inner.x, y))
+            y += self.font_med.get_linesize() + 10
+
+        y += 8
+        for line in (
+            "These rules ride with the next question you send.",
+            "They are invisible to the player until the answer is picked.",
+        ):
+            s.blit(self.font_small.render(line, True, COLOR_DIMMER),
+                   (inner.x, y))
+            y += self.font_small.get_linesize() + 2
+
+        s.blit(self.font_small.render(
+            "[UP/DOWN] OPTION   [LEFT/RIGHT] EFFECT   "
+            "[/] POWER   [DEL] CLEAR   [ENTER/F3] BACK",
+            True, COLOR_DIMMER),
+            (inner.x, inner.bottom - self.font_small.get_linesize()))
+
     def _draw_footer(self, s, w, h):
         if self.toast:
             tone = self.toast.get("tone", "info")
@@ -1311,9 +1500,12 @@ class Sender:
         if self.effects_screen:
             hints = ("[UP/DOWN] PICK  [LEFT/RIGHT] INTENSITY  [ENTER] FIRE  "
                      "[F1] HELP  [F2/ESC] BACK")
+        elif self.triggers_screen:
+            hints = ("[UP/DOWN] OPTION  [LEFT/RIGHT] EFFECT  [/] POWER  "
+                     "[F3/ESC] BACK")
         else:
-            hints = ("[TAB] FIELD  [ENTER] EDIT/ACT  [1-4] CORRECT  [F1] HELP  "
-                     "[F2] EFFECTS  [ESC] QUIT")
+            hints = ("[TAB] FIELD  [ENTER] EDIT  [1-4] CORRECT  [F3] TRIGGERS  "
+                     "[J] JUMPSCARE  [F2] EFFECTS  [ESC] QUIT")
         s.blit(self.font_small.render(hints, True, COLOR_DIMMER),
                (20, h - self.font_small.get_linesize() - 10))
         if self.token:

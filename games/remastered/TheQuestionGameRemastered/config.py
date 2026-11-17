@@ -252,15 +252,16 @@ VHS_STATIC_LINE = 1.0         # faint drifting head line on the main screen
 CRT_CORNER_ROUND = 26         # px of rounded/blackened tube corner (0 = square)
 
 # --- Window motion (Windows + macOS only; Wayland forbids apps moving windows)
-# The window gently floats up and down the whole time, and jumps to a fresh
-# spot near the centre every time a question lands.
-WINDOW_FLOAT = True
-WINDOW_FLOAT_AMPLITUDE = 14   # pixels of vertical travel
-WINDOW_FLOAT_PERIOD = 4.2     # seconds per full bob
+# The constant up/down bob and the hover-lean are off on every platform: the
+# floating window made the game feel like a widget and fought the eye. The
+# one-shot motions below (new-question jump, answer nudge) stay.
+WINDOW_FLOAT = False
+WINDOW_FLOAT_AMPLITUDE = 0    # pixels of vertical travel
+WINDOW_FLOAT_PERIOD = 4.2     # seconds per full bob (unused while off)
 WINDOW_JITTER_NEAR_CENTER = True   # nudge near the centre on each new question
 WINDOW_JITTER_RANGE = 90      # pixels either side of dead centre
 WINDOW_ANSWER_NUDGE = 13      # little shuffle of the window when you answer
-WINDOW_HOVER_AMPLITUDE = 6    # subtle hover parallax (px) toward the cursor
+WINDOW_HOVER_AMPLITUDE = 0    # hover parallax removed on all platforms
 
 # --- AI loop -----------------------------------------------------------------
 # Prefetching the *next* question while the current one is on screen meant the

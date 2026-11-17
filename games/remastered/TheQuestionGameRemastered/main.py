@@ -428,6 +428,12 @@ class Game:
         except Exception:
             self._overlay = None
         self._window_focused = True
+        # The desktop eye only takes over after this flag is set, i.e. after
+        # the window has really had focus. Windows fires a focus-lost event
+        # while the window is still being created; without this gate the eye
+        # popped up next to the cursor the moment the game opened.
+        self._overlay_armed = False
+        self._session_started_at = time.time()
         self._eye_state = {
             "x": 0, "y": 0, "radius": 0,
             "pupil_x": 0, "pupil_y": 0,
@@ -486,6 +492,9 @@ class Game:
         self._close_burst = 0
         self._last_close_try = -999.0
         self.idle_tracker = {"focused": True, "lost_at": 0, "last_away": 0, "pending": False}
+        # The mouse sometimes leaves on its own. First hit well into a session,
+        # then at irregular intervals so it cannot be learned. Always on.
+        self._next_mouse_scare_at = time.time() + random.uniform(35.0, 75.0)
         self.shake_x, self.shake_y = 0, 0
 
         self._cheat_buffer = []
@@ -1204,6 +1213,27 @@ class Game:
         except Exception:
             pass
 
+    def _apply_operator_effect(self, name, intensity=1.0):
+        """Play one named effect with the operator's intensity dial applied.
+
+        Shared by effects fired by hand and by the option-triggered scares
+        attached to a question. Nothing announces either one.
+        """
+        fx = self.fx
+        before = fx.get("scare_scale", 1.0)
+        try:
+            fx["scare_scale"] = max(0.25, min(2.5, float(intensity or 1.0)))
+            name = str(name or "").strip().lower()
+            if scares.apply_scare(self, name):
+                self._scares_fired += 1
+                self._used_scares.add(name)
+                return True
+            return False
+        except Exception:
+            return False
+        finally:
+            fx["scare_scale"] = before
+
     def _play_social_effects(self):
         """Play any scare/glitch the operator fired at us.
 
@@ -1221,24 +1251,10 @@ class Game:
                 return
             if not item:
                 return
-            name = str(item.get("effect") or "").strip().lower()
-            if not name:
+            if not str(item.get("effect") or "").strip():
                 continue
-            try:
-                inten = float(item.get("intensity") or 1.0)
-            except (TypeError, ValueError):
-                inten = 1.0
-            try:
-                # The operator's dial stretches how long the effect lasts.
-                fx = self.fx
-                before = fx.get("scare_scale", 1.0)
-                fx["scare_scale"] = max(0.25, min(2.5, inten))
-                if scares.apply_scare(self, name):
-                    self._scares_fired += 1
-                    self._used_scares.add(name)
-                fx["scare_scale"] = before
-            except Exception:
-                pass
+            self._apply_operator_effect(item.get("effect"),
+                                        item.get("intensity") or 1.0)
 
     def _social_step_from(self, item):
         """Convert a relay question into a playable script step."""
@@ -1411,6 +1427,21 @@ class Game:
                 whisper = "ANSWER SENT TO %s" % who
             self.fx["whisper_text"] = whisper
             self.fx["whisper_until"] = self.now + 4.0
+
+        # The sender can attach "if they choose B, hit them with X" rules to a
+        # question. The relay delivers them with the question; we decide here,
+        # on the player's machine, with no note saying why it happened.
+        try:
+            idx = opts.index(answer)
+        except (ValueError, AttributeError):
+            idx = -1
+        if idx >= 0:
+            for rule in (item.get("scare_triggers") or []):
+                if not isinstance(rule, dict) or rule.get("option") != idx:
+                    continue
+                self._apply_operator_effect(rule.get("effect"),
+                                            rule.get("intensity", 1.0))
+                break
 
     # --- fade ----------------------------------------------------------------
     def start_fade(self, target):
@@ -1958,9 +1989,18 @@ class Game:
     def _supervise_overlay(self):
         """Keep the desktop eye alive while the game is not the foreground
         window. If the overlay process dies (or the player kills it) it is
-        quietly brought back, with a backoff so a hard failure cannot spin."""
+        quietly brought back, with a backoff so a hard failure cannot spin.
+
+        Nothing is spawned until the window has been focused at least once and
+        has had a moment to settle — a freshly launched game must not drop an
+        eye beside the cursor before the player has even seen the title.
+        """
         ov = getattr(self, "_overlay", None)
         if ov is None:
+            return
+        if not getattr(self, "_overlay_armed", False):
+            if self._window_focused and self.now - self._session_started_at > 1.0:
+                self._overlay_armed = True
             return
         if getattr(self, "_window_focused", True):
             return
@@ -2069,7 +2109,28 @@ class Game:
             audio.play_glitch_sound()
             self.fx["corrupt_until"] = max(self.fx["corrupt_until"], self.now + 0.8)
 
+    def _maybe_mouse_scare(self):
+        """Once in a while, drag the real cursor out of the game window."""
+        if self.now < getattr(self, "_next_mouse_scare_at", 0.0):
+            return
+        # Rearm first so a refused attempt cannot spin every frame.
+        self._next_mouse_scare_at = self.now + random.uniform(55.0, 130.0)
+        if not self._window_focused:
+            return
+        if os_layer.mouse_anim["active"] or os_layer.mouse_shake["active"]:
+            return
+        try:
+            fired = os_layer.begin_mouse_shake(
+                duration=random.uniform(0.45, 0.85))
+        except Exception:
+            fired = False
+        if fired:
+            audio.play_glitch_sound()
+            self.fx["corrupt_until"] = max(
+                float(self.fx.get("corrupt_until", 0.0) or 0.0), self.now + 0.6)
+
     def _update_playing(self):
+        self._maybe_mouse_scare()
         if self.current_step >= len(self.active_script):
             self.pending_exit = True
             return
@@ -2721,17 +2782,21 @@ class Game:
     def _on_window_focus(self, gained):
         """The game window gained or lost focus.
 
-        Losing focus hands the watch over to the desktop eye (Windows and
-        macOS only). Regaining focus brings it back into the window.
+        A real focus gain arms the desktop eye; losing focus then hands the
+        watch over to it (Windows and macOS only). Regaining focus stops it.
+        An early focus-*loss* from window creation is ignored, which is what
+        used to leave an eye next to the cursor straight after launch.
         """
         self._window_focused = bool(gained)
+        if gained:
+            self._overlay_armed = True
         ov = getattr(self, "_overlay", None)
         if ov is None:
             return
         try:
             if gained:
                 ov.stop()
-            else:
+            elif getattr(self, "_overlay_armed", False):
                 ov.start()
         except Exception:
             pass
@@ -3178,6 +3243,28 @@ class Game:
                                intensity=1.5 if self.run_count >= 3 else 1.0)
 
         self._draw_malware_overlays(w, h)
+        self._draw_giant_eye(w, h)
+
+    def _draw_giant_eye(self, w, h):
+        """A scare that replaces the whole frame with one enormous angry eye."""
+        until = float(self.fx.get("giant_eye_until", 0.0) or 0.0)
+        if until <= self.now:
+            return
+        veil = pygame.Surface((w, h), pygame.SRCALPHA)
+        veil.fill((0, 0, 0, 228))
+        self.screen.blit(veil, (0, 0))
+        r = int(min(w, h) * 0.34)
+        cx, cy = w // 2, h // 2
+        target = None
+        try:
+            mx, my, inside = self._eye_cursor_in_window(w, h)
+            if not inside:
+                target = (mx, my)
+        except Exception:
+            target = None
+        px, py = ui.eye_pupil_offset(cx, cy, r, target)
+        ui.draw_eye(self.screen, cx, cy, r, openness=1.0,
+                    pupil=(px, py), angry=True, dilation=1.2)
 
     def _draw_malware_overlays(self, w, h):
         """Fake scanner / BSOD / console / file list / security modal.
@@ -3353,6 +3440,7 @@ class Game:
 
             os_layer.update_window_anim()
             os_layer.update_mouse_anim()
+            os_layer.update_mouse_shake()
             os_layer.nudge_mouse_from_close()
             pic = ui.poll_picture_result()
             if pic is not None:

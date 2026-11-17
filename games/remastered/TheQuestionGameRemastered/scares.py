@@ -123,6 +123,25 @@ def _do_jumpscare(game):
     game.fx["rgb_split_until"] = max(game.fx["rgb_split_until"], game.now + 1.5)
 
 
+def _do_eye_jumpscare(game):
+    """One enormous eye replaces the whole picture, with the stinger under it."""
+    audio.play_jumpscare()
+    game.fx["giant_eye_until"] = game.now + 1.4
+    game.fx["corrupt_until"] = max(game.fx["corrupt_until"], game.now + 1.4)
+    game.fx["flicker_until"] = max(game.fx["flicker_until"], game.now + 0.5)
+
+
+def _do_mouse_shake_out(game):
+    """The real cursor is shaken and dragged outside the game window."""
+    ok = os_layer.begin_mouse_shake(duration=random.uniform(0.5, 0.85))
+    if ok:
+        audio.play_glitch_sound()
+    else:
+        audio.play_mechanical_beep()
+    game.fx["screen_shake_until"] = max(
+        float(game.fx.get("screen_shake_until", 0.0) or 0.0), game.now + 0.6)
+
+
 def _do_window_teleport(game):
     os_layer.teleport_window_random()
     audio.play_glitch_sound()
@@ -323,6 +342,8 @@ SCARE_REGISTRY = {
     "rgb_split": _do_rgb_split,
     "screen_tear": _do_screen_tear,
     "jumpscare": _do_jumpscare,
+    "eye_jumpscare": _do_eye_jumpscare,
+    "mouse_shake_out": _do_mouse_shake_out,
     "windows_shake": _do_windows_shake,
     "windows_minimize": _do_windows_minimize,
     "fake_scan": _do_fake_scan,
@@ -346,7 +367,8 @@ _last_applied = {}
 _DESKTOP_SCARES = frozenset({
     "window_shake", "windows_shake", "windows_minimize",
     "window_teleport", "window_drift", "wallpaper", "mouse_move",
-    "clipboard", "window_title", "security_alert", "desktop_note",
+    "mouse_shake_out", "clipboard", "window_title", "security_alert",
+    "desktop_note",
 })
 
 # Effects that leave something behind on the real machine (clipboard contents,
@@ -360,7 +382,7 @@ _DESKTOP_TWEAK_SCARES = frozenset({
 # something slower and dimmer — the hit still lands, it just does not strobe.
 _FLASH_SCARES = frozenset({
     "flicker", "webcam_flash", "rgb_split", "screen_tear", "jumpscare",
-    "fake_bsod",
+    "eye_jumpscare", "fake_bsod",
 })
 
 # Scares that turn the camera on. "Disable Webcam Scares" swaps them.

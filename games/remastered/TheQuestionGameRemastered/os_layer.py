@@ -487,6 +487,12 @@ def _user32():
         u.GetWindowTextLengthW.restype = ctypes.c_int
         u.GetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
         u.GetWindowTextW.restype = ctypes.c_int
+        u.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
+        u.GetCursorPos.restype = ctypes.c_bool
+        u.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+        u.SetCursorPos.restype = ctypes.c_bool
+        u.GetSystemMetrics.argtypes = [ctypes.c_int]
+        u.GetSystemMetrics.restype = ctypes.c_int
     except Exception:
         pass
     _win_user32 = u
@@ -896,11 +902,145 @@ def update_mouse_anim():
         mouse_anim["active"] = False
 
 
+# --- Live cursor shake (the mouse leaves the window) -------------------------
+# Unlike 'mouse_move' this is not an SDL warp inside the frame: it drives the
+# real OS cursor in desktop coordinates, so the pointer can be dragged right
+# out of the game window. It is a scare in its own right and is deliberately
+# always on — it does not read the screen-shake accessibility switch.
+mouse_shake = {
+    "active": False, "start_x": 0, "start_y": 0,
+    "target_x": 0, "target_y": 0,
+    "start_time": 0.0, "duration": 0.65,
+}
+
+
+def set_global_cursor(x, y):
+    """Put the OS cursor at a desktop coordinate. Best effort everywhere."""
+    x, y = int(x), int(y)
+    if SYSTEM == "Windows":
+        try:
+            return bool(_user32().SetCursorPos(x, y))
+        except Exception:
+            return False
+    if SYSTEM == "Darwin":
+        try:
+            import Quartz  # pyobjc, if installed
+            Quartz.CGWarpMouseCursorPosition(Quartz.CGPointMake(x, y))
+            return True
+        except Exception:
+            pass
+        try:
+            import pygame
+            pos = _mac_window_position()
+            if pos:
+                pygame.mouse.set_pos(x - pos[0], y - pos[1])
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _screen_size():
+    if SYSTEM == "Windows":
+        try:
+            u = _user32()
+            return (int(u.GetSystemMetrics(0)), int(u.GetSystemMetrics(1)))
+        except Exception:
+            pass
+    try:
+        import pygame
+        info = pygame.display.Info()
+        return (int(info.current_w), int(info.current_h))
+    except Exception:
+        return (1920, 1080)
+
+
+def _window_bounds_global():
+    """(left, top, right, bottom) of the game window in desktop pixels."""
+    if SYSTEM == "Windows":
+        hwnd = get_hwnd()
+        rect = get_window_rect(hwnd) if hwnd else None
+        if rect:
+            return (rect.left, rect.top, rect.right, rect.bottom)
+        return None
+    if SYSTEM == "Darwin":
+        pos = _mac_window_position()
+        try:
+            import pygame
+            surf = pygame.display.get_surface()
+            if pos and surf:
+                return (pos[0], pos[1],
+                        pos[0] + surf.get_width(), pos[1] + surf.get_height())
+        except Exception:
+            pass
+    return None
+
+
+def mouse_shake_target_outside_window(margin=40):
+    """A point just beyond one edge of the window, still on the screen."""
+    bounds = _window_bounds_global()
+    sw, sh = _screen_size()
+    if not bounds:
+        return (max(8, sw - 24), max(8, sh // 2))
+    left, top, right, bottom = bounds
+    midx, midy = (left + right) // 2, (top + bottom) // 2
+    side = random.choice(("left", "right", "top", "bottom"))
+    if side == "left":
+        x, y = left - margin, midy
+    elif side == "right":
+        x, y = right + margin, midy
+    elif side == "top":
+        x, y = midx, top - margin
+    else:
+        x, y = midx, bottom + margin
+    return (max(4, min(sw - 4, int(x))), max(4, min(sh - 4, int(y))))
+
+
+def begin_mouse_shake(target_x=None, target_y=None, duration=0.65):
+    """Shake the live cursor and finish outside the game window."""
+    if config.IS_ANDROID or not window_motion_supported():
+        return False
+    if target_x is None or target_y is None:
+        target_x, target_y = mouse_shake_target_outside_window()
+    cur = get_global_cursor()
+    if cur is None:
+        try:
+            import pygame
+            cur = pygame.mouse.get_pos()
+        except Exception:
+            cur = (int(target_x), int(target_y))
+    mouse_shake.update(active=True, start_x=int(cur[0]), start_y=int(cur[1]),
+                       target_x=int(target_x), target_y=int(target_y),
+                       start_time=time.time(), duration=max(0.2, float(duration)))
+    return True
+
+
+def update_mouse_shake():
+    """Advance the running shake one frame. Call from the game loop."""
+    if not mouse_shake["active"]:
+        return
+    elapsed = time.time() - mouse_shake["start_time"]
+    dur = max(0.001, float(mouse_shake["duration"]))
+    t = min(1.0, elapsed / dur)
+    eased = t * t * (3.0 - 2.0 * t)
+    x = mouse_shake["start_x"] + (
+        mouse_shake["target_x"] - mouse_shake["start_x"]) * eased
+    y = mouse_shake["start_y"] + (
+        mouse_shake["target_y"] - mouse_shake["start_y"]) * eased
+    # Jitter fades as the cursor lands, so it ends just outside the window
+    # instead of skittering across the desktop.
+    jitter = 18.0 * (1.0 - t)
+    set_global_cursor(x + random.uniform(-jitter, jitter),
+                      y + random.uniform(-jitter, jitter))
+    if t >= 1.0:
+        mouse_shake["active"] = False
+
+
 def nudge_mouse_from_close():
     import pygame
     if config.IS_ANDROID:
         return   # no cursor, no title bar to bait the finger toward
-    if mouse_anim["active"]:
+    if mouse_anim["active"] or mouse_shake["active"]:
         return
     try:
         if SYSTEM == "Windows":

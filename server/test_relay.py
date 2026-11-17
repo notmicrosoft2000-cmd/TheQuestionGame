@@ -247,6 +247,58 @@ try:
     bool_items = [x for x in (r.get("inbox") or []) if x["q"] == "pick"]
     check("bool correct index dropped",
           bool(bool_items) and bool_items[0]["correct"] is None, bool_items[:1])
+
+    # --- scare_triggers: the option -> scare rules ride with the question ---
+    code, _ = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "triggers",
+        "opts": ["A", "B", "C"],
+        "scare_triggers": [
+            {"option": 1, "effect": "jumpscare", "intensity": 1.5},
+            {"option": 2, "effect": "eye jumpscare", "intensity": 99},
+        ],
+    })
+    check("a question with scare triggers is accepted", code == 200, code)
+    code, rr = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    trig_items = [x for x in (rr.get("inbox") or []) if x["q"] == "triggers"]
+    check("scare triggers travel with the question",
+          bool(trig_items) and len(trig_items[0].get("scare_triggers") or []) == 2,
+          trig_items[:1])
+    if trig_items:
+        rules = {r["option"]: r for r in trig_items[0]["scare_triggers"]}
+        check("the trigger's effect name survives",
+              rules.get(1, {}).get("effect") == "jumpscare", rules)
+        check("effect names with spaces are normalised",
+              rules.get(2, {}).get("effect") == "eye_jumpscare", rules)
+        check("trigger intensity is clamped on the wire",
+              abs(rules.get(2, {}).get("intensity", 0) - 2.0) < 1e-9, rules)
+
+    code, bad = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "bad trigger",
+        "opts": ["A", "B"],
+        "scare_triggers": [{"option": 0, "effect": "totally_not_a_scare"}],
+    })
+    check("an unknown trigger effect is refused", code == 400, (code, bad))
+    code, bad = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "bad trigger 2",
+        "opts": ["A", "B"],
+        "scare_triggers": [{"option": 9, "effect": "jumpscare"}],
+    })
+    check("an out-of-range trigger option is refused", code == 400, (code, bad))
+    code, bad = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "bad trigger 3",
+        "opts": ["A", "B"],
+        "scare_triggers": "jumpscare",
+    })
+    check("a non-list trigger field is refused", code == 400, (code, bad))
+
+    code, _ = post("/v1/send-question", {
+        "from": "aaaaaaaaaa", "to": "bbbbbbbbbb", "q": "plain",
+        "opts": ["A", "B"],
+    })
+    code, pp = post("/v1/presence", {"id": "bbbbbbbbbb", "name": "bob"})
+    plain_items = [x for x in (pp.get("inbox") or []) if x["q"] == "plain"]
+    check("a plain question has no trigger field",
+          bool(plain_items) and "scare_triggers" not in plain_items[0], plain_items[:1])
 finally:
     srv.shutdown()
 

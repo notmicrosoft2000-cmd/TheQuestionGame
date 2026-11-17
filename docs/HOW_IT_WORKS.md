@@ -191,7 +191,19 @@ notice. It is the fastest way to break the feature.
 The operator can also trigger the game's own scares — a flicker, a whisper, a
 screen tear — without writing a question. They arrive the same way and are
 equally unannounced: the game plays them exactly as if it had chosen them
-itself. The intensity dial controls how **long** the effect lasts.
+itself. The intensity dial controls how **long** the effect lasts. There is a
+one-key jumpscare shortcut too, and two stronger scares: a giant eye that
+covers the screen, and a shake of the *real* cursor that drags the pointer
+outside the game window.
+
+### Scare triggers — the answer bites back
+
+A question can carry invisible rules: "if they pick option B, hit them with a
+jumpscare." The player sees nothing in the question itself. Only when they pick
+that option does the game fire the bound scare on their own machine — with no
+toast or warning, exactly as if the game had chosen it. The operator sets these
+up in the private sender (one per option, with its own intensity), and the
+relay validates them before they ride out with the question.
 
 ---
 

@@ -174,6 +174,58 @@ check("escape leaves the effects screen",
       app.effects_screen is False, app.effects_screen)
 app.effects_screen = False
 
+# --- scare triggers: bind a scare to an answer option (F3) -------------------
+check("one empty trigger slot per option",
+      isinstance(app.triggers, list) and len(app.triggers) == 4, app.triggers)
+check("no rules are configured by default", app._trigger_rules() == [],
+      app._trigger_rules())
+
+
+def _tkey(key):
+    return type("E", (), {"key": key, "unicode": ""})()
+
+
+app.handle_key(_tkey(pygame.K_F3))
+check("F3 opens the trigger editor", app.triggers_screen is True)
+try:
+    app.draw()
+    check("the trigger editor draws", True)
+except Exception as exc:
+    check("the trigger editor draws", False, repr(exc))
+
+app.trigger_slot = 0
+app._handle_triggers_key(_tkey(pygame.K_RIGHT))
+_rules = app._trigger_rules()
+check("picking an effect creates a rule for that option",
+      len(_rules) == 1 and _rules[0]["option"] == 0, _rules)
+check("the rule names a real effect",
+      _rules[0]["effect"] == app.effects[0], _rules)
+_before_power = _rules[0]["intensity"]
+app._handle_triggers_key(_tkey(pygame.K_RIGHTBRACKET))
+check("the bracket key raises a rule's power",
+      app._trigger_rules()[0]["intensity"] > _before_power, app._trigger_rules())
+app._handle_triggers_key(_tkey(pygame.K_DOWN))
+check("down moves to the next option slot", app.trigger_slot == 1, app.trigger_slot)
+app._handle_triggers_key(_tkey(pygame.K_BACKSPACE))
+check("delete clears the selected (empty) slot without touching the other",
+      len(app._trigger_rules()) == 1, app._trigger_rules())
+app.trigger_slot = 0
+app._handle_triggers_key(_tkey(pygame.K_DELETE))
+check("delete clears a configured rule", app._trigger_rules() == [],
+      app._trigger_rules())
+app._handle_triggers_key(_tkey(pygame.K_F3))
+check("F3 closes the trigger editor", app.triggers_screen is False)
+
+# J is the one-key jumpscare: it uses the effects route and leaves a log line.
+app.sent_log = []
+app.toast = None
+app._fire_jumpscare()
+check("J queues a jumpscare effect",
+      any("JUMPSCARE" in str(e.get("q", "")).upper() for e in app.sent_log),
+      app.sent_log)
+check("J announces the jumpscare",
+      app.toast is not None and "JUMPSCARE" in app.toast["text"], app.toast)
+
 # A long question wraps instead of being cut off with an ellipsis: every word
 # of a 200-character question ends up on screen somewhere in the form.
 app.fields["q"] = ("What is the airspeed velocity of an unladen swallow, and "

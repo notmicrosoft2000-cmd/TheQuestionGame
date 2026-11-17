@@ -125,10 +125,19 @@ hardcoded per-screen position; that is what made the old eye miss the target.
 
 **The desktop overlay.** On Windows and macOS the game re-executes itself with
 `--eye-overlay`, which runs `eye_overlay.main()` in a second process: a
-borderless, always-on-top, click-through window with an eye in it that trails
-the cursor across the whole desktop. It appears when the game window loses
-focus and disappears when it gets it back. `main._supervise_overlay()` starts
-it and restarts it if it dies; `run()` kills it on exit.
+borderless, always-on-top, click-through window pinned to the **top-right** of
+the primary monitor. The window does not move; only the pupil follows the
+cursor across the whole desktop (`eye_overlay._pupil_from_cursor()`). It appears
+when the game window loses focus and disappears when it gets it back.
+`main._supervise_overlay()` starts it and restarts it if it dies; `run()` kills
+it on exit. The child watches its parent with `eye_overlay._parent_alive()` and
+exits on its own if the game closes or is force-killed.
+
+**No eye at launch.** Windows fires a focus-*loss* event while the window is
+still being created, which used to drop an eye beside the cursor immediately.
+`main._overlay_armed` gates this: overlay starts are ignored until the window
+has genuinely had focus (or, as a fallback, a second of settled startup has
+passed). Only a real unfocus after that spawns the eye. Do not remove this gate.
 
 **The overlay is Windows and macOS only. Do not add it to Linux.** Wayland
 compositors deliberately keep the pointer position private and there is no API
@@ -221,6 +230,15 @@ a question (text + up to four options + which one is correct) and fire it at
 one player or at everyone. It shares the game's `config`/`ui`/`social` modules
 by putting `games/remastered` on `sys.path` — it is meant to be run straight
 from a checkout. See `tools/sender/README.md`.
+
+The sender is **private — the operator only**. It is never published, never
+linked, never bundled. Beyond questions it can fire any scare by hand (`F2`,
+the effects screen, with an intensity dial) or in one key (`J`, a jumpscare).
+It can also attach invisible **scare triggers** to a question (`F3`): one
+optional rule per answer option, so picking that option fires the named scare
+on the player's machine with no announcement. The rules ride with the question
+in a `scare_triggers` field; the relay validates them. This is the one place a
+player's *choice* can decide which scare runs.
 
 #### Getting the token
 
@@ -322,6 +340,19 @@ choosing that effect itself: no toast, no note, nothing. `"intensity"`
 scare sees. An unknown effect name is **refused with 400**, not silently
 dropped — `relay.EFFECT_NAMES` mirrors `scares.SCARE_REGISTRY` (the relay is
 deployed separately and cannot import it, so keep the two lists in step).
+The two new effects are `eye_jumpscare` (a giant eye fills the screen) and
+`mouse_shake_out` (the real OS cursor jitters and is dragged outside the game
+window).
+
+A question may also carry a `"scare_triggers"` list of
+`{"option": index, "effect": name, "intensity": level}` rules. The relay's
+`_clean_scare_triggers()` validates each rule (one per option, effect must be in
+`EFFECT_NAMES`, intensity clamped) and forwards it with the question item. The
+receiver decides locally in `main._report_social_answer()`: when the player
+picks a bound option, `main._apply_operator_effect()` runs that scare through
+the same path a hand-fired effect uses. No note announces it. Malformed rules
+get a `400`, so a typo fails loudly in the sender rather than doing nothing on
+the player's machine.
 
 Tunables on the server: `RELAY_SEND_TOKEN`, `RELAY_PEER_TTL`,
 `RELAY_QUESTION_TTL`, `RELAY_INBOX_MAX`, `RELAY_RESULT_MAX`,

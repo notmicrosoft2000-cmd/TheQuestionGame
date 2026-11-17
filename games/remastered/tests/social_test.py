@@ -97,6 +97,29 @@ try:
     check("correct index intact", got.get("correct") == 0, got.get("correct"))
     check("sender name intact", got.get("from_name") == "alice", got.get("from_name"))
 
+    # Scare triggers: a question can carry "if they pick option B, fire X"
+    # rules. They must survive the client -> relay -> receiver round trip.
+    check("send_question with triggers queues", alice.send_question(
+        bob_id, "which door?", ["left", "right"],
+        scare_triggers=[
+            {"option": 1, "effect": "eye jumpscare", "intensity": 8.0},
+            {"option": 99, "effect": "jumpscare"},          # invalid, dropped locally
+        ]) is True)
+    trig = {}
+    def _take_trig():
+        item = bob.take_question()
+        if item and item.get("q") == "which door?":
+            trig.update(item)
+            return True
+        return False
+    check("a triggered question reaches bob", wait_until(_take_trig, 6), trig)
+    rules = trig.get("scare_triggers") or []
+    check("the valid trigger survives the round trip",
+          len(rules) == 1 and rules[0]["effect"] == "eye_jumpscare"
+          and rules[0]["option"] == 1, rules)
+    check("the trigger intensity is clamped",
+          rules and abs(rules[0]["intensity"] - 2.0) < 1e-9, rules)
+
     check("answer queues", bob.send_answer(got, "death", False) is True)
 
     results = {}

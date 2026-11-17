@@ -34,6 +34,7 @@ import pygame  # noqa: E402
 
 from TheQuestionGameRemastered import main as gmain        # noqa: E402
 from TheQuestionGameRemastered import audio, config, interjections, persistence  # noqa: E402
+from TheQuestionGameRemastered import eye_overlay  # noqa: E402
 from TheQuestionGameRemastered import os_layer  # noqa: E402
 from TheQuestionGameRemastered import scares as sc        # noqa: E402
 from TheQuestionGameRemastered import script, ui          # noqa: E402
@@ -1446,6 +1447,125 @@ finally:
     _webbrowser.open = _orig_open
     game.update_available = None
     game.update_checker.available = None
+
+# --- Desktop eye: top-right anchor + live pupil ------------------------------
+# The window is pinned to the top-right corner; only the pupil follows the
+# cursor. A cursor to the right of the eye must push the pupil right, not move
+# the window after it.
+_SZ = 120
+_ORIGIN = (1920 - _SZ - 18, 18)   # the same top-right pin the overlay uses
+_CTR = (_ORIGIN[0] + _SZ // 2, _ORIGIN[1] + _SZ // 2)
+_pup_c = eye_overlay._pupil_from_cursor(_SZ, _CTR, _ORIGIN)
+check("a centred cursor leaves the eye looking straight ahead",
+      abs(_pup_c[0]) < 1e-9 and abs(_pup_c[1]) < 1e-9, _pup_c)
+_pup_r = eye_overlay._pupil_from_cursor(_SZ, (_CTR[0] + 500, _CTR[1]), _ORIGIN)
+_pup_l = eye_overlay._pupil_from_cursor(_SZ, (_CTR[0] - 500, _CTR[1]), _ORIGIN)
+_pup_d = eye_overlay._pupil_from_cursor(_SZ, (_CTR[0], _CTR[1] + 500), _ORIGIN)
+check("the pupil turns toward a cursor on either side",
+      _pup_r[0] > 0 and _pup_l[0] < 0, (_pup_r, _pup_l))
+check("the pupil turns downward toward a cursor below",
+      _pup_d[1] > 0, _pup_d)
+check("the pupil travel stays inside the almond",
+      abs(_pup_r[0]) <= _SZ * 0.46 and abs(_pup_r[1]) <= _SZ * 0.46 * 0.55,
+      _pup_r)
+check("a missing cursor does not break the eye",
+      eye_overlay._pupil_from_cursor(_SZ, None, _ORIGIN) == (0.0, 0.0))
+check("the desktop eye is a separate top-right window, not a second SDL display",
+      "OVERLAY_FLAG" in dir(eye_overlay) and eye_overlay.OVERLAY_FLAG == "--eye-overlay")
+
+
+# --- Overlay arming gate: no eye at launch -----------------------------------
+class _FakeOverlay:
+    def __init__(self):
+        self.starts = 0
+        self.stops = 0
+        self.supported = True
+        self.running = False
+
+    def start(self):
+        self.starts += 1
+        self.running = True
+        return True
+
+    def stop(self):
+        self.stops += 1
+        self.running = False
+
+
+_gate_game = game
+_gate_overlay = _FakeOverlay()
+_saved_overlay = _gate_game._overlay
+_gate_game._overlay = _gate_overlay
+_gate_game._overlay_armed = False
+_gate_game._window_focused = True
+_gate_game._on_window_focus(False)   # the early focus-loss every launch fires
+check("an early focus loss does not spawn the eye at launch",
+      _gate_overlay.starts == 0, _gate_overlay.starts)
+_gate_game._on_window_focus(True)    # the window is really focused now
+check("a real focus gain arms the overlay", _gate_game._overlay_armed is True)
+check("focus gain stops any stray overlay", _gate_overlay.stops >= 1)
+_gate_game._on_window_focus(False)
+check("a genuine focus loss after launch opens the eye",
+      _gate_overlay.starts == 1, _gate_overlay.starts)
+_gate_game._overlay = _saved_overlay
+
+# --- No hovering / floating on any platform ---------------------------------
+check("window float is disabled", config.WINDOW_FLOAT is False)
+check("window float amplitude is zero", config.WINDOW_FLOAT_AMPLITUDE == 0)
+check("window hover parallax is removed", config.WINDOW_HOVER_AMPLITUDE == 0)
+
+# --- New scare effects are real and registered everywhere -------------------
+check("the giant-eye scare is registered", "eye_jumpscare" in sc.SCARE_REGISTRY)
+check("the live mouse-shake scare is registered",
+      "mouse_shake_out" in sc.SCARE_REGISTRY)
+check("the giant-eye scare is in the flash set",
+      "eye_jumpscare" in sc._FLASH_SCARES)
+check("the mouse-shake scare is in the desktop set",
+      "mouse_shake_out" in sc._DESKTOP_SCARES)
+
+# The relay refuses effect names it does not know, so its list must stay in
+# sync with the game's registry for the two new effects.
+_relay_src = open(os.path.join(HERE, "..", "..", "..", "server", "relay.py"),
+                  encoding="utf-8").read()
+check("the relay accepts the giant-eye effect",
+      '"eye_jumpscare"' in _relay_src)
+check("the relay accepts the mouse-shake effect",
+      '"mouse_shake_out"' in _relay_src)
+
+# A live cursor shake degrades to a no-op off Windows/macOS but never raises.
+try:
+    os_layer.begin_mouse_shake()
+    os_layer.update_mouse_shake()
+    check("a live mouse shake never raises", True)
+except Exception as exc:
+    check("a live mouse shake never raises", False, repr(exc))
+
+# --- Option-triggered scares -------------------------------------------------
+# Choosing a configured option fires the bound effect; choosing another one
+# leaves it alone. There is no announcement and no separate effect send.
+_trig_game = game
+_fired = {"n": 0}
+_real_apply = _trig_game._apply_operator_effect
+_trig_game._apply_operator_effect = lambda name, intensity=1.0: (
+    _fired.__setitem__("n", _fired["n"] + 1) or True)
+_trig_game.social = None   # no answer report needed for this test
+_qitem = {
+    "id": "q1", "from": "aaaaaaaaaa", "from_name": "operator",
+    "q": "Pick one", "opts": ["A", "B", "C"],
+    "correct": 0,
+    "scare_triggers": [{"option": 1, "effect": "jumpscare", "intensity": 1.5}],
+}
+_trig_game._report_social_answer(_qitem, "A")
+check("picking an unbound option fires nothing", _fired["n"] == 0, _fired)
+_trig_game._report_social_answer(_qitem, "B")
+check("picking the bound option fires its scare", _fired["n"] == 1, _fired)
+_trig_game._report_social_answer(_qitem, "C")
+check("only the configured option is bound", _fired["n"] == 1, _fired)
+_trig_game._apply_operator_effect = _real_apply
+_trig_game.social = _saved_social
+check("an option trigger leaves no announcement on screen",
+      not any("JUMPSCARE" in n.get("text", "").upper()
+              for n in _trig_game.social_notes), _trig_game.social_notes)
 
 game.state = "TITLE"
 game.running = False

@@ -138,6 +138,7 @@ EFFECT_NAMES = frozenset({
     "corruption", "flicker", "heartbeat", "jumpscare", "mouse_move",
     "notification", "picture", "reverse_chord", "rgb_split", "rumble",
     "screen_tear", "static_scream", "wallpaper", "webcam_flash", "whisper",
+    "eye_jumpscare", "mouse_shake_out",
     "window_drift", "window_shake", "window_teleport", "windows_minimize",
     "windows_shake",
     # v6.1 malware-theme effects
@@ -184,6 +185,45 @@ def _valid_peer_id(value):
     if not isinstance(value, str) or not (8 <= len(value) <= 64):
         return False
     return all(ch.isalnum() or ch in "-_" for ch in value)
+
+
+def _clean_scare_triggers(raw):
+    """Validate the optional "option -> scare" rules on a question.
+
+    Returns a normalised list, or None for a malformed request. Only names the
+    receiver can actually play are accepted, and only one rule per option: a
+    typo must fail loudly here rather than doing nothing on the player's
+    machine. Deliberately independent of option *text* — the rule is the option
+    index the sender configured.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > SOCIAL_OPTS_MAX:
+        return None
+    out = []
+    seen = set()
+    for rule in raw:
+        if not isinstance(rule, dict):
+            return None
+        option = rule.get("option")
+        effect = _clean_social_text(rule.get("effect"), 32).lower().replace(" ", "_")
+        if isinstance(option, bool) or not isinstance(option, int) \
+                or not 0 <= option < SOCIAL_OPTS_MAX:
+            return None
+        if effect not in EFFECT_NAMES:
+            return None
+        try:
+            intensity = float(rule.get("intensity", 1.0))
+        except (TypeError, ValueError):
+            intensity = 1.0
+        if intensity != intensity or intensity in (float("inf"), float("-inf")):
+            intensity = 1.0
+        if option in seen:
+            continue
+        seen.add(option)
+        out.append({"option": option, "effect": effect,
+                    "intensity": max(0.1, min(2.0, intensity))})
+    return out
 
 
 def _purge_locked(now):
@@ -255,6 +295,9 @@ def _handle_send(body):
     if isinstance(correct, bool) or not isinstance(correct, int) \
             or not (0 <= correct < len(opts)):
         correct = None
+    triggers = _clean_scare_triggers(body.get("scare_triggers"))
+    if triggers is None:
+        return 400, {"error": "bad scare triggers"}
 
     now = time.time()
     delivered = []
@@ -283,6 +326,8 @@ def _handle_send(body):
             "correct": correct,
             "ts": now,
         }
+        if triggers:
+            item["scare_triggers"] = triggers
         for target in targets[:20]:
             box = _inboxes.setdefault(target, [])
             box.append(dict(item))

@@ -228,8 +228,14 @@ class SocialClient:
         self._wake.set()
         return True
 
-    def send_question(self, to_id, question, options, correct=None):
+    def send_question(self, to_id, question, options, correct=None,
+                      scare_triggers=None):
         """Queue a question for one peer id (or 'all'). Returns the local count.
+
+        ``scare_triggers`` is an optional list of
+        ``{"option": index, "effect": name, "intensity": level}`` rules. The
+        relay validates and forwards them with the question; the receiver
+        fires the named scare on its own machine when that option is picked.
 
         The UI treats queueing as success; a relay-side failure surfaces as a
         result note from `_run` ("could not deliver").
@@ -242,6 +248,24 @@ class SocialClient:
         if not (isinstance(correct, int) and not isinstance(correct, bool)
                 and 0 <= correct < len(opts)):
             correct = None
+        triggers = []
+        for raw in (scare_triggers or []):
+            if not isinstance(raw, dict):
+                continue
+            value = raw.get("option")
+            if isinstance(value, bool) or not isinstance(value, int):
+                continue
+            if not 0 <= value < len(opts):
+                continue
+            name = _clean(raw.get("effect"), 32).lower().replace(" ", "_")
+            if not name:
+                continue
+            try:
+                level = float(raw.get("intensity", 1.0))
+            except (TypeError, ValueError):
+                level = 1.0
+            triggers.append({"option": value, "effect": name,
+                             "intensity": max(0.1, min(2.0, level))})
         payload = {
             "from": self.player_id,
             "to": to_id or "all",
@@ -249,6 +273,8 @@ class SocialClient:
             "opts": opts,
             "correct": correct,
         }
+        if triggers:
+            payload["scare_triggers"] = triggers[:config.SOCIAL_OPTS_MAX]
         with self._lock:
             self._outbox.append(("send", payload))
             self._sent += 1
@@ -348,6 +374,19 @@ class SocialClient:
             path = "/v1/send-question" if kind in ("send", "effect") \
                 else "/v1/answer"
             ok, data = self._post(path, payload)
+            if not ok and kind in ("send", "effect"):
+                # The UI treats queueing as success, so a refused or offline
+                # send must surface here as a local note. main.py turns this
+                # into "COULD NOT DELIVER — <error>" instead of claiming the
+                # question/effect reached anyone.
+                with self._lock:
+                    self._results.append({
+                        "local": True,
+                        "error": data.get("_error") or "offline",
+                        "q": payload.get("q")
+                        or ("EFFECT: " + payload.get("effect", "")),
+                        "to": payload.get("to", "all"),
+                    })
             if kind == "effect":
                 # Same rule as a question: queueing is not delivery. Record
                 # what the relay said so the operator UI can tell the truth.

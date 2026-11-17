@@ -14,6 +14,21 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 
 ### Fixed
 
+- **No eye next to the cursor at launch (Windows).** The desktop eye used to
+  pop up the moment the game opened, because Windows fires a focus-*loss*
+  event while the window is being created. The overlay now waits for a real
+  focus gain (or a second of settled startup) before it can open, and only a
+  genuine unfocus afterwards spawns it.
+- **The desktop eye is pinned top-right and its pupil tracks the cursor.** It
+  used to be anchored near the bottom-right and dragged after the pointer. The
+  window now stays in the top-right corner of the primary monitor; only the
+  iris and pupil follow the mouse across the whole desktop. Rewritten for both
+  Windows (layered, click-through, always-on-top Win32 window) and macOS (Tk +
+  a small AppKit bridge), and the child now watches its parent and exits if the
+  game closes or is force-killed.
+- **The game window no longer floats on any platform.** The constant up/down
+  bob and the hover-lean toward the cursor are off everywhere, Windows and
+  macOS included. The one-shot new-question jump and answer nudge stay.
 - **The CRT tube has no more seams and no longer cuts the eye.** The curvature
   pass used to slice the frame into 26 horizontal strips and scale each one to
   its own integer width. Adjacent strips could differ by a pixel, so vertical
@@ -28,6 +43,22 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 
 ### Added
 
+- **The cursor can be shaken right out of the game window.** A new scare
+  (`mouse_shake_out`) drives the *real* OS cursor in desktop coordinates, so it
+  jitters and lands outside the window rather than warping inside a frame.
+  Once well into a session it also fires on its own at irregular intervals, so
+  the pointer sometimes leaves on its own with no warning. It is always on and
+  does not follow the screen-shake accessibility switch.
+- **Eye jumpscare.** A new `eye_jumpscare` effect fills the whole screen with
+  one enormous angry eye under the stinger.
+- **Option-triggered scares in the operator sender.** A question can now carry
+  invisible "if they pick option B, fire X" rules. They ride with the question
+  (new `scare_triggers` wire field), the relay validates them, and the player's
+  machine fires the scare locally with no toast or announcement. One rule per
+  option, each with its own intensity.
+- **More sender customization.** `F3` opens the option → scare editor, `J`
+  fires a jumpscare at the current recipient in one key, the compose form
+  shows the configured triggers, and the focused row is highlighted.
 - **Automatic update check.** On launch, and every six hours afterwards, the
   game asks GitHub for the newest published `remastered` release and compares
   it with `config.VERSION`. A newer release is announced with a toast and a

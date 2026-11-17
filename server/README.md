@@ -97,6 +97,24 @@ token is only as secret as your build — treat it as a lock on the door, not a
 vault. It is a separate secret from `RELAY_APP_TOKEN`, which gates the AI
 endpoint, so you can rotate either one alone.
 
+### Effects and option-triggered scares
+
+`POST /v1/send-question` also dispatches an `"effect"` body (an `effect` name
+plus an `intensity`) to the same room. The receiver plays it through its own
+scare system, so it is indistinguishable from a scare the game chose itself.
+Effect names are validated against `EFFECT_NAMES` near the top of `relay.py`;
+**keep that list in sync with `scares.SCARE_REGISTRY` in the game** — the relay
+is deployed on its own and cannot import it. Two newer names are
+`eye_jumpscare` and `mouse_shake_out`.
+
+A question may carry a `"scare_triggers"` list of
+`{"option": index, "effect": name, "intensity": level}` rules. `_clean_scare_triggers()`
+validates them (one rule per option, known effect name, intensity clamped to
+`[0.1, 2.0]`) and forwards them with the question. The receiver fires the
+matching scare locally when that answer option is picked. Malformed rules are
+refused with `400` — a mistake in the sender fails loudly instead of silently
+doing nothing on the player's machine.
+
 These endpoints never touch the Groq upstream or the API key. They are
 rate-limited separately (`RELAY_SOCIAL_RATE`/min, `RELAY_SOCIAL_BURST`) and
 every string is capped, so all they can move is a question-sized payload.

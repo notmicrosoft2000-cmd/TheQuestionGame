@@ -58,6 +58,8 @@ ssh nept@192.168.99.56 "sudo grep RELAY_SEND_TOKEN /opt/tqg-relay/relay.env"
 | `1` `2` `3` `4` | set which option is the correct one |
 | `F1` (or `H`) | the "how this works" screen |
 | `F2` | the effects screen: fire a scare or glitch by hand |
+| `F3` | the scare-trigger editor: bind a scare to an answer option |
+| `J` | fire `jumpscare` at the current recipient immediately |
 | `CTRL+X` | forget the token |
 | `ESC` | quit (or leave the field you are editing) |
 | mouse wheel | scroll the compose form |
@@ -103,6 +105,28 @@ No toast, no note, no warning. It simply happens.
 same flicker can be a blink or a sustained stutter. The relay clamps it to
 `[0.1, 2.0]` and refuses unknown effect names with a `400`, so a typo fails
 loudly here instead of silently doing nothing on the player's screen.
+
+`J` is the one-key shortcut for `jumpscare` at the current recipient, with no
+compose step. It uses the same effects route and the same honest delivery log.
+
+## Scare triggers (`F3`)
+
+A question can carry up to four invisible rules, one per answer option. Press
+`F3` to open the editor:
+
+| key | what it does |
+|---|---|
+| `UP` / `DOWN` | pick option A, B, C or D |
+| `LEFT` / `RIGHT` | cycle the effect for that option (`NONE` clears it) |
+| `[` / `]` | lower / raise that rule's intensity (0.5 to 2.0) |
+| `DEL` | clear the selected option's rule |
+| `ENTER` / `F3` / `ESC` | back to the compose form |
+
+The configured rules show on the `SCARE TRIGGER` row of the compose form and
+ride with the next question you send. When the player picks that option, the
+game fires the scare locally — no toast, no warning, exactly as if the model
+had chosen the effect itself. The relay validates the effect name against its
+own registry and refuses malformed rules with a `400`.
 
 Effects are recorded in the delivery log like questions are, so the relay's
 verdict about them is reported just as honestly. They do not clear the compose
