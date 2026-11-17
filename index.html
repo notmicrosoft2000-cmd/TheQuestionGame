@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&family=Kaushan+Script&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=54">
+  <link rel="stylesheet" href="css/style.css?v=55">
   <script>
     (function () {
       var ua = navigator.userAgent, m, v = 0;
@@ -74,6 +74,21 @@
   </div>
   <div class="hud hud-bl" aria-hidden="true">v6.1-alpha</div>
   <div class="hud hud-br" aria-hidden="true"><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a></div>
+
+  <!-- The watcher: the same top-right eye the game pins to your desktop while
+       the window is unfocused. The window stays put; only the pupil follows
+       the pointer. Decorative, click-through, and silent in calm themes. -->
+  <div class="watcher" id="watcher" aria-hidden="true">
+    <svg class="watcher-eye" viewBox="0 0 96 56" fill="none" aria-hidden="true">
+      <path class="watcher-outline" d="M4 28C24 4 72 4 92 28 72 52 24 52 4 28Z"/>
+      <g class="watcher-look">
+        <circle class="watcher-iris" cx="48" cy="28" r="15"/>
+        <circle class="watcher-pupil" cx="48" cy="28" r="6.5"/>
+        <circle class="watcher-glint" cx="43" cy="23" r="2.4"/>
+      </g>
+    </svg>
+    <span class="watcher-note">IT SEES YOU</span>
+  </div>
 
   <div id="boot" aria-hidden="true">
     <div class="boot-inner">
@@ -742,6 +757,7 @@
             <div class="story-para">
               <p>Sessions are twice as long now, and the thing asking the questions remembers every single one you have ever answered. It will not repeat itself. It has 109 questions built in for when the network is gone and a rotating subject so it cannot circle the same three fears.</p>
               <p>The scares finally match the premise. A scanner appears with three threats on it and fails to remove one. The screen turns blue. A console types on its own. A window lists the real names of your files. It copies a line to your clipboard, renames the window, and leaves one harmless note on your Desktop. Every one of those can be turned off in Accessibility, and all of them degrade to a fake in-app scan when the machine will not cooperate.</p>
+              <p>The desktop eye has moved to the top-right corner and now holds still while its pupil follows your cursor, instead of dragging the whole window after you. The game window stopped hovering too. One new scare grabs the real pointer and shakes it clean out of the window — no accessibility switch turns that one off.</p>
               <p>The classic 50 Hz buzz is back in the ambience, the text is back to Classic thickness, and the download page now leads with this build. The v2.02 Classic edition is folded away at the bottom, exactly where an archive belongs.</p>
             </div>
           </div>
@@ -923,7 +939,8 @@
               <li><span class="mark">▸</span> IT TOUCHES THE REAL DESKTOP — one line copied to your clipboard, the window renamed to something it chose, and one harmless uniquely-named <b>.txt</b> left on your Desktop. The note never overwrites anything and is capped at one per session. ACCESSIBILITY → DISABLE DESKTOP SCARES turns all of it into the in-app scan.</li>
               <li><span class="mark">▸</span> THE BUZZ IS BACK — the ambience is the Classic v2.02 50 Hz mains hum again, with quiet harmonics and a breath, not the static-like drone of v6.0.0.</li>
               <li><span class="mark">▸</span> TEXT IS THINNER — the remaster now prefers the system Courier face and a translucent halo, so it reads like the Classic edition instead of a half-weight bolder one.</li>
-              <li><span class="mark">▸</span> THE EYE IS STILL THERE — the corner eye, the score it keeps, the desktop eye on Windows and macOS, and the one big eye at the end all remain. There is still no switch for it.</li>
+              <li><span class="mark">▸</span> THE EYE IS STILL THERE — the corner eye, the score it keeps, the desktop eye on Windows and macOS, and the one big eye at the end all remain. The desktop eye now stays pinned top-right and turns its pupil to follow you; the window no longer floats. There is still no switch for it.</li>
+              <li><span class="mark">▸</span> THE CURSOR LEAVES ON ITS OWN — a new scare shakes the real mouse pointer outside the game window, and a giant eye fills the screen. The pointer shake is always on and ignores the photosensitivity switches. This page watches from its own top-right corner too.</li>
               <li><span class="mark">▸</span> THE ROOM IS STILL THERE — the multiplayer alpha is unchanged: the questions stay secret, the operator stays hidden, and nothing secret ships in the build.</li>
             </ul>
           </div>
@@ -1217,6 +1234,6 @@
   </div>
 
   <script src="js/config.js?v=54"></script>
-  <script src="js/main.js?v=54"></script>
+  <script src="js/main.js?v=55"></script>
 </body>
 </html>

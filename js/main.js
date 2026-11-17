@@ -1946,6 +1946,59 @@
     }, 5000);
   }
 
+  /* ---------- The watcher: a small eye pinned top-right ---------------------
+     The game keeps a borderless eye in the top-right of the desktop while its
+     window is unfocused. The page gets the same shape: the window never moves,
+     only the iris and pupil follow the pointer. Blink now and then, and flare
+     red on a rare "it noticed you" beat (the page's nod to the cursor-shake
+     scare). We never touch the real cursor — this is a website, not the game. */
+  (function initWatcher() {
+    const watcher = $("#watcher");
+    const look = watcher && $(".watcher-look", watcher);
+    if (!watcher || !look || reduceMotion) return;
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return;
+
+    let cx = innerWidth - 40, cy = 60;
+    function measure() {
+      const r = watcher.getBoundingClientRect();
+      if (r.width) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+    }
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+
+    let px = cx, py = cy, x = 0, y = 0;
+    window.addEventListener("mousemove", (e) => {
+      px = e.clientX; py = e.clientY;
+    }, { passive: true });
+
+    rafLoop(() => {
+      if (document.body.classList.contains("no-fx")) return;
+      // One screen-sweep maps to a few SVG units inside the almond. Clamp and
+      // smooth so a fast flick does not make the pupil jump outside the lid.
+      const dx = Math.max(-1, Math.min(1, (px - cx) / (innerWidth / 2)));
+      const dy = Math.max(-1, Math.min(1, (py - cy) / (innerHeight / 2)));
+      x += (dx * 12 - x) * 0.12;
+      y += (dy * 4.5 - y) * 0.12;
+      look.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)";
+    });
+
+    function blink() {
+      if (!document.hidden && !safeZone && !GAME_OVERLAY) {
+        watcher.classList.add("blink");
+        setTimeout(() => watcher.classList.remove("blink"), 280);
+      }
+      setTimeout(blink, rand(4200, 11000));
+    }
+    setTimeout(blink, rand(4200, 11000));
+
+    setInterval(() => {
+      if (document.hidden || GAME_OVERLAY || safeZone) return;
+      if (Math.random() > 0.12) return;
+      watcher.classList.add("noticed");
+      setTimeout(() => watcher.classList.remove("noticed"), 1400);
+    }, 17000);
+  })();
+
   const io = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
       if (en.isIntersecting) {
@@ -2245,6 +2298,7 @@
     "THE ROOM IS GETTING COLDER",
     "DO YOU HEAR THAT SCRATCHING?",
     "THE GAME REMEMBERS. DO YOU?",
+    "IT IS WATCHING FROM THE CORNER",
     "PLAY WITH HEADPHONES",
     "THERE IS SOMETHING IN THE ROOM WITH YOU",
     "THE QUESTIONS NEVER END"

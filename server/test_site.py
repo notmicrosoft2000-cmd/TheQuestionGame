@@ -155,6 +155,41 @@ check("main.js records why the tilt went", "card tilt" in mainjs.lower())
 check("new layers are behind the no-fx switch",
       "body.no-fx .crt .tracking" in css and "body.no-fx .vhs-chrome" in css)
 
+print("== the watcher eye is wired end to end ==")
+# The page echoes the game's new top-right desktop eye: markup, styling and
+# behaviour must all be present, and it must stay decoration-only.
+for needle in ('id="watcher"', 'class="watcher-eye"', 'class="watcher-look"',
+               'class="watcher-outline"'):
+    check("index.html has %s" % needle, needle in index)
+for needle in (".watcher{", ".watcher.blink .watcher-eye{",
+               ".watcher.noticed .watcher-eye{", "body.no-fx .watcher",
+               "@media(prefers-reduced-motion:reduce){.watcher{display:none}}"):
+    check("style.css defines %s" % needle, needle in css)
+check("main.js initialises the watcher", "function initWatcher()" in mainjs)
+check("the pupil follows the pointer", 'window.addEventListener("mousemove"' in mainjs)
+check("the watcher has a blink timer", "setTimeout(blink, rand(" in mainjs)
+check("the page advertises the watching eye", "IT IS WATCHING FROM THE CORNER" in mainjs)
+check("the copy mentions the top-right desktop eye", "pinned top-right" in index)
+check("the copy mentions the cursor shake", "shakes the real mouse pointer" in index)
+
+# It watches; it must never steer. Pull out just the watcher block and make
+# sure no code there can move the real pointer or the page.
+_w_start = mainjs.find("function initWatcher()")
+_w_end = mainjs.find("const io = new IntersectionObserver", _w_start)
+_watcher_js = mainjs[_w_start:_w_end] if _w_start != -1 and _w_end != -1 else ""
+check("the watcher block was found", len(_watcher_js) > 200, len(_watcher_js))
+for banned in ("scrollTo", "window.scroll", "cursor =", "cursor:", "setPointerCapture"):
+    check("the watcher does not call %s" % banned, banned not in _watcher_js)
+
+# CSS and JS are cache-busted together; a stale pair loads half an old feature.
+_css_v = re.search(r"style\.css\?v=(\d+)", index)
+_js_v = re.search(r"main\.js\?v=(\d+)", index)
+check("both site assets carry a cache-bust version",
+      _css_v is not None and _js_v is not None)
+check("the CSS and JS cache-bust versions match",
+      bool(_css_v and _js_v and _css_v.group(1) == _js_v.group(1)),
+      (_css_v.group(1) if _css_v else None, _js_v.group(1) if _js_v else None))
+
 print("== the site does not repeat the disproven claims ==")
 # The classic edition DOES open the camera and DOES call ip-api.com; claiming
 # otherwise was a factual error on the page. Guard against it coming back.

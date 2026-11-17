@@ -292,6 +292,49 @@ body.chaos .nav{animation:chaos-jump .14s steps(2) infinite}
 @keyframes eye-pulse{50%{transform:scale(1.25)}}
 #eyes.go{opacity:1;transition:opacity .04s}
 
+/* ---------- The watcher (top-right page eye) -------------------------------
+   A small echo of the game's top-right desktop overlay: the window stays
+   pinned, js/main.js only moves the pupil. Pure decoration — click-through,
+   no text for screen readers, and switched off with the FX, on touch screens,
+   on small viewports and under reduced motion. */
+.watcher{
+  position:fixed;top:3.4rem;right:1.1rem;z-index:9961;
+  width:clamp(46px,5vw,64px);pointer-events:none;opacity:.82;
+  transition:opacity .4s ease;
+}
+.watcher-eye{display:block;width:100%;height:auto;overflow:visible;transform-origin:50% 50%}
+.watcher-outline{
+  fill:rgba(0,18,4,.45);stroke:var(--green);stroke-width:1.6;
+  filter:drop-shadow(0 0 5px rgba(0,220,0,.45));
+}
+.watcher-iris{fill:var(--green-dim);stroke:var(--green);stroke-width:1.1}
+.watcher-pupil{fill:#020402}
+.watcher-glint{fill:rgba(220,255,220,.85)}
+.watcher.blink .watcher-eye{animation:watcher-blink .26s steps(4)}
+@keyframes watcher-blink{
+  0%,100%{transform:scaleY(1)}
+  45%,55%{transform:scaleY(.06)}
+}
+/* The rare "it noticed" beat: a red glare and a short jitter, the page's
+   quiet nod to the game's cursor-shake scare. It never moves the real pointer. */
+.watcher.noticed .watcher-outline{stroke:var(--red);filter:drop-shadow(0 0 9px rgba(200,0,0,.85))}
+.watcher.noticed .watcher-iris{fill:var(--dark-red);stroke:var(--red)}
+.watcher.noticed .watcher-eye{animation:watcher-jitter .12s steps(2) 8}
+@keyframes watcher-jitter{
+  0%,100%{transform:translate(0,0)}
+  50%{transform:translate(1px,-1px)}
+}
+.watcher-note{
+  position:absolute;top:100%;right:0;white-space:nowrap;
+  font-family:var(--vt);font-size:.95rem;letter-spacing:.14em;
+  color:var(--red);text-shadow:var(--glow-red);
+  opacity:0;transition:opacity .3s ease;
+}
+.watcher-note.show{opacity:1}
+body.no-fx .watcher,body.paper .watcher,body.forum .watcher{display:none}
+@media(pointer:coarse){.watcher{display:none}}
+@media(prefers-reduced-motion:reduce){.watcher{display:none}}
+
 .gif-scare{
   position:fixed;inset:0;z-index:9998;display:none;align-items:center;justify-content:center;
   background:#000;pointer-events:none;
@@ -1456,6 +1499,7 @@ body.modal-open{overflow:hidden}
 }
 @media(max-width:600px){
   .hud{display:none}
+  .watcher{display:none}
   .hero-meta{flex-direction:column;align-items:center}
   .stats{grid-template-columns:1fr 1fr}
   .asset-row{flex-direction:column;align-items:flex-start}
