@@ -48,3 +48,7 @@ tools/*.zip
 # directory, but if anyone ever points it at the repo, this keeps it out.
 sender_token
 *.sender_token
+
+# Store asset capture intermediates. Regenerate with
+# tools/capture_store_assets.py; only the finished PNGs/GIFs are committed.
+store-assets/frames/

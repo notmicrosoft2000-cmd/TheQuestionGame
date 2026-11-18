@@ -2487,7 +2487,8 @@
   }
 
   const ASSET_LABELS = [
-    [/\.apk$/i, "ANDROID — APK INSTALLER (ARMEABI-V7A)"],
+    [/arm64[-_]?v8a/i, "ANDROID — SIGNED 64-BIT APK (ARM64-V8A)"],
+    [/\.apk$/i, "ANDROID — 32-BIT APK (ARMEABI-V7A)"],
     [/\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
     [/\.dmg$/i, "macOS — APP BUNDLE"],
     [/\.tar\.gz$/i, "LINUX — TAR.GZ ARCHIVE"]
@@ -2545,7 +2546,7 @@
     // v7.0-beta ships an Android APK alongside the desktop builds. `tag` is
     // overwritten by resolveRemasterTag() when a newer release is published,
     // so the buttons always point at the current release.
-    remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz", apk: "TheQuestionGameRemastered-Android-7.0-beta.apk" }
+    remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz", apk: "TheQuestionGameRemastered-Android-7.0-beta-arm64-v8a.apk" }
   };
 
   // "v6.1-alpha-remastered" -> [6, 1, 0, 0]  (a "beta" counts as 0)
@@ -2620,7 +2621,10 @@
     // tag lookup and always miss.
     const sel = (id) => (id.charAt(0) === "#" ? id : "#" + id);
     const applyAssets = (assets) => {
-      const apk = assets.find((a) => /\.apk$/i.test(a.name));
+      // Prefer the signed 64-bit build when both APKs are attached to a
+      // release; the 32-bit one stays available for older phones.
+      const apks = assets.filter((a) => /\.apk$/i.test(a.name));
+      const apk = apks.find((a) => /arm64/i.test(a.name)) || apks[0];
       const zip = assets.find((a) => /\.zip$/i.test(a.name));
       const dmg = assets.find((a) => /\.dmg$/i.test(a.name));
       const tar = assets.find((a) => /\.tar\.gz$/i.test(a.name));

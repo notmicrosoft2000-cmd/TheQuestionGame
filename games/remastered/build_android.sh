@@ -29,6 +29,16 @@ if [ -d "$HOME/android/jdk21" ]; then
     export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
+# Release signing material lives OUTSIDE the repo. The optional local env file
+# exports P4A_RELEASE_KEYSTORE / KEYALIAS / KEYSTORE_PASSWD / KEYALIAS_PASSWD;
+# without it release builds are produced unsigned (fine for local inspection).
+if [ -f "$HOME/android/tqg-release.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$HOME/android/tqg-release.env"
+    set +a
+fi
+
 "$PY" apply_p4a_patches.py
 
 # Guard: an interrupted `pip install -U pip` inside p4a's build venv leaves a
