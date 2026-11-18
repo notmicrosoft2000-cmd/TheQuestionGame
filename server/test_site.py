@@ -190,6 +190,18 @@ check("the CSS and JS cache-bust versions match",
       bool(_css_v and _js_v and _css_v.group(1) == _js_v.group(1)),
       (_css_v.group(1) if _css_v else None, _js_v.group(1) if _js_v else None))
 
+print("== the evidence gallery shows both editions ==")
+check("the remastered captures are separated from the classic ones",
+      'class="gallery-divider' in index)
+check("the evidence copy names both builds",
+      "v2.02 classic" in index and "v7.0-beta remaster" in index)
+check("the divider is styled", ".gallery-divider{" in css)
+for asset in ("01-title.png", "02-question.png", "03-pause.png",
+              "04-settings.png", "05-online.png", "06-help.png",
+              "gameplay.gif", "title.gif"):
+    check("evidence shows store-assets/%s" % asset,
+          ("store-assets/" + asset) in index)
+
 print("== the site does not repeat the disproven claims ==")
 # The classic edition DOES open the camera and DOES call ip-api.com; claiming
 # otherwise was a factual error on the page. Guard against it coming back.

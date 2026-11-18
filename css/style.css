@@ -1077,6 +1077,13 @@ body.touch-device .signal-keys,
 
 /* ---------- Evidence ---------- */
 .gallery{display:grid;grid-template-columns:1fr 1fr;gap:1.6rem}
+.gallery-divider{
+  grid-column:1/-1;display:flex;align-items:center;gap:1rem;
+  margin:1.2rem 0 .1rem;color:var(--green);font-size:.62rem;letter-spacing:.22em;
+}
+.gallery-divider::before,.gallery-divider::after{
+  content:"";flex:1;height:1px;background:var(--line);
+}
 .shot{
   border:1px solid var(--line);background:var(--panel);position:relative;
   padding:1rem 1rem 1.2rem;transition:border-color .3s,box-shadow .3s;
