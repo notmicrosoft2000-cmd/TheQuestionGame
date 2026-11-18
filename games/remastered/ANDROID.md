@@ -48,6 +48,27 @@ p4a pins Gradle 8.14, which refuses to run on Java 27 (the system default).
 `build_android.sh` therefore points `JAVA_HOME` at a local Temurin 21 in
 `~/android/jdk21` (Adoptium tarball, no sudo) when it exists.
 
+### If the APK will not boot
+
+The original crash on launch was the entry point, not the game: p4a compiles
+the app to bytecode only, so `run_remastered.py` is **not** in the APK. `main.py`
+now checks for the `.py`, falls back to `run_remastered.pyc`, and wraps startup
+so any uncaught exception is written to `tqg_boot_crash.txt` in the app's
+private files dir. On a debuggable (debug) APK:
+
+```sh
+adb shell run-as org.ntg.thequestiongameremastered cat files/tqg_boot_crash.txt
+```
+
+A public-copy fallback is also attempted in `/sdcard/Download`. `logcat` still
+shows the raw Python traceback:
+
+```sh
+adb logcat | grep -i python
+```
+
+Normal exits are `SystemExit` and are deliberately not logged as crashes.
+
 > `.gitignore` deliberately excludes `buildozer.spec`, `p4a-recipes/`,
 > `.buildozer/` and `bin/` — the Android toolchain is machine-local. The
 > scripts that *keep* it working (`build_android.sh`, `apply_p4a_patches.py`)
