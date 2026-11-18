@@ -52,3 +52,6 @@ sender_token
 # Store asset capture intermediates. Regenerate with
 # tools/capture_store_assets.py; only the finished PNGs/GIFs are committed.
 store-assets/**/frames/
+
+# Local staging area for itch.io uploads (downloaded release binaries + images).
+itch-upload/
