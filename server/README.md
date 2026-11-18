@@ -97,6 +97,43 @@ token is only as secret as your build — treat it as a lock on the door, not a
 vault. It is a separate secret from `RELAY_APP_TOKEN`, which gates the AI
 endpoint, so you can rotate either one alone.
 
+### Join alerts to the operator (ntfy)
+
+When a **new player id** first appears in the room, the relay can POST a small
+alert to ntfy, which shows up as a desktop/browser notification wherever you
+are subscribed. The game does not know the topic, the token, or that this is
+configured.
+
+```sh
+# on the relay host
+sudo nano /opt/tqg-relay/relay.env
+#   RELAY_NTFY_TOPIC=tqg-<long random string>
+#   RELAY_NTFY_TOKEN=          # only if the topic is protected
+sudo systemctl restart tqg-relay
+```
+
+Subscribe your laptop to `https://ntfy.sh/<the same topic>`. On ntfy.sh the
+topic is effectively the password, so make it unguessable and do not commit it.
+The alert contains the player's chosen name, platform and the current player
+count — never their IP address. The operator sender (`OPERATOR`) is ignored, so
+your own sender joining does not alert you.
+
+It fires on the first poll from a peer id, not on every heartbeat, with a
+per-peer cooldown (`RELAY_JOIN_COOLDOWN`, default 300s). Delivery is
+best-effort in a background thread: if ntfy is down, the room keeps working and
+the failure is only logged. Leave `RELAY_NTFY_TOPIC` empty to disable it.
+
+Extra knobs:
+
+| var | default | meaning |
+|---|---|---|
+| `RELAY_NTFY_TOPIC` | *(empty)* | ntfy topic; empty disables alerts |
+| `RELAY_NTFY_SERVER` | `https://ntfy.sh/` | base URL for self-hosted ntfy (keep the trailing slash) |
+| `RELAY_NTFY_TOKEN` | *(empty)* | bearer token for protected topics |
+| `RELAY_NTFY_PRIORITY` | `4` | ntfy priority, 1-5 |
+| `RELAY_JOIN_COOLDOWN` | `300` | seconds between alerts for the same peer |
+| `RELAY_JOIN_TIMEOUT` | `5` | ntfy request timeout in seconds |
+
 ### Effects and option-triggered scares
 
 `POST /v1/send-question` also dispatches an `"effect"` body (an `effect` name

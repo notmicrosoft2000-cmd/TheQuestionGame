@@ -27,6 +27,11 @@ def check(name, cond, extra=""):
 
 def load_relay(env):
     """Import relay.py fresh with a given environment."""
+    # Tests must never publish to a real ntfy topic, even if the machine running
+    # them happens to have one configured for the live relay.
+    for k in ("RELAY_NTFY_TOPIC", "RELAY_NTFY_TOKEN", "RELAY_NTFY_SERVER"):
+        if k not in env:
+            os.environ.pop(k, None)
     for k, v in env.items():
         os.environ[k] = v
     spec = importlib.util.spec_from_file_location("relay_under_test", os.path.join(HERE, "relay.py"))
@@ -550,6 +555,107 @@ try:
     check("an idle sender was purged too", code == 403, (code, p))
 finally:
     srv3.shutdown()
+
+print("== join alerts: ntfy from new players, no network ==")
+ntfy_mod = load_relay({
+    "RELAY_KEY": "",
+    "RELAY_NTFY_TOPIC": "tqg-test-topic",
+    "RELAY_NTFY_SERVER": "https://ntfy.invalid",
+    "RELAY_JOIN_COOLDOWN": "300",
+    "RELAY_JOIN_TIMEOUT": "1",
+})
+ntfy_mod._peers.clear()
+ntfy_mod._join_notices.clear()
+
+sent = []
+sent_lock = threading.Lock()
+
+
+class FakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return b"{}"
+
+
+def fake_urlopen(req, timeout=None):
+    body = json.loads(req.data.decode("utf-8"))
+    with sent_lock:
+        sent.append((req, body, timeout))
+    return FakeResponse()
+
+
+real_urlopen = ntfy_mod.urllib.request.urlopen
+ntfy_mod.urllib.request.urlopen = fake_urlopen
+
+
+def wait_for(count):
+    deadline = time.time() + 2.0
+    while len(sent) < count and time.time() < deadline:
+        time.sleep(0.02)
+
+
+try:
+    ntfy_mod._handle_presence({"id": "joiner00001", "name": "alice", "platform": "linux"})
+    # The next polls are heartbeats from the same peer, not new arrivals.
+    ntfy_mod._handle_presence({"id": "joiner00001", "name": "alice", "platform": "linux"})
+    ntfy_mod._handle_presence({"id": "joiner00001", "name": "alice", "platform": "linux"})
+    wait_for(1)
+    check("one alert for a new player", len(sent) == 1, len(sent))
+    if sent:
+        req, body, timeout = sent[0]
+        check("alert posts to the configured ntfy server",
+              req.full_url == "https://ntfy.invalid/", req.full_url)
+        check("alert is a valid ntfy publish",
+              body.get("topic") == "tqg-test-topic" and
+              "message" in body and "title" in body, body)
+        check("alert names the player and platform",
+              "alice" in body["message"] and "linux" in body["message"],
+              body["message"])
+        check("alert carries no IP or token",
+              "ip" not in body and "token" not in str(body).lower(), body)
+        check("alert uses the ntfy timeout", timeout == 1.0, timeout)
+        check("ntfy priority is an integer",
+              isinstance(body.get("priority"), int), body.get("priority"))
+
+    ntfy_mod._handle_presence({"id": "operator0001", "name": "OPERATOR",
+                               "platform": "windows"})
+    time.sleep(0.1)
+    check("the operator sender does not alert", len(sent) == 1, len(sent))
+
+    ntfy_mod._handle_presence({"id": "joiner00002", "name": "bob", "platform": "android"})
+    wait_for(2)
+    check("another player alerts again", len(sent) == 2, len(sent))
+    if len(sent) >= 2:
+        check("alert reports the current player count",
+              "2 players online" in sent[1][1]["message"], sent[1][1]["message"])
+
+    # A peer that times out may come back; the cooldown stops it becoming spam,
+    # but once the cooldown has elapsed a returning player is worth one alert.
+    ntfy_mod._peers.clear()
+    ntfy_mod._join_notices["joiner00001"] = time.time() - 1000
+    ntfy_mod._handle_presence({"id": "joiner00001", "name": "alice", "platform": "linux"})
+    wait_for(3)
+    check("a returning player alerts after the cooldown", len(sent) == 3, len(sent))
+
+    bad_topic_count = len(sent)
+    ntfy_mod.NTFY_TOPIC = "bad topic!"
+    ntfy_mod._handle_presence({"id": "joiner00003", "name": "carol"})
+    time.sleep(0.1)
+    check("an invalid topic disables alerts", len(sent) == bad_topic_count,
+          len(sent))
+
+    ntfy_mod.NTFY_TOPIC = ""
+    ntfy_mod._handle_presence({"id": "joiner00004", "name": "dave"})
+    time.sleep(0.1)
+    check("an empty topic disables alerts", len(sent) == bad_topic_count,
+          len(sent))
+finally:
+    ntfy_mod.urllib.request.urlopen = real_urlopen
 
 print()
 if FAILS:

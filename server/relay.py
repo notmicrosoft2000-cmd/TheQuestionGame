@@ -22,6 +22,9 @@ Configuration is read from the environment (see relay.env.example):
   RELAY_MAX_TOKENS (default 320)   hard ceiling on max_tokens
   RELAY_RATE       (default 30)    requests per minute per IP
   RELAY_BURST      (default 10)    allowed in a short spike
+  RELAY_NTFY_TOPIC (optional)      ntfy topic for "a player joined" alerts
+  RELAY_NTFY_TOKEN (optional)      ntfy auth token, if the topic is protected
+  RELAY_NTFY_SERVER(default https://ntfy.sh)  self-hosted ntfy base URL
 
 Endpoints:
   GET  /health                  -> {"ok": true}
@@ -131,6 +134,31 @@ SOCIAL_OPTS_MAX = 4
 SOCIAL_RATE = int(os.environ.get("RELAY_SOCIAL_RATE", "120"))
 SOCIAL_BURST = int(os.environ.get("RELAY_SOCIAL_BURST", "40"))
 
+# --- operator join alerts (ntfy) ---------------------------------------------
+# Presence heartbeats are frequent, so "someone is online" cannot be derived
+# from "a presence request arrived". A peer is new only when its id was absent
+# from the room on the previous poll. The alert goes to ntfy from the relay, so
+# the game never learns the topic, token, or the operator's notification setup.
+# The topic is effectively the password on ntfy.sh: keep it out of the repo.
+NTFY_TOPIC = os.environ.get("RELAY_NTFY_TOPIC", "").strip()
+# ntfy's JSON publish endpoint is the server root; it requires the trailing
+# slash (https://ntfy.sh/), otherwise ntfy replies 400 "body must be valid
+# JSON" even though the body is fine.
+NTFY_SERVER = os.environ.get("RELAY_NTFY_SERVER", "https://ntfy.sh/").strip().rstrip("/") + "/"
+NTFY_TOKEN = os.environ.get("RELAY_NTFY_TOKEN", "").strip()
+try:
+    NTFY_PRIORITY = int(os.environ.get("RELAY_NTFY_PRIORITY", "4").strip() or "4")
+except ValueError:
+    NTFY_PRIORITY = 4
+# ntfy's JSON API wants an integer priority here, not the string form it also
+# accepts as an HTTP header. Clamp so a typo cannot create a 400 on every join.
+NTFY_PRIORITY = max(1, min(5, NTFY_PRIORITY))
+JOIN_COOLDOWN = float(os.environ.get("RELAY_JOIN_COOLDOWN", "300"))
+JOIN_TIMEOUT = float(os.environ.get("RELAY_JOIN_TIMEOUT", "5"))
+# Only the sender uses these names in the shipped setup. Filtering them here
+# stops the relay from alerting the operator that the operator came online.
+_OPERATOR_NAMES = frozenset({"operator", "operator app", "sender"})
+
 # The scares the receiver knows how to play. The relay is deployed on its own,
 # so it cannot import the game's SCARE_REGISTRY; this is a copy of it. An
 # unknown name is refused rather than delivered, so a typo in the operator's
@@ -155,6 +183,62 @@ _messages = {}       # peer id -> [short operator transmission]
 _social_lock = threading.Lock()
 _social_hits = {}    # ip -> [timestamp]; separate from the AI limiter
 _social_hits_lock = threading.Lock()
+_join_notices = {}   # peer id -> last time we alerted for it (cooldown)
+
+
+def _valid_ntfy_topic(value):
+    """ntfy.sh topics are 1-64 chars of [-_A-Za-z0-9]."""
+    if not 1 <= len(value) <= 64:
+        return False
+    return all(ch.isascii() and (ch.isalnum() or ch in "-_") for ch in value)
+
+
+def _post_ntfy(payload):
+    """Best-effort ntfy publish. Runs in a thread; never blocks presence."""
+    try:
+        req = urllib.request.Request(
+            NTFY_SERVER,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        if NTFY_TOKEN:
+            req.add_header("Authorization", "Bearer " + NTFY_TOKEN)
+        with urllib.request.urlopen(req, timeout=JOIN_TIMEOUT) as resp:
+            resp.read()
+    except Exception as exc:
+        # Never let a notification outage affect the room. The topic is not
+        # logged; only the failure reason is, so the log stays operator-safe.
+        print("[!] ntfy join alert failed: %s" % exc, flush=True)
+
+
+def _queue_join_notice_locked(pid, name, platform, now, players_online):
+    """Build one alert for a newly arrived player. Call with _social_lock held.
+
+    Returns (payload, thread_args) or None. The caller starts the thread after
+    releasing the lock, so a slow ntfy server cannot stall other heartbeats.
+    """
+    if not NTFY_TOPIC or not _valid_ntfy_topic(NTFY_TOPIC):
+        return None
+    if name.strip().lower() in _OPERATOR_NAMES:
+        return None
+    if now - _join_notices.get(pid, 0.0) < JOIN_COOLDOWN:
+        return None
+    _join_notices[pid] = now
+    if len(_join_notices) > 1024:
+        for stale in [k for k, t in _join_notices.items() if now - t > 86400]:
+            _join_notices.pop(stale, None)
+
+    who = name[:SOCIAL_NAME_MAX]
+    where = " on %s" % platform if platform else ""
+    message = "%s joined the room%s. %d player%s online now." % (
+        who, where, players_online, "" if players_online == 1 else "s")
+    return {
+        "topic": NTFY_TOPIC,
+        "title": "TQG — someone joined",
+        "message": message,
+        "priority": NTFY_PRIORITY,
+        "tags": ["loudspeaker"],
+    }
 
 
 def _social_rate_ok(ip):
@@ -252,9 +336,19 @@ def _handle_presence(body):
     if not _valid_peer_id(pid) or not name:
         return 400, {"error": "id and name required"}
     now = time.time()
+    notice = None
     with _social_lock:
         _purge_locked(now)
+        # A peer that timed out is "new" again when it polls. The per-peer
+        # cooldown below stops that from becoming a stream of alerts.
+        is_new = pid not in _peers
         _peers[pid] = {"id": pid, "name": name, "platform": platform, "last": now}
+        players_online = sum(
+            1 for p in _peers.values()
+            if p["name"].strip().lower() not in _OPERATOR_NAMES)
+        if is_new:
+            notice = _queue_join_notice_locked(
+                pid, name, platform, now, players_online)
         online = [{"id": p["id"], "name": p["name"], "platform": p["platform"]}
                   for p in _peers.values()]
         # Delivered once: pop, don't peek. A client that dies before showing
@@ -263,6 +357,8 @@ def _handle_presence(body):
         results = _results.pop(pid, [])
         effects = _effects.pop(pid, [])
         messages = _messages.pop(pid, [])
+    if notice is not None:
+        threading.Thread(target=_post_ntfy, args=(notice,), daemon=True).start()
     online.sort(key=lambda p: p["name"].lower())
     return 200, {"ok": True, "online": online, "inbox": inbox,
                  "results": results, "effects": effects,
