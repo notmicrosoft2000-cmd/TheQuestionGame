@@ -200,7 +200,29 @@ for asset in ("01-title.png", "02-question.png", "03-pause.png",
               "04-settings.png", "05-online.png", "06-help.png",
               "gameplay.gif", "title.gif"):
     check("evidence shows store-assets/%s" % asset,
-          ("store-assets/" + asset) in index)
+          ('src="store-assets/%s"' % asset) in index)
+    check("evidence shows store-assets/desktop/%s" % asset,
+          ('src="store-assets/desktop/%s"' % asset) in index)
+check("the evidence page separates the two remastered builds",
+      index.count("gallery-divider") >= 2)
+
+print("== the itch.io description is HTML, not markdown ==")
+itch = read("store-assets/ITCH_IO.html")
+check("itch page is an HTML fragment", "<h1>" in itch and "<img" in itch)
+# The upload instructions live in an HTML comment and may mention those tags.
+itch_body = re.sub(r"<!--.*?-->", "", itch, flags=re.S)
+check("itch page has no document wrapper",
+      "<html" not in itch_body and "<body" not in itch_body)
+for asset in ("01-title.png", "gameplay.gif", "title.gif",
+              "desktop/01-title.png", "desktop/gameplay.gif"):
+    check("itch page embeds %s" % asset, ('src="%s"' % asset) in itch)
+check("itch page offers the signed 64-bit APK",
+      "TheQuestionGameRemastered-Android-7.0-beta-arm64-v8a.apk" in itch)
+check("itch page offers the desktop archives",
+      "TheQuestionGameRemastered.zip" in itch and
+      "TheQuestionGameRemastered-macOS.dmg" in itch and
+      "TheQuestionGameRemastered-linux.tar.gz" in itch)
+check("itch page states it is not malware", "not malware" in itch)
 
 print("== the site does not repeat the disproven claims ==")
 # The classic edition DOES open the camera and DOES call ip-api.com; claiming

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Capture real frames from the remastered game for store listings.
 
-Runs the actual Game class headlessly with the Android platform flag on, so the
-screens show the phone layout (touch wording, Low-mode renderer, 1280x720
-landscape). Writes PNG screenshots plus two looping GIFs made from real frames.
+Runs the actual Game class headlessly, once with the Android platform flag and
+once as the desktop build, and writes screenshots plus two looping GIFs for
+each. The dummy SDL driver still advances Game.now from wall-clock time, so the
+helpers below sleep between frames -- without that, fades never finish and
+questions stay half-typed.
 
-    ~/.myenv/bin/python tools/capture_store_assets.py
+    ~/.myenv/bin/python tools/capture_store_assets.py            # Android
+    ~/.myenv/bin/python tools/capture_store_assets.py --desktop  # desktop
 
-Outputs to store-assets/ in the repo root. The dummy SDL driver still advances
-Game.now from wall-clock time, so the helpers below sleep between frames --
-without that, fades never finish and questions stay half-typed.
+Android frames land in store-assets/, desktop frames in store-assets/desktop/.
+Regenerating one mode never touches the other.
 """
 import os
 import shutil
@@ -17,10 +19,13 @@ import subprocess
 import sys
 import time
 
+DESKTOP = "--desktop" in sys.argv[1:]
+MODE = "desktop" if DESKTOP else "android"
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "store-assets")
+OUT = os.path.join(ROOT, "store-assets", MODE) if DESKTOP else os.path.join(ROOT, "store-assets")
 FRAMES = os.path.join(OUT, "frames")
-DATA = "/tmp/opencode/tqg_capture_data"
+DATA = "/tmp/opencode/tqg_capture_data_" + MODE
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
@@ -43,24 +48,24 @@ os_layer.speak_text = lambda *a, **k: None
 # Never call the live relay; the offline question bank answers immediately.
 config.AI_PROVIDERS["relay"]["url"] = "http://127.0.0.1:9/v1/chat/completions"
 
-# Present a phone-shaped landscape display to the Android code path.
+# A 16:9 landscape window in both modes keeps the gallery and itch page tidy.
+# The platform flag still controls the real differences: touch wording and the
+# Low-mode renderer on Android, keyboard wording and the full effects on desktop.
 class _Info:
     current_w = 1280
     current_h = 720
 
 
 pygame.display.Info = lambda: _Info()
-config.IS_ANDROID = True
-gmain.IS_ANDROID = True
+config.IS_ANDROID = gmain.IS_ANDROID = not DESKTOP
 
 
-def _phone_display(self):
-    """The dummy driver ignores FULLSCREEN, so force a 16:9 phone window."""
+def _capture_display(self):
     self._video_applied = self._video_wanted()
     return pygame.display.set_mode((1280, 720))
 
 
-gmain.Game._create_display = _phone_display
+gmain.Game._create_display = _capture_display
 
 game = gmain.Game()
 
@@ -124,6 +129,8 @@ def force_full_question():
     game.fade["alpha"] = 0
     game._draw()  # no _update: it would put the typewriter back into TYPING
 
+
+print("capturing %s frames -> %s" % (MODE, OUT), flush=True)
 
 # --- Title ------------------------------------------------------------------
 game.state = "TITLE"

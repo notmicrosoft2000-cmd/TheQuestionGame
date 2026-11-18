@@ -68,9 +68,10 @@ is the publishing target for this build.
   description still matters, and the same screenshots/graphics apply.
 - A 64-bit build is also what modern phones (Android 11+ devices shipped since
   ~2019) need; the 32-bit APK only covers older hardware.
-- A ready-to-edit page is in `store-assets/ITCH_IO.md`, with six real Android
-  captures and two looping GIFs in the same folder. Replace the relative image
-  paths with the URLs itch gives you when you upload them.
+- A ready-to-paste HTML description is in `store-assets/ITCH_IO.html`. It has
+  six Android captures plus two GIFs in `store-assets/`, and the same six plus
+  two GIFs for the desktop build in `store-assets/desktop/`. Replace the `src`
+  paths with the URLs itch gives you when you upload the images.
 
 ## Store listing copy
 

@@ -51,4 +51,4 @@ sender_token
 
 # Store asset capture intermediates. Regenerate with
 # tools/capture_store_assets.py; only the finished PNGs/GIFs are committed.
-store-assets/frames/
+store-assets/**/frames/
