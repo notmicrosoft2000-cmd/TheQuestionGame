@@ -39,6 +39,93 @@ def _platform_label():
     return (sys.platform or "desktop")[:16]
 
 
+def _clean_incoming_question(item):
+    """Validate a relay question before it can reach the game loop.
+
+    The relay is trusted, but a malformed payload must still never take the
+    player down — that was the crash seen on a friend's phone. Anything that is
+    not a plain question with at least two short string options is dropped here,
+    at the boundary, before main.py can render it.
+    """
+    if not isinstance(item, dict):
+        return None
+    q = _clean(item.get("q"), config.SOCIAL_Q_MAX)
+    raw_opts = item.get("opts")
+    if not q or not isinstance(raw_opts, list):
+        return None
+    opts = [_clean(o, config.SOCIAL_OPT_MAX) for o in raw_opts[:config.SOCIAL_OPTS_MAX]]
+    opts = [o for o in opts if o]
+    if len(opts) < 2:
+        return None
+    clean = {
+        "id": _clean(item.get("id"), 64),
+        "from": _clean(item.get("from"), 64),
+        "from_name": _clean(item.get("from_name"), config.SOCIAL_NAME_MAX),
+        "q": q,
+        "opts": opts,
+    }
+    correct = item.get("correct")
+    clean["correct"] = (correct if isinstance(correct, int)
+                        and not isinstance(correct, bool)
+                        and 0 <= correct < len(opts) else None)
+    rules = []
+    raw_rules = item.get("scare_triggers")
+    if isinstance(raw_rules, list):
+        for rule in raw_rules[:config.SOCIAL_OPTS_MAX]:
+            if not isinstance(rule, dict):
+                continue
+            option = rule.get("option")
+            effect = _clean(rule.get("effect"), 32).lower().replace(" ", "_")
+            if isinstance(option, bool) or not isinstance(option, int) \
+                    or not 0 <= option < len(opts) or not effect:
+                continue
+            try:
+                level = float(rule.get("intensity", 1.0))
+            except (TypeError, ValueError):
+                level = 1.0
+            if level != level or level in (float("inf"), float("-inf")):
+                level = 1.0
+            rules.append({"option": option, "effect": effect,
+                          "intensity": max(0.1, min(2.0, level))})
+    if rules:
+        clean["scare_triggers"] = rules
+    return clean
+
+
+def _clean_incoming_effect(item):
+    if not isinstance(item, dict):
+        return None
+    effect = _clean(item.get("effect"), 32).lower().replace(" ", "_")
+    if not effect:
+        return None
+    try:
+        level = float(item.get("intensity", 1.0))
+    except (TypeError, ValueError):
+        level = 1.0
+    if level != level or level in (float("inf"), float("-inf")):
+        level = 1.0
+    return {
+        "id": _clean(item.get("id"), 64),
+        "from": _clean(item.get("from"), 64),
+        "effect": effect,
+        "intensity": max(0.1, min(2.0, level)),
+    }
+
+
+def _clean_incoming_message(item):
+    if not isinstance(item, dict):
+        return None
+    text = _clean(item.get("message"), config.SOCIAL_MESSAGE_MAX)
+    if not text:
+        return None
+    return {
+        "id": _clean(item.get("id"), 64),
+        "from": _clean(item.get("from"), 64),
+        "from_name": _clean(item.get("from_name"), config.SOCIAL_NAME_MAX),
+        "message": text,
+    }
+
+
 class SocialClient:
     """Threaded presence + question mailbox. Safe to call from the main thread."""
 
@@ -63,6 +150,7 @@ class SocialClient:
         self._inbox = []
         self._results = []
         self._effects = []            # scares/glitches the operator fired at us
+        self._messages = []           # short operator transmissions
         self._send_outcomes = []      # what the relay said about a queued send
         self._status = "connecting"
         self._last_ok = 0.0
@@ -138,6 +226,18 @@ class SocialClient:
     def pending_effects(self):
         with self._lock:
             return len(self._effects)
+
+    def take_messages(self):
+        """Pop all short transmissions the operator sent us."""
+        with self._lock:
+            out = self._messages
+            self._messages = []
+            self._received += len(out)
+            return out
+
+    def pending_messages(self):
+        with self._lock:
+            return len(self._messages)
 
     def pending_questions(self):
         with self._lock:
@@ -308,6 +408,26 @@ class SocialClient:
         self._wake.set()
         return True
 
+    def send_message(self, to_id, message):
+        """Queue a short operator transmission. Operator builds only.
+
+        Messages go through the same token-gated route as questions and
+        effects, but they never carry options, effects or answers.
+        """
+        text = _clean(message, config.SOCIAL_MESSAGE_MAX)
+        if not text:
+            return False
+        payload = {
+            "from": self.player_id,
+            "to": to_id or "all",
+            "message": text,
+        }
+        with self._lock:
+            self._outbox.append(("message", payload))
+            self._sent += 1
+        self._wake.set()
+        return True
+
     def send_answer(self, item, choice, correct):
         """Report the answer to a question taken from `take_question()`."""
         if not isinstance(item, dict):
@@ -371,10 +491,10 @@ class SocialClient:
                 if not self._outbox:
                     return
                 kind, payload = self._outbox.pop(0)
-            path = "/v1/send-question" if kind in ("send", "effect") \
+            path = "/v1/send-question" if kind in ("send", "effect", "message") \
                 else "/v1/answer"
             ok, data = self._post(path, payload)
-            if not ok and kind in ("send", "effect"):
+            if not ok and kind in ("send", "effect", "message"):
                 # The UI treats queueing as success, so a refused or offline
                 # send must surface here as a local note. main.py turns this
                 # into "COULD NOT DELIVER — <error>" instead of claiming the
@@ -384,17 +504,21 @@ class SocialClient:
                         "local": True,
                         "error": data.get("_error") or "offline",
                         "q": payload.get("q")
-                        or ("EFFECT: " + payload.get("effect", "")),
+                        or ("EFFECT: " + payload.get("effect", "")
+                            if kind == "effect" else
+                            "MESSAGE: " + payload.get("message", "")),
                         "to": payload.get("to", "all"),
                     })
-            if kind == "effect":
+            if kind in ("effect", "message"):
                 # Same rule as a question: queueing is not delivery. Record
                 # what the relay said so the operator UI can tell the truth.
+                label = ("EFFECT: " + payload.get("effect", "") if kind == "effect"
+                         else "MESSAGE: " + payload.get("message", ""))
                 with self._lock:
                     self._send_outcomes.append({
                         "ok": ok,
                         "to": payload.get("to", "all"),
-                        "q": "EFFECT: " + payload.get("effect", ""),
+                        "q": label,
                         "qid": data.get("id") or "",
                         "delivered": data.get("delivered") or [],
                         "error": "" if ok else (data.get("_error") or "offline"),
@@ -436,17 +560,44 @@ class SocialClient:
                         self._status = "online"
                         self._last_ok = now
                         self._last_error = ""
-                        self._online = data.get("online") or []
-                        self._inbox.extend(data.get("inbox") or [])
+                        raw_online = data.get("online") or []
+                        self._online = [dict(p) for p in raw_online
+                                        if isinstance(p, dict)]
+
+                        # Clean at the boundary. A bad item from an older relay
+                        # or a partial payload is discarded, never rendered.
+                        raw_inbox = data.get("inbox") or []
+                        if isinstance(raw_inbox, list):
+                            for raw in raw_inbox:
+                                item = _clean_incoming_question(raw)
+                                if item is not None:
+                                    self._inbox.append(item)
                         if len(self._inbox) > config.SOCIAL_INBOX_MAX:
                             del self._inbox[:-config.SOCIAL_INBOX_MAX]
-                        self._results.extend(data.get("results") or [])
+
+                        raw_results = data.get("results") or []
+                        self._results.extend(r for r in raw_results
+                                             if isinstance(r, dict))
+
                         # Effects the operator fired at us while we were here.
-                        # They ride the same presence poll, so they arrive even
-                        # though the receiver has no way to ask for them.
-                        self._effects.extend(data.get("effects") or [])
+                        raw_effects = data.get("effects") or []
+                        if isinstance(raw_effects, list):
+                            for raw in raw_effects:
+                                item = _clean_incoming_effect(raw)
+                                if item is not None:
+                                    self._effects.append(item)
                         if len(self._effects) > config.SOCIAL_INBOX_MAX:
                             del self._effects[:-config.SOCIAL_INBOX_MAX]
+
+                        # Short operator transmissions arrive on the same poll.
+                        raw_messages = data.get("messages") or []
+                        if isinstance(raw_messages, list):
+                            for raw in raw_messages:
+                                item = _clean_incoming_message(raw)
+                                if item is not None:
+                                    self._messages.append(item)
+                        if len(self._messages) > config.SOCIAL_INBOX_MAX:
+                            del self._messages[:-config.SOCIAL_INBOX_MAX]
                     else:
                         fail_streak += 1
                         # "reconnecting" is a distinct state: the UI says so

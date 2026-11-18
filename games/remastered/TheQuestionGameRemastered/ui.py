@@ -79,6 +79,40 @@ def _font(label, size, bold=False):
     return f
 
 
+# --- Text raster cache -------------------------------------------------------
+# font.render() is the hottest path in the render loop: every menu line calls it
+# 2-5 times per frame, and the glyph rasterization is pure CPU work that is
+# identical from one frame to the next. Font objects themselves are cached in
+# _font_obj_cache, so id(font) is stable for a session. The title's scramble
+# changes the text a few times a second, so the cache is bounded and cleared
+# wholesale when full. This alone removes 60+ font renders per frame on a phone.
+_text_surf_cache = {}
+_TEXT_SURF_CACHE_MAX = 512
+
+
+def _cached_render(font, text, *args):
+    """Cached replacement for font.render(text, True, color).
+
+    Accepts both (text, color) and pygame's (text, True, color) calling
+    convention; the antialias flag is ignored because pygame's True is the
+    only mode the game uses.
+    """
+    color = args[-1] if args else config.COLOR_WHITE
+    key = (id(font), text, color)
+    surf = _text_surf_cache.get(key)
+    if surf is None:
+        surf = font.render(text, True, color)
+        if len(_text_surf_cache) >= _TEXT_SURF_CACHE_MAX:
+            _text_surf_cache.clear()
+        _text_surf_cache[key] = surf
+    return surf
+
+
+def cached_render(font, text, *args):
+    """Public entry point for the text raster cache (used by main.py too)."""
+    return _cached_render(font, text, *args)
+
+
 def get_scaled_fonts(game_state, w, h):
     base = min(w, h)
     s = game_state.get("settings", {})
@@ -447,15 +481,36 @@ def draw_scan_sweep(surface, w, h, t):
     surface.blit(_get_sweep_band(w), (0, y))
 
 
+_glow_text_cache = {}
+_glitch_comp_cache = {}
+
+
 def draw_glowing_text(surface, text, font, x, y, t, color=config.COLOR_WHITE, glow_color=config.COLOR_RED):
-    """Title bloom — a red halo breathing behind the letterforms."""
-    base = font.render(text, True, color)
+    """Title bloom — a red halo breathing behind the letterforms.
+
+    The two smoothscales used to build the halo are far too expensive to redo
+    every frame. Cache the prepared surfaces by text/style and animate only the
+    halo's alpha at blit time (set_alpha multiplies the per-pixel alpha, which
+    is the same result the old per-frame BLEND_RGBA_MULT fill produced).
+    """
+    key = (text, id(font), color, glow_color)
+    prepared = _glow_text_cache.get(key)
+    if prepared is None:
+        base = _cached_render(font, text, color)
+        try:
+            small = pygame.transform.smoothscale(base, (max(2, base.get_width() // 3), max(2, base.get_height() // 3)))
+            glow = pygame.transform.smoothscale(small, (base.get_width() + 14, base.get_height() + 14))
+            glow.fill(glow_color, special_flags=pygame.BLEND_RGB_MULT)
+        except Exception:
+            glow = base.copy()
+        prepared = (base, glow)
+        if len(_glow_text_cache) >= 128:
+            _glow_text_cache.clear()
+        _glow_text_cache[key] = prepared
+    base, glow = prepared
     try:
-        small = pygame.transform.smoothscale(base, (max(2, base.get_width() // 3), max(2, base.get_height() // 3)))
-        glow = pygame.transform.smoothscale(small, (base.get_width() + 14, base.get_height() + 14))
-        glow.fill(glow_color, special_flags=pygame.BLEND_RGB_MULT)
         pulse = 0.55 + 0.45 * math.sin(t * 2.2)
-        glow.fill((255, 255, 255, int(255 * (0.3 + 0.4 * pulse))), special_flags=pygame.BLEND_RGBA_MULT)
+        glow.set_alpha(int(255 * (0.3 + 0.4 * pulse)))
         surface.blit(glow, (x - 7, y - 7))
     except Exception:
         pass
@@ -611,14 +666,17 @@ def draw_text(surface, text, font, color, x, y, outline=None):
         outline = config.TEXT_OUTLINE_COLOR
     if outline:
         try:
-            halo = font.render(text, True, outline)
+            halo = _cached_render(font, text, outline)
+            # set_alpha is a per-surface property, so setting it on the cached
+            # surface is cheap and idempotent (every caller wants the same
+            # outline alpha).
             halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
             for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                 surface.blit(halo, (x + ox, y + oy))
         except Exception:
             pass
     try:
-        surf = font.render(text, True, color)
+        surf = _cached_render(font, text, color)
         surface.blit(surf, (x, y))
     except Exception:
         return
@@ -780,29 +838,41 @@ def render_glitch_text(surface, text, font, x, y, t=0.0, color=config.COLOR_WHIT
     """One line with the site's red/cyan split + occasional jitter."""
     if outline is None and config.TEXT_OUTLINE:
         outline = config.TEXT_OUTLINE_COLOR
-    base = font.render(text, True, color)
-    w, h = base.get_size()
+    # Pre-compose the whole effect into ONE surface at cache time. Per frame
+    # that turns 7 alpha-blended blits (halo x4, red, cyan, base) into a single
+    # blit, which is the difference between tolerable and unusable on a phone.
+    key = (text, id(font), color, top_color, bottom_color, outline)
+    comp = _glitch_comp_cache.get(key)
+    if comp is None:
+        base = _cached_render(font, text, color)
+        w, h = base.get_size()
+        pad = 8
+        comp = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+        if outline:
+            halo = _cached_render(font, text, outline)
+            halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
+            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                comp.blit(halo, (pad + ox, pad + oy))
+        try:
+            top = _cached_render(font, text, top_color)
+            bot = _cached_render(font, text, bottom_color)
+            comp.blit(top, (pad - 3, pad - 2),
+                      area=pygame.Rect(0, 0, w, max(1, int(h * 0.45))))
+            comp.blit(bot, (pad + 3, pad + 2),
+                      area=pygame.Rect(0, int(h * 0.55), w, max(1, h - int(h * 0.55))))
+        except Exception:
+            pass
+        comp.blit(base, (pad, pad))
+        if len(_glitch_comp_cache) >= 128:
+            _glitch_comp_cache.clear()
+        _glitch_comp_cache[key] = comp
     jx = jy = 0
     if jitter and random.random() < 0.14:
         jx, jy = random.randint(-3, 3), random.randint(-2, 2)
-    if outline:
-        try:
-            halo = font.render(text, True, outline)
-            halo.set_alpha(getattr(config, "TEXT_OUTLINE_ALPHA", 96))
-            for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                surface.blit(halo, (x + jx + ox, y + jy + oy))
-        except Exception:
-            pass
-    try:
-        top = font.render(text, True, top_color)
-        bot = font.render(text, True, bottom_color)
-        surface.blit(top, (x + jx - 3, y + jy - 2),
-                     area=pygame.Rect(0, 0, w, max(1, int(h * 0.45))))
-        surface.blit(bot, (x + jx + 3, y + jy + 2),
-                     area=pygame.Rect(0, int(h * 0.55), w, max(1, h - int(h * 0.55))))
-    except Exception:
-        pass
-    surface.blit(base, (x + jx, y + jy))
+    surface.blit(comp, (x + jx - 8, y + jy - 8))
+
+
+_glitch_block_cache = {}
 
 
 def render_glitch_block(surface, text, font, color, start_x, start_y, max_width,
@@ -812,42 +882,50 @@ def render_glitch_block(surface, text, font, color, start_x, start_y, max_width,
 
     The coloured fringes go *under* the crisp (optionally outlined) base copy so
     the words stay readable while the split is still visible at the edges.
+
+    Pre-compose each line's three alpha layers into ONE cached surface. The old
+    version blitted base + red + cyan separately every frame — three full-width
+    alpha blends per line, which dominated PLAYING frame time on the phone.
     """
     if outline is None and config.TEXT_OUTLINE:
         outline = config.TEXT_OUTLINE_COLOR
-    lines = _get_cached_lines(text, font, color, max_width, outline=outline)
-    pad = 2 if outline else 0
-    top_lines = _get_cached_lines(text, font, config.COLOR_RED, max_width)
-    bot_lines = _get_cached_lines(text, font, _CYAN, max_width)
-    line_h = font.get_linesize() + 4
-    for i, surf in enumerate(lines):
-        sway_x = int(math.sin(t * 0.8 + i * 0.6) * sway_amp) if sway_amp else 0
-        x = start_x + sway_x
-        y = start_y + i * line_h
-        ox, oy = x + pad, y + pad
-        if ghost:
-            jx = jy = 0
-            if jitter and random.random() < 0.12:
-                jx, jy = random.randint(-2, 2), random.randint(-1, 2)
-            try:
+    key = (text, id(font), color, max_width, outline, bool(ghost), int(alpha_base))
+    comps = _glitch_block_cache.get(key)
+    if comps is None:
+        pad = 2 if outline else 0
+        lines = _get_cached_lines(text, font, color, max_width, outline=outline)
+        top_lines = _get_cached_lines(text, font, config.COLOR_RED, max_width)
+        bot_lines = _get_cached_lines(text, font, _CYAN, max_width)
+        comps = []
+        px, py = 4, 4  # padding so negative fringe offsets stay inside the surface
+        for i, base in enumerate(lines):
+            bw, bh = base.get_size()
+            comp = pygame.Surface((bw + px * 2, bh + py * 2), pygame.SRCALPHA)
+            if ghost:
                 if i < len(top_lines):
                     tl = top_lines[i]
-                    th = tl.get_height()
-                    surface.blit(tl, (ox + jx - 2, oy + jy - 1),
-                                 area=pygame.Rect(0, 0, tl.get_width(), max(1, int(th * 0.45))))
+                    comp.blit(tl, (px + pad - 2, py + pad - 1),
+                              area=pygame.Rect(0, 0, tl.get_width(), max(1, int(tl.get_height() * 0.45))))
                 if i < len(bot_lines):
                     bl = bot_lines[i]
-                    bh = bl.get_height()
-                    surface.blit(bl, (ox + jx + 2, oy + jy + 1),
-                                 area=pygame.Rect(0, int(bh * 0.55), bl.get_width(),
-                                                  max(1, bh - int(bh * 0.55))))
-            except Exception:
-                pass
-        try:
-            surf.set_alpha(alpha_base)
-        except Exception:
-            pass
-        surface.blit(surf, (x, y))
+                    bh2 = bl.get_height()
+                    comp.blit(bl, (px + pad + 2, py + pad + 1),
+                              area=pygame.Rect(0, int(bh2 * 0.55), bl.get_width(),
+                                               max(1, bh2 - int(bh2 * 0.55))))
+            comp.blit(base, (px, py))
+            if alpha_base != 255:
+                comp.set_alpha(int(alpha_base))
+            comps.append(comp)
+        if len(_glitch_block_cache) >= 64:
+            _glitch_block_cache.clear()
+        _glitch_block_cache[key] = comps
+    line_h = font.get_linesize() + 4
+    for i, comp in enumerate(comps):
+        sway_x = int(math.sin(t * 0.8 + i * 0.6) * sway_amp) if sway_amp else 0
+        jx = jy = 0
+        if jitter and random.random() < 0.12:
+            jx, jy = random.randint(-2, 2), random.randint(-1, 2)
+        surface.blit(comp, (start_x + sway_x + jx - 4, start_y + i * line_h + jy - 4))
 
 
 # --- VHS distortion pass -----------------------------------------------------

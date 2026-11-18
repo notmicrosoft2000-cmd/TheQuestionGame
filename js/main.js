@@ -3,7 +3,7 @@
 
   const REPO = "notmicrosoft2000-cmd/TheQuestionGame";
 
-  const REMASTER_TAG = "v6.1-alpha-remastered";
+  const REMASTER_TAG = "v7.0-beta-remastered";
   // The known-good release to fall back to if the API cannot be reached and no
   // bigger-versioned release can be resolved from the release list.
   const REMASTER_FALLBACK_TAG = "v6.1-alpha-remastered";
@@ -2487,7 +2487,7 @@
   }
 
   const ASSET_LABELS = [
-    [/\.apk$/i, "ANDROID — APK INSTALLER (ARM64)"],
+    [/\.apk$/i, "ANDROID — APK INSTALLER (ARMEABI-V7A)"],
     [/\.zip$/i, "WINDOWS 10/11 — ZIP ARCHIVE"],
     [/\.dmg$/i, "macOS — APP BUNDLE"],
     [/\.tar\.gz$/i, "LINUX — TAR.GZ ARCHIVE"]
@@ -2520,7 +2520,6 @@
   }
 
   function wirePlatform(btnId, statusId, asset) {
-    if (btnId === "dlAndroid") { pauseAndroid(); return; }
     const btn = $("#" + btnId);
     const status = $("#" + statusId);
     if (asset) {
@@ -2543,12 +2542,10 @@
 
   const FALLBACKS = {
     classic: { tag: CLASSIC_TAG, win: "TheQuestionGame.zip", mac: "TheQuestionGame-macOS.dmg", linux: "TheQuestionGame-linux.tar.gz", apk: "TheQuestionGame-Android-1.0-arm64-v8a-debug.apk" },
-    // The multiplayer alpha is desktop only: Windows, macOS and Linux. There
-    // is no Android asset for it, so no apk fallback is offered. `tag` is the
-    // last release we know exists; `tag` is overwritten by
-    // resolveRemasterTag() when a newer one is published, so the buttons
-    // always point at the current release.
-    remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz" }
+    // v7.0-beta ships an Android APK alongside the desktop builds. `tag` is
+    // overwritten by resolveRemasterTag() when a newer release is published,
+    // so the buttons always point at the current release.
+    remastered: { tag: REMASTER_FALLBACK_TAG, win: "TheQuestionGameRemastered.zip", mac: "TheQuestionGameRemastered-macOS.dmg", linux: "TheQuestionGameRemastered-linux.tar.gz", apk: "TheQuestionGameRemastered-Android-7.0-beta.apk" }
   };
 
   // "v6.1-alpha-remastered" -> [6, 1, 0, 0]  (a "beta" counts as 0)
@@ -2607,7 +2604,6 @@
   }
 
   function wireFallback(btnId, statusId, os, url) {
-    if (btnId === "dlAndroid") { pauseAndroid(); return; }
     const btn = $("#" + btnId);
     const status = $("#" + statusId);
     btn.href = url;
@@ -2702,7 +2698,8 @@
       relVersion: "remRelVersion", relDate: "remRelDate", releaseFallback: "remReleaseFallback",
       winBtn: "dlRemWindows", winStatus: "dlRemWindowsStatus",
       macBtn: "dlRemMac", macStatus: "dlRemMacStatus",
-      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus"
+      linuxBtn: "dlRemLinux", linuxStatus: "dlRemLinuxStatus",
+      androidBtn: "dlRemAndroid", androidStatus: "dlRemAndroidStatus"
     }, FALLBACKS.remastered);
     (async () => {
       let tag = CLASSIC_TAG;
@@ -2719,12 +2716,10 @@
         relVersion: "relVersion", relDate: "relDate", releaseFallback: "releaseFallback",
         winBtn: "dlWindows", winStatus: "dlWindowsStatus",
         macBtn: "dlMac", macStatus: "dlMacStatus",
-        linuxBtn: "dlLinux", linuxStatus: "dlLinuxStatus",
-        androidBtn: "dlAndroid", androidStatus: "dlAndroidStatus"
+        linuxBtn: "dlLinux", linuxStatus: "dlLinuxStatus"
       }, FALLBACKS.classic);
     })();
   }
-  pauseAndroid();
   loadRelease();
 
   // ---------- Ambience player ----------

@@ -610,9 +610,9 @@ Asset names are fixed and the site depends on them:
 ### Android
 
 Built by hand with buildozer (`games/remastered/build_android.sh`), not by the
-release workflows. The last APK was `v4.0.0-remastered`. The v5.0.0
-multiplayer alpha is **desktop only** — there is no APK for it and the site's
-Android card deliberately offers no link. See `games/remastered/ANDROID.md`.
+release workflows. The current APK is attached to the `v7.0-beta-remastered`
+release as `TheQuestionGameRemastered-Android-7.0-beta.apk`; the site's remastered
+Android card links to it. See `games/remastered/ANDROID.md`.
 
 ### Locally
 
@@ -711,8 +711,8 @@ gh release list
 gh release view v5.1.0-beta-remastered --json assets
 ```
 
-Current versions: game **6.1-alpha** (multiplayer alpha, receiver build),
-classic **2.02**, pinned site tag `v6.1-alpha-remastered`, fallback tag
+Current versions: game **7.0-beta** (Android port + performance release),
+classic **2.02**, pinned site tag `v7.0-beta-remastered`, fallback tag
 `v6.1-alpha-remastered`.
 
 ### Cutting a release

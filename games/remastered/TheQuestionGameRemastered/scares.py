@@ -448,6 +448,11 @@ def apply_scare(game, name):
         sset = (getattr(game, "game_state", {}) or {}).get("settings", {}) or {}
     except Exception:
         sset = {}
+    # A phone has no usable camera feed or picture stash. Swap those for a
+    # screen effect before any other rule, so an operator scare always lands
+    # with something visible on Android instead of quietly evaporating.
+    if config.IS_ANDROID and name in _CAMERA_SCARES:
+        name = "corruption"
     if sset.get("disable_desktop_scares", False) and name in _DESKTOP_TWEAK_SCARES:
         name = "fake_scan"
     elif sset.get("disable_webcam_scares", False) and name in _CAMERA_SCARES:

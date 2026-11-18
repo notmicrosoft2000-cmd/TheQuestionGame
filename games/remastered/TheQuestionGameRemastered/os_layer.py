@@ -1608,8 +1608,12 @@ def get_cached_username():
 
 def start_background_prefetch():
     threading.Thread(target=_prefetch_location, daemon=True).start()
-    threading.Thread(target=_prefetch_pictures, daemon=True).start()
-    threading.Thread(target=_refresh_processes_loop, daemon=True).start()
+    # There is no gallery to read and no Linux process table to scan on a
+    # phone. Both threads would only burn battery and take the GIL away from
+    # the game loop.
+    if not config.IS_ANDROID:
+        threading.Thread(target=_prefetch_pictures, daemon=True).start()
+        threading.Thread(target=_refresh_processes_loop, daemon=True).start()
 
 
 def put_computer_to_sleep():

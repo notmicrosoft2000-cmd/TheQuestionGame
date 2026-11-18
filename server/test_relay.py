@@ -421,6 +421,136 @@ try:
 finally:
     srv2.shutdown()
 
+print("== social: short operator messages ==")
+# Messages share the token-gated send route but land in their own one-shot
+# mailbox, so none of the question/effect checks above should ever see them.
+mod = load_relay({"RELAY_KEY": "", "RELAY_PORT": "8213", "RELAY_APP_TOKEN": "",
+                  "RELAY_RATE": "100", "RELAY_BURST": "50",
+                  "RELAY_SEND_TOKEN": "msg-secret"})
+srv3 = mod.ThreadingHTTPServer(("127.0.0.1", 8213), mod.Handler)
+threading.Thread(target=srv3.serve_forever, daemon=True).start()
+time.sleep(0.2)
+
+
+def post3(path, body, headers=None):
+    h = {"Content-Type": "application/json"}
+    h.update(headers or {})
+    req = urllib.request.Request("http://127.0.0.1:8213" + path,
+                                 data=json.dumps(body).encode(), headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except Exception:
+            return e.code, {}
+
+
+try:
+    code, _ = post3("/v1/presence", {"id": "opmessage01", "name": "operator"})
+    check("operator joins for messages", code == 200, code)
+    code, _ = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    check("player joins for messages", code == 200, code)
+    code, _ = post3("/v1/presence", {"id": "thirdmsg001", "name": "third"})
+    check("third peer joins for messages", code == 200, code)
+
+    code, a = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "no token"})
+    check("message without the token is refused", code == 403, (code, a))
+    code, b = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "wrong token"},
+        {"X-Send-Token": "guess"})
+    check("message with a wrong token is refused", code == 403, (code, b))
+
+    token = {"X-Send-Token": "msg-secret"}
+    code, c = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "hello there"}, token)
+    check("message with the token is accepted",
+          code == 200 and c.get("delivered") == ["playermsg01"], (code, c))
+    mid = c.get("id")
+
+    code, d = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    box = d.get("messages") or []
+    check("message reaches only the recipient",
+          len(box) == 1 and box[0].get("message") == "hello there", box)
+    check("message carries sender identity",
+          bool(box) and box[0].get("from") == "opmessage01"
+          and box[0].get("from_name") == "operator" and box[0].get("id") == mid, box)
+    check("message is not a question or an effect",
+          bool(box) and "q" not in box[0] and "opts" not in box[0]
+          and "effect" not in box[0], box)
+    check("message does not leak into the question inbox",
+          not (d.get("inbox") or []), d.get("inbox"))
+    check("message does not leak into the effect inbox",
+          not (d.get("effects") or []), d.get("effects"))
+
+    code, e = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    check("message pickup is one-shot", not (e.get("messages") or []), e.get("messages"))
+    code, f = post3("/v1/presence", {"id": "opmessage01", "name": "operator"})
+    check("the sender never receives their own message",
+          not (f.get("messages") or []), f.get("messages"))
+
+    code, g = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "all", "message": "room broadcast"}, token)
+    check("a message can be broadcast",
+          code == 200 and set(g.get("delivered") or []) == {"playermsg01", "thirdmsg001"},
+          (code, g))
+    check("broadcast excludes the sender",
+          "opmessage01" not in (g.get("delivered") or []), g.get("delivered"))
+    code, h = post3("/v1/presence", {"id": "opmessage01", "name": "operator"})
+    check("broadcast does not bounce back to the sender",
+          not (h.get("messages") or []), h.get("messages"))
+    code, i = post3("/v1/presence", {"id": "thirdmsg001", "name": "third"})
+    check("the other peer gets the broadcast",
+          [m.get("message") for m in (i.get("messages") or [])] == ["room broadcast"],
+          i.get("messages"))
+    code, j = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    check("the intended peer also gets the broadcast",
+          [m.get("message") for m in (j.get("messages") or [])] == ["room broadcast"],
+          j.get("messages"))
+
+    raw_long = "  " + ("a\x01b" * 200) + "  "
+    code, k = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": raw_long}, token)
+    check("an oversized message is accepted", code == 200, (code, k))
+    code, l = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    longs = [m.get("message", "") for m in (l.get("messages") or [])]
+    check("message text is capped on the wire",
+          bool(longs) and len(longs[0]) <= mod.SOCIAL_MESSAGE_MAX, longs[:1])
+    check("message text is trimmed and single-line",
+          bool(longs) and longs[0] == longs[0].strip() and "\x01" not in longs[0], longs[:1])
+
+    for bad in (123, None, ["hello"], {"text": "hello"}):
+        code, _ = post3("/v1/send-question", {
+            "from": "opmessage01", "to": "playermsg01", "message": bad}, token)
+        check("non-string message is rejected (%s)" % type(bad).__name__, code == 400, code)
+    code, blank = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "   \t  "}, token)
+    check("blank message is rejected", code == 400, (code, blank))
+    code, m = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    check("rejected messages were never queued",
+          not (m.get("messages") or []), m.get("messages"))
+
+    # Idle peers and uncollected messages expire exactly like questions do.
+    mod.PEER_TTL = 0.2
+    mod.QUESTION_TTL = 0.2
+    post3("/v1/presence", {"id": "opmessage01", "name": "operator"})
+    post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    code, n = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "will expire"}, token)
+    check("message accepted just before idle timeout", code == 200, (code, n))
+    time.sleep(0.5)
+    post3("/v1/presence", {"id": "observer01", "name": "observer"})
+    code, o = post3("/v1/presence", {"id": "playermsg01", "name": "player"})
+    check("an uncollected message is purged when idle",
+          not (o.get("messages") or []), o.get("messages"))
+    code, p = post3("/v1/send-question", {
+        "from": "opmessage01", "to": "playermsg01", "message": "after purge"}, token)
+    check("an idle sender was purged too", code == 403, (code, p))
+finally:
+    srv3.shutdown()
+
 print()
 if FAILS:
     print("RELAY_FAIL: " + ", ".join(FAILS))

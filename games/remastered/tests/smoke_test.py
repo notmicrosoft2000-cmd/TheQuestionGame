@@ -9,8 +9,10 @@ be used directly as a CI gate.
 Environment is forced to dummy video/audio and a throwaway data dir, so nothing
 touches the player's real save data.
 """
+import ast
 import os
 import random
+import re
 import sys
 import tempfile
 import time
@@ -57,6 +59,24 @@ def check(name, cond, extra=""):
     else:
         print("  FAIL %s %s" % (name, extra))
         FAILURES.append(name)
+
+
+# player-facing text is pulled out of the drawing methods with ast, so the
+# "no key hints" checks read what can actually reach the screen, not comments.
+_MAIN_SRC = open(os.path.join(HERE, "..", "TheQuestionGameRemastered", "main.py"),
+                 encoding="utf-8").read()
+
+
+def _ui_strings(*method_names):
+    """String literals a set of Game drawing methods can put on screen."""
+    tree = ast.parse(_MAIN_SRC)
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in method_names:
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                    found.append(sub.value)
+    return found
 
 
 # --- Boot ------------------------------------------------------------------
@@ -300,14 +320,26 @@ check("badges survive reset", persistence.has_badge("patient_one"))
 
 # --- Settings overhaul ------------------------------------------------------
 # The settings screen is tabbed, every tab has options, and a change reaches
-# the game itself — not just the save file.
-_expected_tabs = {"AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY",
-                  "CONTROLS", "OTHER"}
-check("the settings screen has the tabs it promises",
-      _expected_tabs.issubset(set(game.settings_categories)),
-      str(game.settings_categories))
+# the game itself — not just the save file. 7.0-beta phase one is touch-first:
+# the old CONTROLS tab and its rebind UI are gone; keys work silently if an
+# older save has bindings, but nothing on screen advertises them.
+_expected_tabs = ["AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY",
+                  "OTHER"]
+check("the settings screen has exactly the touch-first categories",
+      game.settings_categories == _expected_tabs, str(game.settings_categories))
+check("there is no CONTROLS settings tab",
+      "CONTROLS" not in game.settings_categories, str(game.settings_categories))
 check("every settings tab has options",
       all(game.settings_options_by_category.get(c) for c in game.settings_categories))
+_settings_text = " ".join(_ui_strings("_draw_settings")).upper()
+check("the settings screen offers no rebinding",
+      not any(w in _settings_text for w in
+              ("REBIND", "KEYBIND", "CONTROLS", "PRESS A KEY", "ALREADY BOUND")),
+      _settings_text)
+check("no settings option is a rebind control",
+      not any("REBIND" in str(o).upper() or "KEY" in str(o).upper()
+              for opts in game.settings_options_by_category.values() for o in opts),
+      game.settings_options_by_category)
 
 # Keep the old settings so the rest of the file is unaffected.
 _saved_idx = dict(game.settings_idx)
@@ -937,10 +969,14 @@ game.online_edit = None
 game._online_key(pygame.K_ESCAPE)
 check("ONLINE key exits the screen cleanly", True)
 
-# The online screen is an alpha and says so, and it explains the room.
-_ONLINE_ALPHA_LINE = "AN ALPHA. IT WILL BREAK A LOT."
-check("ONLINE says it is an alpha",
-      "ALPHA" in _ONLINE_ALPHA_LINE.upper(), _ONLINE_ALPHA_LINE)
+# The online screen is a beta and says so, and it explains the room.
+_ONLINE_BETA_LINE = "A BETA. IT CAN STILL BREAK."
+check("ONLINE says it is a beta",
+      "BETA" in _ONLINE_BETA_LINE.upper()
+      and "ALPHA" not in _ONLINE_BETA_LINE.upper(), _ONLINE_BETA_LINE)
+check("the ONLINE screen actually renders the beta warning",
+      any(_ONLINE_BETA_LINE in s for s in _ui_strings("_draw_online")),
+      _ui_strings("_draw_online"))
 check("ONLINE explains how the room works", len(gmain.ONLINE_EXPLAINER) >= 4,
       gmain.ONLINE_EXPLAINER)
 check("the explanation promises no writing",
@@ -1068,6 +1104,260 @@ finally:
     for k, v in _old.items():
         if v is not None:
             os.environ[k] = v
+
+
+# --- Touch-first UI: every screen draws real tappable zones ------------------
+# Phase one of 7.0-beta is touch-first. Each screen records its hit boxes while
+# drawing, and a tap runs the same action the old key did. Exercise the whole
+# loop here: draw -> find the zone -> tap it -> check the game actually acted.
+from TheQuestionGameRemastered import social as social_mod  # noqa: E402
+
+
+def _zone(kind, idx=0):
+    for rect, k, i in game._touch_zones:
+        if k == kind and i == idx:
+            return rect
+    return None
+
+
+def _tap_zone(kind, idx=0):
+    rect = _zone(kind, idx)
+    if rect is None:
+        return False
+    game._handle_touch(rect.centerx, rect.centery)
+    return True
+
+
+def _clear_fade():
+    game.fade = {"active": False, "dir": "in", "start": 0, "dur": 0.25,
+                 "alpha": 0, "target": None}
+
+
+_touch_saved_social = game.social
+_touch_saved_name = game.game_state.get("player_name")
+_touch_saved_volume = game.settings_idx.get("Master Volume")
+_touch_saved_cat = game.settings_category_selected
+game.transmissions = []
+_clear_fade()
+game.now = time.time()
+
+# ONLINE: RENAME / SAVE / CANCEL are visible buttons, not hidden keys.
+game.state = "ONLINE"
+game.online_edit = None
+game.social = _RoomStub(2)
+game._draw()
+check("ONLINE draws tappable actions",
+      _zone("online", 0) is not None and _zone("back") is not None
+      and _zone("online_action", 2) is not None,
+      [k for _, k, _ in game._touch_zones])
+check("ONLINE offers a RENAME button", _zone("online_action", 2) is not None)
+check("ONLINE draws a visible BACK button", _zone("back") is not None)
+check("tapping RENAME starts editing",
+      _tap_zone("online_action", 2) and game.online_edit is not None,
+      game.online_edit)
+game._draw()
+check("renaming shows SAVE and CANCEL buttons",
+      _zone("online_action", 0) is not None
+      and _zone("online_action", 1) is not None,
+      [(k, i) for _, k, i in game._touch_zones if k == "online_action"])
+check("tapping CANCEL clears editing",
+      _tap_zone("online_action", 1) and game.online_edit is None,
+      game.online_edit)
+game._draw()   # the RENAME button is back once editing is cancelled
+check("tapping RENAME again starts editing",
+      _tap_zone("online_action", 2) and game.online_edit is not None,
+      game.online_edit)
+game.online_edit["text"] = "TOUCH NAME"
+game._draw()   # SAVE / CANCEL replace RENAME once editing begins
+check("tapping SAVE commits the name",
+      _tap_zone("online_action", 0) and game.online_edit is None
+      and str(game._social_name()).upper() == "TOUCH NAME",
+      game._social_name())
+check("tapping BACK leaves ONLINE",
+      _tap_zone("back") and game.fade["active"]
+      and game.fade["target"] == "TITLE", game.fade)
+_clear_fade()
+
+# SETTINGS: category chips, option rows and BACK are all tappable.
+game.state = "SETTINGS"
+game.settings_category_selected = 0
+game.settings_options = game.settings_options_by_category["AUDIO"]
+game.settings_selected = 0
+game._draw()
+check("SETTINGS draws tappable category chips",
+      _zone("settings_cat", -1) is not None and _zone("settings_cat", 1) is not None,
+      [(k, i) for _, k, i in game._touch_zones if k == "settings_cat"])
+check("SETTINGS draws tappable option rows", _zone("settings", 0) is not None,
+      [(k, i) for _, k, i in game._touch_zones if k == "settings"])
+check("tapping a category chip moves the category",
+      _tap_zone("settings_cat", 1) and game.settings_category_selected == 1,
+      game.settings_category_selected)
+check("tapping the other chip moves back",
+      _tap_zone("settings_cat", -1) and game.settings_category_selected == 0,
+      game.settings_category_selected)
+_touch_vol_before = game.settings_idx.get("Master Volume")
+check("tapping a settings row changes its value",
+      _tap_zone("settings", 0)
+      and game.settings_idx.get("Master Volume") != _touch_vol_before,
+      (_touch_vol_before, game.settings_idx.get("Master Volume")))
+game.settings_idx["Master Volume"] = _touch_saved_volume
+game.settings_selected = 0
+game.settings_category_selected = _touch_saved_cat
+game._apply_settings()
+
+# PAUSE: the menu options are real tap targets; RESUME and SETTINGS work.
+game.state = "PLAYING"
+game.paused = True
+game.pause_selected = 0
+game.pending_exit = False
+game.active_script = [{"type": "choice", "q": "Pause test.", "opts": ["A", "B"],
+                       "_id": "pause-touch"}]
+game.current_step = 0
+game.typing_state = "WAITING"
+game._draw()
+check("PAUSE draws tappable options",
+      _zone("pause", 0) is not None and _zone("pause", 1) is not None
+      and _zone("back") is not None,
+      [k for _, k, _ in game._touch_zones])
+check("tapping SETTINGS in pause opens settings",
+      _tap_zone("pause", 1) and not game.paused
+      and game.fade["active"] and game.fade["target"] == "SETTINGS",
+      (game.paused, game.fade))
+_clear_fade()
+game.paused = True
+game.pause_selected = 0
+game._draw()
+check("tapping RESUME leaves the pause menu",
+      _tap_zone("pause", 0) and not game.paused, game.paused)
+
+# TITLE: every menu line is a tap target, and a tap opens that screen.
+game.state = "TITLE"
+game.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
+game.selected_option = 0
+game.update_available = None
+game._draw()
+check("TITLE draws one tappable zone per menu line",
+      sum(1 for _, k, _ in game._touch_zones if k == "title")
+      == len(game.menu_options),
+      [k for _, k, _ in game._touch_zones])
+check("tapping a title line opens that screen",
+      _tap_zone("title", game.menu_options.index("SETTINGS"))
+      and game.fade["active"] and game.fade["target"] == "SETTINGS", game.fade)
+_clear_fade()
+
+# PLAYING: tapping an answer selects and confirms it in one gesture.
+game.state = "PLAYING"
+game.paused = False
+game.pending_exit = False
+game.active_script = [{"type": "choice", "q": "Tap one.",
+                       "opts": ["FIRST", "SECOND"], "_id": "touch-answer"}]
+game.current_step = 0
+game.selected_answer = 0
+game.typing_state = "WAITING"
+game.question_start_time = time.time()
+_touch_prefetch = game._prefetch_question
+game._prefetch_question = lambda idx: None
+try:
+    game._draw()
+    check("PLAYING draws tappable answers",
+          _zone("answer", 0) is not None and _zone("answer", 1) is not None,
+          [k for _, k, _ in game._touch_zones])
+    _history_len = len(game.session_history)
+    # _confirm_answer resets selected_answer for the next question, so the
+    # proof that the tapped line was used is the recorded answer itself.
+    check("tapping an answer selects and confirms it",
+          _tap_zone("answer", 1) and game.current_step == 1
+          and len(game.session_history) == _history_len + 1
+          and game.session_history[-1]["a"] == "SECOND",
+          (game.current_step, game.session_history[-1:]))
+finally:
+    game._prefetch_question = _touch_prefetch
+
+# The real loop queues FINGERDOWN and dispatches it after _draw(). Test that
+# path too: calling _handle_touch directly would not catch a stale-zone bug.
+game.current_step = 0
+game.selected_answer = 0
+game.typing_state = "WAITING"
+game.paused = False
+game._draw()
+_fw, _fh = game.screen.get_size()
+_zone0 = _zone("answer", 0)
+game._queue_touch(_zone0.centerx / _fw, _zone0.centery / _fh, "finger")
+game._dispatch_pending_touch()
+check("a queued FINGERDOWN dispatches against the freshly drawn frame",
+      game.current_step == 1, game.current_step)
+
+# Gesture navigation cannot be relied on for K_AC_BACK, so PLAYING must draw
+# its own pause target.
+game.current_step = 0
+game.typing_state = "WAITING"
+game.paused = False
+game._draw()
+check("PLAYING draws a visible PAUSE target", _zone("pause_open") is not None,
+      [k for _, k, _ in game._touch_zones])
+check("tapping PAUSE opens the pause menu",
+      _tap_zone("pause_open") and game.paused, game.paused)
+game.paused = False
+
+# A sanitized operator message becomes a tappable transmission card.
+class _MessageStub(social_mod.SocialClient):
+    """A SocialClient stub that opens no socket and starts no thread."""
+
+    def __init__(self, messages):
+        self._messages = list(messages)
+
+    def take_messages(self):
+        out, self._messages = self._messages, []
+        return out
+
+
+_msg = social_mod._clean_incoming_message({
+    "id": "m1", "from": "sender", "from_name": "OPERATOR",
+    "message": "  THE DOOR IS OPEN  ",
+})
+check("the message sanitizer produces a clean transmission",
+      _msg is not None and _msg["message"] == "THE DOOR IS OPEN", _msg)
+game.now = time.time()
+game.transmissions = []
+game.state = "TITLE"
+game.social = _MessageStub([_msg])
+game._receive_social_messages()
+check("a received message reaches the transmissions list",
+      len(game.transmissions) == 1
+      and game.transmissions[0]["text"] == "THE DOOR IS OPEN",
+      game.transmissions)
+game._draw()
+check("a transmission is a tappable card", _zone("transmission", 0) is not None,
+      [k for _, k, _ in game._touch_zones])
+check("tapping a transmission dismisses it",
+      _tap_zone("transmission", 0) and not game.transmissions,
+      game.transmissions)
+game.social = _touch_saved_social
+game.game_state["player_name"] = _touch_saved_name
+_clear_fade()
+
+# --- No key hints are player-facing ------------------------------------------
+# The player is told to TAP, and sees BACK / RENAME / SAVE / CANCEL. No function
+# keys, arrow keys, ENTER, ESC or TAB are advertised anywhere reachable.
+_hint_text = "\n".join(
+    list(gmain.HELP_VARIATIONS)
+    + list(gmain.ONLINE_EXPLAINER)
+    + list(gmain.ONLINE_LOBBY_BLURB)
+    + [name for name, _when in gmain.ONLINE_LOBBY_TEASER]
+    + _ui_strings("_draw_settings", "_draw_online", "_draw_pause", "_draw_title",
+                  "_draw_playing", "_draw_help", "_draw_back_button",
+                  "_draw_small_button", "_draw_transmissions")
+)
+# "RIGHT NOW" is ordinary English, not an arrow-key instruction.
+_hint_text = _hint_text.replace("RIGHT NOW", "").upper()
+for _token in ("F1", "F2", "F3", "UP", "DOWN", "LEFT", "RIGHT", "ENTER",
+               "ESC", "TAB", "REBIND", "KEYBIND", "CONTROLS"):
+    _hits = [line for line in _hint_text.splitlines()
+             if re.search(r"\b%s\b" % _token, line)]
+    check("no %s hint is player-facing" % _token, not _hits, _hits[:3])
+check("touch words are the player-facing hints",
+      all(word in _hint_text for word in ("TAP", "BACK", "RENAME", "SAVE", "CANCEL")),
+      _hint_text[:200])
 
 
 # Full flow: a queued question is injected as the very next step...
@@ -1368,46 +1658,46 @@ except Exception as _e:      # pragma: no cover - import guard
     print("       eye_overlay import failed: %s" % _e)
 check("the desktop eye overlay is importable", _overlay_ok)
 
-# --- Key rebinding -----------------------------------------------------------
-# The rebinds have to actually drive the game, not just sit in the save file.
+# --- Silent legacy keybinds (no rebind UI) -----------------------------------
+# Bindings left by older builds still steer the keyboard, but 7.0-beta phase
+# one never advertises or offers rebinding: every visible control is a tap
+# target. The silent support is allowed; a rebind *screen* is not.
 game.game_state.setdefault("settings", {})["keybinds"] = {
     "up": "W", "down": "S", "confirm": "SPACE", "back": "ESCAPE", "pause": "ESCAPE",
 }
-check("a rebound up key is used",
+check("a legacy rebound up key is still honoured",
       game._bound_key("up", pygame.K_UP) == pygame.K_w)
-check("a rebound confirm key is used",
+check("a legacy rebound confirm key is still honoured",
       game._bound_key("confirm", pygame.K_RETURN) == pygame.K_SPACE)
 
 game.state = "TITLE"
 game.menu_options = ["PLAY", "ONLINE", "SETTINGS", "HELP", "ABOUT", "EXIT"]
 game.selected_option = 0
 game._handle_key(pygame.K_w)
-check("the rebound key moves the title selection",
+check("the legacy rebound key moves the title selection",
       game.selected_option == len(game.menu_options) - 1, game.selected_option)
 game._handle_key(pygame.K_s)
-check("the rebound key moves it back",
+check("the legacy rebound key moves it back",
       game.selected_option == 0, game.selected_option)
 
-# A key that is already bound is refused rather than shadowing the old action.
+# Nothing on the settings screen can enter a rebinding flow, and no key press
+# opens one. There is no CONTROLS category to look for it in either.
 game.state = "SETTINGS"
-game.settings_category_selected = game.settings_categories.index("CONTROLS")
-game.settings_options = game.settings_options_by_category["CONTROLS"]
+game.settings_category_selected = 0
+game.settings_options = game.settings_options_by_category["AUDIO"]
 game.settings_selected = 0
-game.rebinding = "Rebind: Up"
-game._settings_key(pygame.K_s)          # "S" is already Down
-check("a conflicting rebind is refused",
-      game.rebinding is None and "ALREADY BOUND" in (game.rebind_error or ""),
+game.rebinding = None
+game.rebind_error = ""
+game._settings_key(pygame.K_z)
+check("a key press cannot open a rebind prompt",
+      game.rebinding is None and not game.rebind_error,
       (game.rebinding, game.rebind_error))
-check("the refused rebind did not change anything",
-      game._bound_key("up", pygame.K_UP) == pygame.K_w)
-
-game.rebinding = "Rebind: Up"
-game._settings_key(pygame.K_z)          # "Z" is free
-check("a free key binds",
-      game._bound_key("up", pygame.K_UP) == pygame.K_z,
-      game._bound_key("up", pygame.K_UP))
-check("the rebind is saved with the settings",
-      game.game_state["settings"]["keybinds"]["up"] == "Z")
+check("there is no CONTROLS category to rebind keys in",
+      "CONTROLS" not in game.settings_categories, game.settings_categories)
+check("the settings draw code offers no rebind strings",
+      not any(w in _settings_text for w in
+              ("REBIND", "REBINDING", "PRESS A KEY", "ALREADY BOUND")),
+      _settings_text)
 
 # Put the defaults back so the rest of the file is unaffected.
 game.game_state["settings"]["keybinds"] = {

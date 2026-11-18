@@ -9,9 +9,11 @@ Runs headless. Two halves, like every other suite here:
     question at a real receiving client, which answers it, and the verdict
     comes back. This is the whole point of the app, so it is tested end to end.
 """
+import ast
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -33,6 +35,44 @@ def check(name, cond, extra=""):
     print(("  ok   " if cond else "  FAIL ") + name + ("" if cond else " :: %s" % (extra,)))
     if not cond:
         FAILS.append(name)
+
+
+def _action(screen, kind, idx=None):
+    """Find a visible button recorded by the last draw."""
+    for rect, k, i in screen.action_rects:
+        if k == kind and (idx is None or i == idx):
+            return rect
+    return None
+
+
+def _tap(screen, kind, idx=None):
+    rect = _action(screen, kind, idx)
+    if rect is None:
+        return False
+    screen.handle_click(rect.center)
+    return True
+
+
+def _no_key_hints(path):
+    """Player-facing sender copy must not teach keys or shortcuts."""
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read(), filename=path)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            body = getattr(node, "body", [])
+            if body and isinstance(body[0], ast.Expr) \
+                    and isinstance(body[0].value, ast.Constant) \
+                    and isinstance(body[0].value.value, str):
+                docstrings.add(id(body[0].value))
+    pattern = re.compile(
+        r"\[[A-Z0-9/]+\]|\bF[1-9]\b|\bENTER\b|\bESC\b|\bTAB\b|"
+        r"\bUP/DOWN\b|\bLEFT/RIGHT\b|\bSPACE\b|\bCTRL\b|"
+        r"\bARROW\b|\bpress\b", re.I)
+    return [(n.lineno, n.value) for n in ast.walk(tree)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and id(n) not in docstrings and pattern.search(n.value)]
 
 
 def load_relay():
@@ -68,6 +108,16 @@ try:
     check("sender draws while offline", True)
 except Exception as exc:
     check("sender draws while offline", False, repr(exc))
+
+check("every operation has a visible button",
+      all(_action(app, kind) is not None for kind in
+          ("help", "message", "effects", "triggers", "quit")),
+      [(k, i) for _, k, i in app.action_rects])
+check("no server token means no visible FORGET TOKEN button",
+      _action(app, "forget") is None, app.action_rects)
+_hints = _no_key_hints(sender_mod.__file__)
+check("the sender never teaches a key or shortcut in its copy",
+      not _hints, _hints)
 
 check("no token means sending is refused up front", app._can_send_now() is False)
 app.fields["q"] = "will not send"
@@ -134,7 +184,10 @@ try:
     check("the help screen draws", True)
 except Exception as exc:
     check("the help screen draws", False, repr(exc))
-app.help = False
+check("the help screen has its own visible BACK",
+      _action(app, "back") is not None, app.action_rects)
+check("the visible BACK leaves the help screen",
+      _tap(app, "back") and app.help is False, app.help)
 
 # The effects screen: the operator can fire a scare or glitch by hand. It must
 # draw, the list must come from the game's own registry, and the keys must move
@@ -150,6 +203,16 @@ try:
     check("the effects screen draws", True)
 except Exception as exc:
     check("the effects screen draws", False, repr(exc))
+check("the effects screen has visible pick, power, fire and BACK buttons",
+      all(_action(app, kind, idx) is not None for kind, idx in
+          (("effects_pick", 1), ("effects_power", 1), ("effects_fire", 0),
+           ("back", 0))), app.action_rects)
+check("an effect row is chosen by tapping it",
+      _tap(app, "effects_pick", 1) and app.effect_index == 1, app.effect_index)
+_power_before = app.effect_intensity
+check("the power button changes the intensity",
+      _tap(app, "effects_power", 1) and app.effect_intensity > _power_before,
+      app.effect_intensity)
 
 app.effect_index = 0
 app.effect_intensity = 1.0
@@ -186,12 +249,30 @@ def _tkey(key):
 
 
 app.handle_key(_tkey(pygame.K_F3))
-check("F3 opens the trigger editor", app.triggers_screen is True)
+check("the trigger shortcut still opens the editor silently",
+      app.triggers_screen is True)
 try:
     app.draw()
     check("the trigger editor draws", True)
 except Exception as exc:
     check("the trigger editor draws", False, repr(exc))
+check("the trigger editor exposes visible slot, effect, power, clear and BACK",
+      all(_action(app, kind, idx) is not None for kind, idx in
+          (("trigger_slot", 1), ("trigger_cycle", 1), ("trigger_power", 1),
+           ("trigger_clear", 0), ("back", 0))), app.action_rects)
+check("an option slot is chosen by tapping it",
+      _tap(app, "trigger_slot", 2) and app.trigger_slot == 2, app.trigger_slot)
+check("the visible effect button creates a rule",
+      _tap(app, "trigger_cycle", 1) and len(app._trigger_rules()) == 1
+      and app._trigger_rules()[0]["option"] == 2, app._trigger_rules())
+_power_before = app._trigger_rules()[0]["intensity"]
+check("the visible power button raises a rule's power",
+      _tap(app, "trigger_power", 1)
+      and app._trigger_rules()[0]["intensity"] > _power_before,
+      app._trigger_rules())
+check("the visible CLEAR button removes the rule",
+      _tap(app, "trigger_clear") and app._trigger_rules() == [],
+      app._trigger_rules())
 
 app.trigger_slot = 0
 app._handle_triggers_key(_tkey(pygame.K_RIGHT))
@@ -214,17 +295,48 @@ app._handle_triggers_key(_tkey(pygame.K_DELETE))
 check("delete clears a configured rule", app._trigger_rules() == [],
       app._trigger_rules())
 app._handle_triggers_key(_tkey(pygame.K_F3))
-check("F3 closes the trigger editor", app.triggers_screen is False)
+check("the trigger shortcut still closes the editor silently",
+      app.triggers_screen is False)
 
-# J is the one-key jumpscare: it uses the effects route and leaves a log line.
+# The jumpscare shortcut still works, but nothing on screen names it.
+
 app.sent_log = []
 app.toast = None
 app._fire_jumpscare()
-check("J queues a jumpscare effect",
+check("the silent jumpscare shortcut queues an effect",
       any("JUMPSCARE" in str(e.get("q", "")).upper() for e in app.sent_log),
       app.sent_log)
-check("J announces the jumpscare",
+check("the jumpscare is announced without naming a key",
       app.toast is not None and "JUMPSCARE" in app.toast["text"], app.toast)
+
+# --- short operator transmissions -------------------------------------------
+check("MESSAGE is a visible operation", _tap(app, "message")
+      and app.message_screen is True, app.message_screen)
+try:
+    app.draw()
+    check("the message composer draws", True)
+except Exception as exc:
+    check("the message composer draws", False, repr(exc))
+check("the message composer has visible BACK and SEND MESSAGE buttons",
+      _action(app, "back") is not None
+      and _action(app, "message_send") is not None, app.action_rects)
+
+app.message_text = ""
+for ch in "DO NOT TRUST THE SILENCE":
+    app._handle_message_key(type("E", (), {"key": 0, "unicode": ch})())
+check("a short transmission can be typed",
+      app.message_text == "DO NOT TRUST THE SILENCE", app.message_text)
+
+app.sent_log = []
+app.toast = None
+check("the visible SEND MESSAGE button sends",
+      _tap(app, "message_send"), app.action_rects)
+check("a message without a token warns instead of queueing",
+      app.toast is not None and "TOKEN" in app.toast["text"]
+      and app.sent_log == [], (app.toast, app.sent_log))
+
+check("the message composer's BACK button works",
+      _tap(app, "back") and app.message_screen is False, app.message_screen)
 
 # A long question wraps instead of being cut off with an ellipsis: every word
 # of a 200-character question ends up on screen somewhere in the form.
@@ -385,6 +497,41 @@ try:
                               any("EFFECT" in str(e.get("q", ""))
                                   for e in app.sent_log))[1], 6),
           app.sent_log)
+
+    # --- messages: a short transmission is not a question --------------------
+    app.message_text = "DO NOT TRUST THE SILENCE"
+    app.sent_log = []
+    app.send_message()
+    check("the operator can queue a message",
+          any(str(e.get("q", "")).startswith("MESSAGE:")
+              for e in app.sent_log), app.sent_log)
+    got_msg = {}
+
+    def _take_message():
+        items = player.take_messages()
+        if items:
+            got_msg.update(items[0])
+            return True
+        return False
+
+    check("receiver gets the operator's message", wait_until(_take_message, 6),
+          got_msg)
+    check("the message arrives intact",
+          got_msg.get("message") == "DO NOT TRUST THE SILENCE", got_msg)
+    check("the message carries the operator's name",
+          bool(str(got_msg.get("from_name") or "").strip()), got_msg)
+    check("a message is not delivered as a question",
+          player.take_question() is None)
+    check("a message is not delivered as an effect",
+          player.take_effect() is None)
+    check("the delivery log records the message",
+          wait_until(lambda: (app._harvest(),
+                              any(str(e.get("q", "")).startswith("MESSAGE:")
+                                  and e.get("state") == "DELIVERED"
+                                  for e in app.sent_log))[1], 6),
+          app.sent_log)
+    check("a delivered message clears its composer", app.message_text == "",
+          app.message_text)
 
     # The receiver's reconnect logic: after the relay goes away and comes back,
     # the client must recover on its own and say so.

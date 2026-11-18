@@ -28,10 +28,10 @@
     <div style="position:fixed;top:0;left:0;right:0;z-index:999999;background:#000;color:#00dd00;font-family:monospace;font-size:13px;padding:14px 16px;line-height:1.6;border-bottom:2px solid #00dd00">
       <b>THE QUESTION GAME</b> needs JavaScript. On an old browser (IE 11 or earlier), use the
       <a href="legacy.html" style="color:#00ff88">LEGACY 2000 EDITION</a>.
-      &nbsp;Downloads (v6.1-alpha — the malware alpha — desktop only):&nbsp;
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
-      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a>
+      &nbsp;Downloads (v7.0-beta — Android port &amp; performance release):&nbsp;
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered.zip" style="color:#00ff88">WINDOWS</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered-macOS.dmg" style="color:#00ff88">MAC</a> |
+      <a href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered-linux.tar.gz" style="color:#00ff88">LINUX</a>
     </div>
   </noscript>
 
@@ -72,7 +72,7 @@
   <div class="hud hud-tr" aria-hidden="true">
     SIGNAL: <span class="sig" id="sigStatus">STABLE</span>
   </div>
-  <div class="hud hud-bl" aria-hidden="true">v6.1-alpha</div>
+  <div class="hud hud-bl" aria-hidden="true">v7.0-beta</div>
   <div class="hud hud-br" aria-hidden="true"><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a></div>
 
   <!-- The watcher: the same top-right eye the game pins to your desktop while
@@ -167,7 +167,7 @@
         <span>TEXT-BASED HORROR EXPERIENCE</span>
       </div>
 
-      <div class="hero-badge"><span class="led"></span> BUILD v6.1-alpha — IT IS INSIDE YOUR MACHINE — WINDOWS / MACOS / LINUX</div>
+      <div class="hero-badge"><span class="led"></span> BUILD v7.0-beta — THE ANDROID PORT — WINDOWS / MACOS / LINUX / ANDROID</div>
 
       <h1 class="glitch" data-text="THE QUESTION">THE QUESTION</h1>
       <h1 class="glitch" data-text="GAME">GAME</h1>
@@ -763,6 +763,15 @@
           </div>
 
           <div class="story-card reveal">
+            <p class="story-kicker">NOVEMBER 18, 2026</p>
+            <h3 class="story-headline">v7.0-beta — IT FOLLOWS YOU OUTSIDE</h3>
+            <div class="story-para">
+              <p>The machine got smaller. The whole remastered game now fits on a phone — the same questions, the same eye, the same room of other players — with touch controls built for a screen you hold rather than a desk you sit at. Answer rows, menus, BACK and a visible PAUSE button all respond to a tap.</p>
+              <p>The first port was sluggish, so the renderer was rebuilt around caches: text is rasterized once and reused, the red/cyan split is pre-composited into a single image per line, and Low mode drops the effects that cost the most on a phone. The result is a game that runs at a usable frame rate and reacts when you tap it.</p>
+            </div>
+          </div>
+
+          <div class="story-card reveal">
             <p class="story-kicker">TODAY</p>
             <h3 class="story-headline">THE PRANK KEEPS PAYING OFF</h3>
             <div class="story-para">
@@ -868,15 +877,15 @@
         <h2 class="section-title"><span class="red">&gt;</span> DOWNLOAD</h2>
         <div class="section-line"></div>
       </div>
-      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux, two editions. No installation required. They only need permission. The remastered edition is now the <span class="red">malware alpha</span> — desktop only — and it leads this page. The stable Classic build sits folded away at the bottom.</p>
+      <p class="section-sub reveal">Windows 10 / 11, macOS, Linux, Android, two editions. No installation required. They only need permission. The remastered edition now ships on <span class="red">all four platforms</span>, with touch controls and a faster renderer on the phone. The stable Classic build sits folded away at the bottom.</p>
 
       <div class="download-grid">
         <div class="releases-col">
         <div class="release reveal rem">
           <div class="release-top">
             <div>
-              <span class="tag tag-green">THE MALWARE ALPHA — v6.1-alpha</span>
-              <h3 class="release-version" id="remRelVersion">v6.1-alpha-remastered</h3>
+              <span class="tag tag-green">THE ANDROID PORT — v7.0-beta</span>
+              <h3 class="release-version" id="remRelVersion">v7.0-beta-remastered</h3>
               <p class="release-date" id="remRelDate">CONTACTING RELEASE SERVER...</p>
             </div>
             <div class="release-icon" aria-hidden="true">
@@ -893,7 +902,7 @@
                 <span class="tag tag-green hidden" id="remWinDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Windows 10 / 11 (64-bit). Unzip and run <b>TheQuestionGameRemastered.exe</b> — the multiplayer receiver build. No setup, no key.</p>
-              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
+              <a class="platform-btn" id="dlRemWindows" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered.zip" target="_blank" rel="noopener" data-os="WINDOWS">DOWNLOAD WINDOWS ⤓</a>
               <p class="platform-status" id="dlRemWindowsStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remMacCard">
@@ -902,7 +911,7 @@
                 <span class="tag tag-green hidden" id="remMacDetected">DETECTED</span>
               </div>
               <p class="platform-desc">macOS 14+ (Apple Silicon). Open the DMG and drag <b>The Question Game Remastered</b> into your Applications folder.</p>
-              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
+              <a class="platform-btn" id="dlRemMac" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered-macOS.dmg" target="_blank" rel="noopener" data-os="MACOS">DOWNLOAD MACOS ⤓</a>
               <p class="platform-status" id="dlRemMacStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remLinuxCard">
@@ -911,7 +920,7 @@
                 <span class="tag tag-green hidden" id="remLinuxDetected">DETECTED</span>
               </div>
               <p class="platform-desc">Linux (64-bit). Extract and run <b>TheQuestionGameRemastered</b> from a terminal — <code>chmod +x</code> it first. SDL2 and ALSA are required.</p>
-              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v6.1-alpha-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
+              <a class="platform-btn" id="dlRemLinux" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered-linux.tar.gz" target="_blank" rel="noopener" data-os="LINUX">DOWNLOAD LINUX ⤓</a>
               <p class="platform-status" id="dlRemLinuxStatus">READY — DIRECT LINK</p>
             </div>
             <div class="platform-card" id="remAndroidCard">
@@ -919,9 +928,9 @@
                 <span class="platform-os">ANDROID</span>
                 <span class="tag tag-green hidden" id="remAndroidDetected">DETECTED</span>
               </div>
-              <p class="platform-desc">This build is <b>desktop only</b> — Windows, macOS and Linux. There is no Android build for v6.1-alpha.</p>
-              <a class="platform-btn platform-miss" id="dlRemAndroid" aria-disabled="true" data-os="ANDROID">ANDROID — NOT IN THIS ALPHA</a>
-              <p class="platform-status miss" id="dlRemAndroidStatus">THE MULTIPLAYER ALPHA SHIPS WINDOWS, MACOS AND LINUX ONLY.</p>
+              <p class="platform-desc">Android 11+ (ARMv7). Sideload the <b>APK</b> — touch controls, a visible PAUSE button, and a faster renderer. Enable “Install unknown apps” for your browser when prompted.</p>
+              <a class="platform-btn" id="dlRemAndroid" href="https://github.com/notmicrosoft2000-cmd/TheQuestionGame/releases/download/v7.0-beta-remastered/TheQuestionGameRemastered-Android-7.0-beta.apk" target="_blank" rel="noopener" data-os="ANDROID">DOWNLOAD ANDROID ⤓</a>
+              <p class="platform-status" id="dlRemAndroidStatus">READY — DIRECT LINK</p>
             </div>
           </div>
 
@@ -931,8 +940,9 @@
           </div>
 
           <div class="rem-features">
-            <h4 class="side-title mt">WHAT CHANGED IN v6.1-alpha</h4>
+            <h4 class="side-title mt">WHAT CHANGED IN v7.0-beta</h4>
             <ul class="feature-list">
+              <li><span class="mark">▸</span> IT RUNS ON YOUR PHONE — the full remastered game now ships as an Android APK with real touch controls: tap answer rows, menus, BACK and the visible PAUSE button. Low mode drops decorative effects and the renderer is roughly four times faster than the first port.</li>
               <li><span class="mark">▸</span> SESSIONS ARE TWICE AS LONG — 22, 32 and 46 written questions across the three runs instead of 14, 18 and 26. A run finally has room to settle in before it starts pulling.</li>
               <li><span class="mark">▸</span> IT REMEMBERS EVERY QUESTION — every answer you have ever given is kept across sessions and sent to the model as a hard never-repeat list. It also rotates its subject, retries itself, and ships with 109 offline questions so the well never runs dry.</li>
               <li><span class="mark">▸</span> IT GETS INTO YOUR MACHINE — a fake antivirus scan that finds three threats and removes two; a blue screen; an administrator console that types on its own; a window listing the real names of files on your Desktop and in Downloads; a sign-in alert for a device that was never you. This is the malware fantasy the game was always about.</li>
@@ -1079,7 +1089,7 @@
 
   <footer>
     <div class="footer-line"></div>
-    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v6.1-alpha</p>
+    <p><a class="nep-link" href="https://notmicrosoft2000-cmd.github.io/" title="back to the hub">NEPTUNE PRODUCTIONS [C]</a> — THE QUESTION GAME v7.0-beta</p>
     <p class="footer-tag">SWITCH OFF THE LIGHTS. PLAY WITH HEADPHONES.</p>
     <button class="discord-copy footer-discord" type="button" title="Copy Discord handle">[ DISCORD: neptunetheii — CLICK TO COPY ]</button>
     <p class="footer-dim">A fictional horror experience. Everything is part of the fiction — including this warning.</p>

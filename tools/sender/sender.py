@@ -155,33 +155,29 @@ HELP_STORY = [
     ("tqg-token.txt work as well.", COLOR_DIM),
 ]
 
-HELP_KEYS = [
-    ("KEYS", COLOR_ACCENT),
+HELP_OPERATIONS = [
+    ("CONTROLS", COLOR_ACCENT),
     ("", COLOR_DIM),
-    ("TAB / SHIFT+TAB   move between fields", COLOR_TEXT),
-    ("ENTER            edit the field, or press it", COLOR_TEXT),
-    ("UP / DOWN        pick who receives the question", COLOR_TEXT),
-    ("1 2 3 4          set the correct option", COLOR_TEXT),
-    ("MOUSE WHEEL      scroll the form", COLOR_TEXT),
-    ("F1 or H          this help", COLOR_TEXT),
-    ("F2               effects: fire a scare or glitch", COLOR_TEXT),
-    ("F3               scare triggers: pick an option,", COLOR_TEXT),
-    ("                 pick what happens when it is chosen", COLOR_TEXT),
-    ("J                fire JUMPSCARE at the recipient now", COLOR_TEXT),
-    ("ESC              quit", COLOR_TEXT),
-    ("CTRL+X           forget the saved token", COLOR_TEXT),
+    ("Every action has a button along the bottom.", COLOR_TEXT),
+    ("Tap a player in THE ROOM to choose who receives", COLOR_TEXT),
+    ("it. Tap a field to edit it. Tap SEND when the", COLOR_TEXT),
+    ("question is ready. There is no hidden gesture.", COLOR_TEXT),
     ("", COLOR_DIM),
-    ("EFFECTS — F2", COLOR_ACCENT),
+    ("MESSAGES", COLOR_ACCENT),
     ("", COLOR_DIM),
-    ("The same echo only goes one way: you can also", COLOR_DIM),
-    ("fire the game's own scares and glitches at a", COLOR_DIM),
-    ("player by hand. Pick one, set how hard with", COLOR_DIM),
-    ("LEFT/RIGHT, press ENTER. It arrives through the", COLOR_DIM),
-    ("same poll as a question, and the game plays it", COLOR_DIM),
-    ("exactly as if it had chosen the effect itself —", COLOR_DIM),
-    ("no notice, no warning. It just happens.", COLOR_DIM),
+    ("MESSAGE opens a short transmission. It is", COLOR_DIM),
+    ("not a question and needs no answer: the player", COLOR_DIM),
+    ("sees it as a card and taps it away.", COLOR_DIM),
     ("", COLOR_DIM),
-    ("WHAT PRESSING SEND DOES", COLOR_ACCENT),
+    ("EFFECTS", COLOR_ACCENT),
+    ("", COLOR_DIM),
+    ("EFFECTS fires the game's own scares and", COLOR_DIM),
+    ("glitches at the chosen player by hand. Pick one", COLOR_DIM),
+    ("from the list, set how hard, then FIRE. It", COLOR_DIM),
+    ("arrives through the same poll as a question and", COLOR_DIM),
+    ("the game plays it as if it had chosen it itself.", COLOR_DIM),
+    ("", COLOR_DIM),
+    ("WHAT SENDING DOES", COLOR_ACCENT),
     ("", COLOR_DIM),
     ("The question goes to the relay with your token.", COLOR_DIM),
     ("The relay hands it to everyone it was addressed", COLOR_DIM),
@@ -197,7 +193,7 @@ HELP_KEYS = [
     ("polling right now. A closed game is not in the", COLOR_DIM),
     ("room and cannot be reached.", COLOR_DIM),
     ("", COLOR_DIM),
-    ("SCARE TRIGGERS — F3", COLOR_ACCENT),
+    ("SCARE TRIGGERS", COLOR_ACCENT),
     ("", COLOR_DIM),
     ("Attach a scare to an answer option. When the", COLOR_DIM),
     ("player picks that option, the game fires the", COLOR_DIM),
@@ -455,6 +451,15 @@ class Sender:
         self.triggers = [None] * len(OPTION_LETTERS)
         self.trigger_slot = 0
 
+        # Messages: short operator transmissions. They are not questions and
+        # need no answer; the receiver shows them as a tappable card.
+        self.message_screen = False
+        self.message_text = ""
+
+        # Buttons drawn on the current frame. Rebuilt every draw, so the hit
+        # boxes always match what the operator can actually see.
+        self.action_rects = []
+
         # Compose state.
         self.fields = {
             "q": "", "o0": "", "o1": "", "o2": "", "o3": "",
@@ -605,10 +610,30 @@ class Sender:
             return name + "  (BROADCAST)"
         return name
 
+    def _draw_button(self, s, text, x, y, width, height, kind, idx=0,
+                     color=None, active=False):
+        """A visible, tappable control. No action in this app needs a key."""
+        rect = pygame.Rect(int(x), int(y), int(width), int(height))
+        fill = (46, 42, 32) if active else (24, 24, 28)
+        pygame.draw.rect(s, fill, rect)
+        pygame.draw.rect(s, color or COLOR_EDGE, rect, 1)
+        label = self.font_small.render(text, True, color or COLOR_TEXT)
+        s.blit(label, (rect.x + rect.width // 2 - label.get_width() // 2,
+                       rect.y + rect.height // 2 - label.get_height() // 2))
+        self.action_rects.append((rect, kind, idx))
+        return rect
+
+    def _open_screen(self, name):
+        """Only one secondary screen is open at a time."""
+        self.help = name == "help"
+        self.effects_screen = name == "effects"
+        self.triggers_screen = name == "triggers"
+        self.message_screen = name == "message"
+
     # --- sending ------------------------------------------------------------
     def fire(self):
         if not self._can_send_now():
-            self.note("NO SEND TOKEN — PRESS F1 FOR HOW TO GET ONE", "bad", 8.0)
+            self.note("NO SEND TOKEN — SEE HELP", "bad", 8.0)
             return
         question = self.fields["q"].strip()
         opts = self._options()
@@ -639,6 +664,34 @@ class Sender:
                       + " ...", "info", 3.0)
         else:
             self.note("COULD NOT QUEUE THE QUESTION", "bad")
+
+    def send_message(self):
+        """Queue a short operator transmission at the current recipient."""
+        if not self._can_send_now():
+            self.note("NO SEND TOKEN — SEE HELP", "bad", 8.0)
+            return
+        text = self.message_text.strip()
+        if not text:
+            self.note("THE MESSAGE IS EMPTY", "bad")
+            return
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        try:
+            ok = self.social.send_message(to.get("id", "all"), text)
+        except Exception:
+            ok = False
+        if ok:
+            # It stays in the box until the relay confirms delivery, exactly
+            # like a question. A refused message is still there to fix.
+            self.sent_log.insert(0, {
+                "to": str(to.get("name", "EVERYONE")).upper(),
+                "q": "MESSAGE: " + text,
+                "at": self.now, "state": "SENDING", "n": 0})
+            del self.sent_log[8:]
+            self.note("SENDING MESSAGE TO "
+                      + str(to.get("name", "EVERYONE")).upper() + " ...",
+                      "info", 3.0)
+        else:
+            self.note("COULD NOT QUEUE THE MESSAGE", "bad")
 
     def _trigger_rules(self):
         """The configured per-option scare rules, in wire form."""
@@ -732,7 +785,11 @@ class Sender:
                     # Effects have no form to clear — they are fired, not
                     # written — so only a real question empties the compose.
                     is_effect = q.startswith("EFFECT:")
-                    if (not is_effect
+                    is_message = q.startswith("MESSAGE:")
+                    if is_message:
+                        if self.message_text.strip() in q:
+                            self.message_text = ""
+                    elif (not is_effect
                             and self.fields.get("q", "").strip() == q.strip()):
                         for k in TEXT_KEYS:
                             self.fields[k] = ""
@@ -749,20 +806,25 @@ class Sender:
         unicode = event.unicode
 
         if key == pygame.K_F1:
-            self.help = not self.help
+            self._open_screen("" if self.help else "help")
             return
         if key == pygame.K_F2:
-            self.effects_screen = not self.effects_screen
-            self.triggers_screen = False
+            self._open_screen("" if self.effects_screen else "effects")
             return
         if key == pygame.K_F3:
-            self.triggers_screen = not self.triggers_screen
+            self._open_screen("" if self.triggers_screen else "triggers")
+            return
+        if key == pygame.K_F4:
+            self.message_screen = not self.message_screen
+            self.triggers_screen = False
             self.effects_screen = False
             return
+        if self.message_screen:
+            self._handle_message_key(event)
+            return
         if self.help:
-            if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER,
-                       pygame.K_h):
-                self.help = False
+            if key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                self._open_screen("")
             return
         if self.effects_screen:
             self._handle_effects_key(event)
@@ -818,6 +880,20 @@ class Sender:
             idx = key - pygame.K_1
             if idx < len(self._options()):
                 self.fields["correct"] = idx
+
+    def _handle_message_key(self, event):
+        """Type a short transmission; Enter sends it, Escape returns."""
+        key = event.key
+        unicode = event.unicode
+        if key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.send_message()
+        elif key == pygame.K_ESCAPE:
+            self._open_screen("")
+        elif key == pygame.K_BACKSPACE:
+            self.message_text = self.message_text[:-1]
+        elif unicode and unicode.isprintable() and unicode not in "\t\r\n":
+            if len(self.message_text) < config.SOCIAL_MESSAGE_MAX:
+                self.message_text += unicode
 
     def _handle_effects_key(self, event):
         """The effects screen: pick an effect, set how hard, fire it."""
@@ -940,11 +1016,51 @@ class Sender:
         elif fkey == "back":
             self.running = False
 
+    def _handle_action(self, kind, idx):
+        if kind == "help":
+            self._open_screen("help")
+        elif kind == "message":
+            self._open_screen("message")
+        elif kind == "effects":
+            self._open_screen("effects")
+        elif kind == "triggers":
+            self._open_screen("triggers")
+        elif kind == "quit":
+            self.running = False
+        elif kind == "forget":
+            self._forget()
+        elif kind == "back":
+            self._open_screen("")
+        elif kind == "unlock":
+            self._unlock()
+        elif kind == "effects_pick":
+            self.effect_index = max(0, min(int(idx), len(self.effects) - 1))
+        elif kind == "effects_power":
+            step = 0.25 if idx > 0 else -0.25
+            self.effect_intensity = max(0.5, min(2.0,
+                                                round(self.effect_intensity + step, 2)))
+        elif kind == "effects_fire":
+            self._fire_effect()
+        elif kind == "trigger_slot":
+            self.trigger_slot = max(0, min(int(idx), len(OPTION_LETTERS) - 1))
+        elif kind == "trigger_cycle":
+            self._cycle_trigger(1 if idx > 0 else -1)
+        elif kind == "trigger_power":
+            self._trigger_intensity(0.25 if idx > 0 else -0.25)
+        elif kind == "trigger_clear":
+            self.triggers[self.trigger_slot] = None
+        elif kind == "message_send":
+            self.send_message()
+
     def handle_click(self, pos):
-        if self.help:
-            self.help = False
-            return
-        if self.unlocking:
+        # Visible buttons win: they are drawn last and cover the content under
+        # them. Walk backwards so a button always beats a full-panel hit box.
+        for rect, kind, idx in reversed(self.action_rects):
+            if rect.collidepoint(pos):
+                self._handle_action(kind, idx)
+                return
+        if self.help or self.message_screen or self.effects_screen \
+                or self.triggers_screen or self.unlocking:
             return
         for rect, idx in self.field_rects:
             if rect.collidepoint(pos):
@@ -988,6 +1104,7 @@ class Sender:
         s.fill(config.COLOR_BLACK)
         self.room_rects = []
         self.field_rects = []
+        self.action_rects = []
         try:
             ui.draw_starfield(s, w, h, self.now, self.starfield)
         except Exception:
@@ -996,6 +1113,8 @@ class Sender:
         self._draw_header(s, w, h)
         if self.help:
             self._draw_help(s, w, h)
+        elif self.message_screen:
+            self._draw_message(s, w, h)
         elif self.effects_screen:
             self._draw_effects(s, w, h)
         elif self.triggers_screen:
@@ -1115,7 +1234,7 @@ class Sender:
             s.blit(self.font_small.render(
                 "%d PLAYER%s PLAYING" % (n, "" if n == 1 else "S"),
                 True, COLOR_DIMMER), (inner.x, y + 4))
-            s.blit(self.font_small.render("[UP/DOWN] CHOOSE", True, COLOR_DIMMER),
+            s.blit(self.font_small.render("TAP A PLAYER TO CHOOSE", True, COLOR_DIMMER),
                    (inner.x, y + 4 + self.font_small.get_linesize() + 2))
 
     def _compose_rows(self):
@@ -1143,7 +1262,7 @@ class Sender:
                              for r in rules)
             trig_color = COLOR_TRIGGER
         else:
-            trig, trig_color = "NONE  (press ENTER to edit)", COLOR_DIM
+            trig, trig_color = "NONE  (tap TRIGGERS to edit)", COLOR_DIM
         rows.append({"key": "triggers", "label": "SCARE TRIGGER",
                      "value": trig, "color": trig_color})
         rows.append({"key": "send", "label": "SEND",
@@ -1359,9 +1478,9 @@ class Sender:
             s.blit(self.font_small.render(
                 "THE RELAY IS UNREACHABLE", True, COLOR_BAD), (inner.x, y))
 
-        s.blit(self.font_small.render(
-            "[ENTER] AUTHENTICATE      [F1] HOW THIS WORKS", True, COLOR_DIMMER),
-            (inner.x, inner.bottom - self.font_small.get_linesize()))
+        self._draw_button(s, "AUTHENTICATE", inner.x,
+                          inner.bottom - 34, 180, 30, "unlock",
+                          color=COLOR_GOOD)
 
     def _draw_help(self, s, w, h):
         """The help screen: two columns, so nothing is cut off.
@@ -1372,6 +1491,8 @@ class Sender:
         rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
                            int(w * 0.90), int(h * 0.94))
         inner = self._panel(s, rect, "HOW THIS WORKS")
+        self._draw_button(s, "BACK", rect.right - 110, rect.y + 6, 100, 26,
+                          "back", color=COLOR_ACCENT)
         gap = 26
         stacked = inner.width < 2 * 360 + gap
         col_w = (inner.width - gap) // 2 if not stacked else inner.width
@@ -1392,10 +1513,10 @@ class Sender:
 
         if stacked:
             y2 = draw(HELP_STORY, inner.x, inner.y) + 10
-            draw(HELP_KEYS, inner.x, y2)
+            draw(HELP_OPERATIONS, inner.x, y2)
         else:
             draw(HELP_STORY, inner.x, inner.y)
-            draw(HELP_KEYS, x2, y2)
+            draw(HELP_OPERATIONS, x2, y2)
 
     def _draw_effects(self, s, w, h):
         """Fire a scare or glitch at the current recipient, by hand.
@@ -1407,6 +1528,8 @@ class Sender:
         rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
                            int(w * 0.90), int(h * 0.94))
         inner = self._panel(s, rect, "EFFECTS — FIRE A SCARE OR GLITCH")
+        self._draw_button(s, "BACK", rect.right - 110, rect.y + 6, 100, 26,
+                          "back", color=COLOR_ACCENT)
 
         to = self.recipient or {"id": "all", "name": "EVERYONE"}
         head = "TARGET: " + str(to.get("name", "EVERYONE")).upper()
@@ -1414,8 +1537,12 @@ class Sender:
         y = inner.y + self.font_med.get_linesize() + 6
 
         s.blit(self.font_small.render(
-            "INTENSITY  x%.2f   [LEFT/RIGHT]   (how long it lasts)"
-            % self.effect_intensity, True, COLOR_ACCENT), (inner.x, y))
+            "INTENSITY  x%.2f   (how long it lasts)" % self.effect_intensity,
+            True, COLOR_ACCENT), (inner.x, y))
+        self._draw_button(s, "-", inner.x + 214, y - 3, 32, 26,
+                          "effects_power", -1, color=COLOR_ACCENT)
+        self._draw_button(s, "+", inner.x + 252, y - 3, 32, 26,
+                          "effects_power", 1, color=COLOR_ACCENT)
         y += self.font_small.get_linesize() + 8
 
         bottom = inner.bottom - self.font_small.get_linesize() - 6
@@ -1430,20 +1557,22 @@ class Sender:
             col = config.COLOR_WHITE if sel else COLOR_DIM
             prefix = "> " if sel else "  "
             label = prefix + name.upper().replace("_", " ")
-            s.blit(self.font_med.render(_fit(label, self.font_med, inner.width),
-                                        True, col), (inner.x, y))
+            self._draw_button(s, _fit(label, self.font_small, inner.width - 12),
+                              inner.x, y - 2, inner.width, line_h,
+                              "effects_pick", i,
+                              color=COLOR_ACCENT if sel else COLOR_EDGE)
             y += line_h
 
-        s.blit(self.font_small.render(
-            "[ENTER] FIRE   [UP/DOWN] PICK   [LEFT/RIGHT] INTENSITY   "
-            "[F2/ESC] BACK", True, COLOR_DIMMER),
-            (inner.x, inner.bottom - self.font_small.get_linesize()))
+        self._draw_button(s, "FIRE", inner.x, inner.bottom - 34, 130, 28,
+                          "effects_fire", color=COLOR_BAD)
 
     def _draw_triggers(self, s, w, h):
         """Configure which scare fires when the player picks a given option."""
         rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
                            int(w * 0.90), int(h * 0.94))
         inner = self._panel(s, rect, "SCARE TRIGGERS — THE ANSWER BITES BACK")
+        self._draw_button(s, "BACK", rect.right - 110, rect.y + 6, 100, 26,
+                          "back", color=COLOR_ACCENT)
 
         to = self.recipient or {"id": "all", "name": "EVERYONE"}
         s.blit(self.font_med.render(
@@ -1467,13 +1596,12 @@ class Sender:
                 label = "%s)  NONE" % letter
                 col = COLOR_ACCENT if sel else COLOR_DIM
             if sel:
-                bar = pygame.Rect(inner.x - 8, y - 4, inner.width + 6,
-                                  self.font_med.get_linesize() + 8)
-                pygame.draw.rect(s, COLOR_FOCUS, bar)
                 label = "> " + label
-            s.blit(self.font_med.render(
-                _fit(label, self.font_med, inner.width), True, col),
-                (inner.x, y))
+            self._draw_button(s, _fit(label, self.font_small, inner.width - 12),
+                              inner.x, y - 4, inner.width,
+                              self.font_med.get_linesize() + 8,
+                              "trigger_slot", i,
+                              color=COLOR_TRIGGER if sel else COLOR_EDGE)
             y += self.font_med.get_linesize() + 10
 
         y += 8
@@ -1485,32 +1613,85 @@ class Sender:
                    (inner.x, y))
             y += self.font_small.get_linesize() + 2
 
+        by = inner.bottom - 34
+        self._draw_button(s, "EFFECT -", inner.x, by, 120, 28,
+                          "trigger_cycle", -1, color=COLOR_TRIGGER)
+        self._draw_button(s, "EFFECT +", inner.x + 128, by, 120, 28,
+                          "trigger_cycle", 1, color=COLOR_TRIGGER)
+        self._draw_button(s, "POWER -", inner.x + 256, by, 110, 28,
+                          "trigger_power", -1)
+        self._draw_button(s, "POWER +", inner.x + 374, by, 110, 28,
+                          "trigger_power", 1)
+        self._draw_button(s, "CLEAR", inner.x + 492, by, 100, 28,
+                          "trigger_clear", color=COLOR_BAD)
+
+    def _draw_message(self, s, w, h):
+        """Short operator transmission: one box, SEND, and BACK."""
+        rect = pygame.Rect(int(w * 0.05), int(h * 0.03),
+                           int(w * 0.90), int(h * 0.94))
+        inner = self._panel(s, rect, "MESSAGE — SHORT TRANSMISSION")
+        self._draw_button(s, "BACK", rect.right - 110, rect.y + 6, 100, 26,
+                          "back", color=COLOR_ACCENT)
+
+        to = self.recipient or {"id": "all", "name": "EVERYONE"}
+        s.blit(self.font_med.render(
+            "TARGET: " + str(to.get("name", "EVERYONE")).upper(),
+            True, COLOR_TEXT), (inner.x, inner.y))
+        y = inner.y + self.font_med.get_linesize() + 10
         s.blit(self.font_small.render(
-            "[UP/DOWN] OPTION   [LEFT/RIGHT] EFFECT   "
-            "[/] POWER   [DEL] CLEAR   [ENTER/F3] BACK",
-            True, COLOR_DIMMER),
-            (inner.x, inner.bottom - self.font_small.get_linesize()))
+            "Not a question. No answer comes back. The player sees a card.",
+            True, COLOR_DIM), (inner.x, y))
+        y += self.font_small.get_linesize() + 18
+
+        box = pygame.Rect(inner.x, y, inner.width,
+                          max(120, inner.bottom - y - 90))
+        pygame.draw.rect(s, (10, 10, 12), box)
+        pygame.draw.rect(s, COLOR_EDGE, box, 1)
+        text = self.message_text + "_"
+        lines, hidden = _wrap(text, self.font_med, box.width - 24,
+                              max_lines=max(1, (box.height - 20)
+                                            // self.font_med.get_linesize()))
+        ly = box.y + 10
+        for line in lines:
+            s.blit(self.font_med.render(line, True, COLOR_TEXT), (box.x + 12, ly))
+            ly += self.font_med.get_linesize()
+        if hidden:
+            s.blit(self.font_small.render("+%d MORE CHARACTERS" % hidden,
+                                          True, COLOR_DIMMER),
+                   (box.x + 12, box.bottom - self.font_small.get_linesize() - 6))
+        count = "%d/%d" % (len(self.message_text), config.SOCIAL_MESSAGE_MAX)
+        cnt = self.font_small.render(count, True, COLOR_DIM)
+        s.blit(cnt, (box.right - cnt.get_width() - 10, box.bottom - cnt.get_height() - 6))
+
+        self._draw_button(s, "SEND MESSAGE", inner.x, inner.bottom - 42,
+                          180, 34, "message_send", color=COLOR_GOOD)
 
     def _draw_footer(self, s, w, h):
         if self.toast:
             tone = self.toast.get("tone", "info")
             color = {"good": COLOR_GOOD, "bad": COLOR_BAD}.get(tone, COLOR_ACCENT)
             txt = _fit(self.toast["text"], self.font_med, w - 40)
-            s.blit(self.font_med.render(txt, True, color), (20, h - 62))
-        if self.effects_screen:
-            hints = ("[UP/DOWN] PICK  [LEFT/RIGHT] INTENSITY  [ENTER] FIRE  "
-                     "[F1] HELP  [F2/ESC] BACK")
-        elif self.triggers_screen:
-            hints = ("[UP/DOWN] OPTION  [LEFT/RIGHT] EFFECT  [/] POWER  "
-                     "[F3/ESC] BACK")
-        else:
-            hints = ("[TAB] FIELD  [ENTER] EDIT  [1-4] CORRECT  [F3] TRIGGERS  "
-                     "[J] JUMPSCARE  [F2] EFFECTS  [ESC] QUIT")
-        s.blit(self.font_small.render(hints, True, COLOR_DIMMER),
-               (20, h - self.font_small.get_linesize() - 10))
+            s.blit(self.font_med.render(txt, True, color), (20, h - 72))
+
+        buttons = [
+            ("HELP", "help", self.help),
+            ("MESSAGE", "message", self.message_screen),
+            ("EFFECTS", "effects", self.effects_screen),
+            ("TRIGGERS", "triggers", self.triggers_screen),
+        ]
         if self.token:
-            s.blit(self.font_small.render("[CTRL+X] FORGET TOKEN", True, COLOR_DIMMER),
-                   (w - 200, h - self.font_small.get_linesize() - 10))
+            buttons.append(("FORGET TOKEN", "forget", False))
+        buttons.append(("QUIT", "quit", False))
+        bw = max(84, min(140, (w - 40) // len(buttons) - 8))
+        gap = 8
+        total = len(buttons) * bw + (len(buttons) - 1) * gap
+        x = max(20, (w - total) // 2)
+        y = h - self.font_small.get_linesize() - 16
+        for label, kind, active in buttons:
+            self._draw_button(s, label, x, y, bw, 30, kind,
+                              color=COLOR_ACCENT if active else None,
+                              active=active)
+            x += bw + gap
 
     # --- run ----------------------------------------------------------------
     def run(self):

@@ -10,6 +10,32 @@ Version numbers follow the game's `config.VERSION`. Release tags look like
 
 ---
 
+## v7.0-beta — 2026-11-18
+
+### Added
+
+- **Android port of the remastered game.** Full touch controls: answer rows,
+  menus, BACK and a visible PAUSE button, with normalized touch coordinates
+  dispatched after the draw so hit boxes always match the frame. Android
+  defaults to Low performance mode, 30 fps, and skips gallery/process threads.
+- **Operator sender and relay hardening.** The relay now validates proxies,
+  rate limits, and rooms; the sender has a dry-run mode and safer defaults.
+
+### Changed
+
+- **Phone renderer is ~4x faster.** Cached font rasterization, pre-composited
+  red/cyan glitch text (single lines and wrapped blocks), cheap scaler, and
+  Low mode skipping the vignette, title bloom, readability panel and other
+  decorative passes. The PAUSE overlay uses a solid fill rather than a costly
+  full-screen alpha blend. Frames went from ~250 ms to ~70–80 ms in menus and
+  gameplay on the test device.
+
+### Fixed
+
+- **Touch events were gated on the platform flag.** `FINGERDOWN` and
+  touch-flagged `MOUSEBUTTONDOWN` are now handled regardless of what
+  `sys.platform` reports.
+
 ## Unreleased
 
 ### Fixed

@@ -16,7 +16,7 @@ it in an SDL2 activity, so `main.py` → `run_remastered.py` → the exact same
 
 | Piece | File | Role |
 |---|---|---|
-| Build config | `buildozer.spec` | package `org.ntg.thequestiongameremastered`, landscape, fullscreen, arm64-v8a, API 34 / min 24, launcher icon from the package assets |
+| Build config | `buildozer.spec` | package `org.ntg.thequestiongameremastered`, landscape, fullscreen, single ABI (device-reported), API 34 / min 24, launcher icon from the package assets |
 | Entry point | `main.py` | Android-only shim: permissions + keep-screen-on, then runs `run_remastered.py` |
 | Platform switch | `TheQuestionGameRemastered/config.py` → `IS_ANDROID` | `sys.platform == "android"` — one flag gates every difference |
 | Recipes | `p4a-recipes/` (== `../classic/p4a-recipes`) | custom recipes: `pygame-ce` 2.5.8 (SDL2 build), `numpy` 2.5.2, `openssl` 3.3.1 |
@@ -117,7 +117,7 @@ flipping the flag.
 1. **Fullscreen** — `set_mode((display.Info().current_w, current_h), FULLSCREEN)`
    instead of the 800×600 resizable frame (with a windowed fallback if the
    display query fails).
-2. **Touch input** — `FINGERDOWN` → `_handle_touch()` (below).
+2. **Touch input** — `FINGERDOWN` *and* touch-flagged `MOUSEBUTTONDOWN` are queued in normalized window coordinates and dispatched after `_draw()`, so the hit boxes always match the frame the player actually tapped (below).
 3. **Back key** — Android's `K_AC_BACK` is mapped to `ESC` at the top of
    `_handle_key()`, so every "leave this screen" path works unchanged.
 4. **Keep screen on** — `FLAG_KEEP_SCREEN_ON` via pyjnius: the pauses *are*
@@ -151,9 +151,11 @@ Menus are rendered procedurally, so instead of guessing geometry the draw pass
 - each option list (`title`, `settings`, `about`, `answer`) registers a
   `pygame.Rect` + action as it blits the row;
 - Help/Logs register one full-screen `back` zone ("tap anywhere to leave");
-- `FINGERDOWN` normalizes `event.x/y` (0..1) to the framebuffer and hit-tests
-  the zones, then runs the same handler the equivalent key would have run
-  (`_touch_action()` → `_handle_key(K_RETURN / K_ESCAPE)`).
+- `FINGERDOWN` (0..1 normalized `event.x/y`) and touch-flagged `MOUSEBUTTONDOWN`
+  are queued by the event loop and dispatched **after** `_draw()` — never
+  against a stale frame. They hit-test the zones and run the same handler the
+  equivalent key would have run (`_touch_action()` → `_handle_key(...)`).
+  Topmost-drawn zone wins so cards/pause rows are not shadowed by menus.
 
 Because the zones come from the live layout, they follow the game's own
 layout logic — including the squeeze that lifts a long answer block up from
@@ -162,12 +164,38 @@ the bottom edge, and the screen shake offset.
 Interaction rules that fall out of this:
 
 - **Taps are ignored while the question is still typing** (options aren't on
-  screen yet — there is nothing to tap), and ignored mid-fade, so a fat-finger
-  double-tap can never fire twice.
+  screen yet) and during the fade-*out* of the old screen; taps during the
+  fade-*in* of the new screen are accepted, because on a phone that is exactly
+  when the player sees and taps it.
+- **PLAYING draws a visible PAUSE button** — gesture Back does not reliably
+  deliver `K_AC_BACK`, so there is always an on-screen way out.
 - Tapping an answer *is* the answer: `_playing_key()` still enforces the
   "only when WAITING" rule, so the tap preselects and confirms in one step.
 - Help and Settings show touch wording instead of `[ENTER] / [ESC]`, and the
   in-game Help text gains an "ON THIS DEVICE" section on Android.
+
+### Phone performance
+
+A low-end ARM device has no GPU acceleration for pygame's software blitter, so
+the port trims work that is free on a desktop:
+
+- 30 fps cap (desktop 60), and `performance_mode` defaults to **Low** on a
+  phone — one-time migration for installs that carried the old Medium default;
+- Low mode skips the vignette, dust, scanlines, static line and tube-curvature
+  passes, and the title bloom; the cheap scaler replaces `smoothscale`;
+- `ui.py` caches font rasterization and pre-composites the red/cyan glitch text
+  (single lines *and* wrapped question blocks) into one surface per line,
+  turning dozens of alpha blits per line into one;
+- the question's readability wash is skipped in Low mode (the background is
+  plain black there, so the wash was invisible as well as expensive);
+- the PAUSE overlay uses a solid fill rather than a full-screen alpha blit —
+  an alpha blend cost ~150 ms per frame on the test phone's software blitter;
+- gallery/process background threads are not started on Android.
+
+`TQG_TOUCH_*` log lines prove taps reach the game and which zone they hit. On
+the test device (220233L2G, armeabi-v7a) these changes took frames from
+~250 ms to ~70–80 ms in menus and gameplay, and the PAUSE screen from ~230 ms
+to ~100 ms.
 
 ## 3. Playstyle — what survives, what degrades, what changes
 

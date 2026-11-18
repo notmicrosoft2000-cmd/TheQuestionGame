@@ -8,7 +8,7 @@ APP_NAME = "The Question Game Remastered"
 # alpha: it joins the room, plays the questions the operator sends, and
 # reports its answers back. Writing questions lives in the operator's separate
 # sender app (tools/sender) and is deliberately not part of this build.
-VERSION = "6.1-alpha"
+VERSION = "7.0-beta"
 
 # --- Updates ----------------------------------------------------------------
 # The automatic check reads the newest published release whose tag contains
@@ -82,6 +82,7 @@ SOCIAL_TIMEOUT = float(os.environ.get("TQG_SOCIAL_TIMEOUT", "6"))
 # Limits mirror server/relay.py; the server enforces them again.
 SOCIAL_NAME_MAX = 20
 SOCIAL_Q_MAX = 200
+SOCIAL_MESSAGE_MAX = 160
 SOCIAL_OPT_MAX = 60
 SOCIAL_OPTS_MAX = 4
 SOCIAL_INBOX_MAX = 8
@@ -222,7 +223,10 @@ WEBCAM_ENABLED = True
 WEBCAM_GUARANTEED = True
 if WEBCAM_GUARANTEED and SCARE_FLOOR_INCLUDE_WEBCAM:
     SCARE_FLOOR_POOL.append("webcam_flash")
-FRAMERATE = 60
+# Phones do not need 60 fps for a menu-and-text game, and the 30 fps cap
+# halves the per-frame CPU/GPU load (and therefore battery drain) on the
+# low-end ARM builds this port targets. Desktop keeps the old budget.
+FRAMERATE = 30 if IS_ANDROID else 60
 ENABLE_TASKMGR_DETECT = True
 ENABLE_DISCORD_DETECT = True
 MUSIC_ENABLED = True
@@ -369,7 +373,10 @@ DEFAULT_STATE = {
         "disable_screen_shake": False,
         "disable_webcam_scares": False,
         "disable_desktop_scares": False,
-        "performance_mode": "Medium",
+        # Low is the phone default: it skips the per-frame CRT/curvature and
+        # particle passes that are cheap on a desktop and brutal on a phone.
+        # A player who explicitly picks a richer mode in Settings keeps it.
+        "performance_mode": "Low" if IS_ANDROID else "Medium",
         "crt_enabled": True,
         "crt_intensity": 1.0,
         "scanlines_enabled": True,

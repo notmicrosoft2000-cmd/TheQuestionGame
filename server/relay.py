@@ -28,8 +28,8 @@ Endpoints:
   POST /v1/chat/completions     -> OpenAI-compatible pass-through, sanitised
   POST /v1/presence             -> heartbeat: returns who is online, plus any
                                    questions and answer-results for this peer
-  POST /v1/send-question        -> deliver a hand-written question to one peer
-                                   (or "all" of them)
+  POST /v1/send-question        -> deliver a question, message or effect to one
+                                   (or "all"), then clears it when collected
   POST /v1/answer               -> report a recipient's answer back to the
                                    player who wrote the question
 
@@ -125,6 +125,7 @@ INBOX_MAX = int(os.environ.get("RELAY_INBOX_MAX", "12"))
 RESULT_MAX = int(os.environ.get("RELAY_RESULT_MAX", "12"))
 SOCIAL_NAME_MAX = 24
 SOCIAL_Q_MAX = 240
+SOCIAL_MESSAGE_MAX = 160
 SOCIAL_OPT_MAX = 80
 SOCIAL_OPTS_MAX = 4
 SOCIAL_RATE = int(os.environ.get("RELAY_SOCIAL_RATE", "120"))
@@ -150,6 +151,7 @@ _peers = {}          # peer id -> {"id", "name", "platform", "last"}
 _inboxes = {}        # peer id -> [question]
 _results = {}        # sender id -> [answer result]
 _effects = {}        # peer id -> [effect the operator fired at them]
+_messages = {}       # peer id -> [short operator transmission]
 _social_lock = threading.Lock()
 _social_hits = {}    # ip -> [timestamp]; separate from the AI limiter
 _social_hits_lock = threading.Lock()
@@ -233,7 +235,7 @@ def _purge_locked(now):
     """
     for pid in [p for p, v in _peers.items() if now - v["last"] > PEER_TTL]:
         _peers.pop(pid, None)
-    for table in (_inboxes, _results, _effects):
+    for table in (_inboxes, _results, _effects, _messages):
         for pid in list(table):
             fresh = [item for item in table[pid]
                      if now - item.get("ts", now) < QUESTION_TTL]
@@ -260,14 +262,23 @@ def _handle_presence(body):
         inbox = _inboxes.pop(pid, [])
         results = _results.pop(pid, [])
         effects = _effects.pop(pid, [])
+        messages = _messages.pop(pid, [])
     online.sort(key=lambda p: p["name"].lower())
     return 200, {"ok": True, "online": online, "inbox": inbox,
-                 "results": results, "effects": effects}
+                 "results": results, "effects": effects,
+                 "messages": messages}
 
 
 def _handle_send(body):
     from_id = body.get("from")
     to = body.get("to")
+
+    # A message is not a question: it is a short operator transmission, shown
+    # as a card on the receiver and dismissed by a tap. Like an effect it shares
+    # the route and the token gate, but it lands in its own mailbox.
+    message = _clean_social_text(body.get("message"), SOCIAL_MESSAGE_MAX)
+    if message:
+        return _handle_send_message(body, from_id, to, message)
 
     # An effect is not a question: it shares the route and the token gate, but
     # it carries no options and lands in its own store. The receiver plays it
@@ -334,6 +345,47 @@ def _handle_send(body):
             del box[:-INBOX_MAX]
             delivered.append(target)
     return 200, {"ok": True, "id": qid, "delivered": delivered}
+
+
+def _handle_send_message(body, from_id, to, message):
+    """Deliver a short operator transmission. Same gate, one-shot pickup.
+
+    Messages are deliberately small and separate from questions: they cannot
+    carry options, effects or answers. The receiver shows them as a card that
+    can be tapped away, so the operator can speak without hijacking the next
+    question.
+    """
+    if not _valid_peer_id(from_id):
+        return 400, {"error": "bad sender id"}
+    now = time.time()
+    delivered = []
+    with _social_lock:
+        _purge_locked(now)
+        sender = _peers.get(from_id)
+        if not sender:
+            return 403, {"error": "join presence first"}
+        if to == "all":
+            targets = [pid for pid in _peers if pid != from_id]
+        elif isinstance(to, str) and to in _peers and to != from_id:
+            targets = [to]
+        else:
+            targets = []
+        if not targets:
+            return 404, {"error": "nobody to send to"}
+        mid = uuid.uuid4().hex[:12]
+        item = {
+            "id": mid,
+            "from": from_id,
+            "from_name": sender["name"],
+            "message": message,
+            "ts": now,
+        }
+        for target in targets[:20]:
+            box = _messages.setdefault(target, [])
+            box.append(dict(item))
+            del box[:-INBOX_MAX]
+            delivered.append(target)
+    return 200, {"ok": True, "id": mid, "delivered": delivered}
 
 
 def _handle_send_effect(body, from_id, to, effect):

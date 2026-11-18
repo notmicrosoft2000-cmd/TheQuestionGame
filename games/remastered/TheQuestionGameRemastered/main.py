@@ -35,10 +35,10 @@ ABOUT_VARIATIONS = [
 ]
 
 HELP_VARIATIONS = [
-    "CONTROLS & OPERATIONS\n\n[TAB]   — Cycle through menu/answer options\n[ENTER] — Confirm selection\n[ESC]   — Return from About/Help menus\n\nANSWER ALL QUESTIONS TRUTHFULLY.\nThe system detects inconsistencies.\n\nYour response time is monitored.\nPausing too long will be noted.",
-    "HOW TO PLAY\n\n[TAB]   — Navigate options\n[ENTER] — Select\n\nThere is no skip. There is no fast forward.\nThere is only the next question.\n\nThe questions change every time you play.\nThey are written for you, in the moment.\n\nThe game remembers. Do you?",
-    "SAFETY & OPERATIONS LOG\n\n[TAB]   — Move between choices\n[ENTER] — Confirm\n\nQ: Are local effects dangerous?\nA: No. Effects are cosmetic: flicker, sound, window movement.\n\nQ: Are answers transmitted?\nA: The questions are generated remotely. Your answers stay local.\n\nQ: What does it do with my answers?\nA: It remembers them.",
-    "THE ROOM\n\nONLINE IS AN ALPHA. IT WILL BREAK. A LOT.\n\nQ: What is the room?\nA: A list of who is playing. The game checks in with it every few seconds. The room lives on the server that runs the game. Nothing is installed on your machine.\n\nQ: Where do the questions come from?\nA: Most are written by the program. Some are written by hand, by someone else. Those join the queue between the others and look exactly the same.\n\nQ: Can I write to the room?\nA: No. You can see it and be seen in it. The writing half is not in this build.",
+    "HOW TO PLAY\n\nTap the line you want. A tap selects and opens it in one gesture.\nThe BACK button is always on screen. The device back gesture does the same thing.\n\nANSWER ALL QUESTIONS TRUTHFULLY.\nThe system detects inconsistencies.\n\nYour response time is monitored.\nPausing too long will be noted.",
+    "HOW TO PLAY\n\nTouch an answer to give it. There is no skip. There is no fast forward.\nThere is only the next question.\n\nThe questions change every time you play.\nThey are written for you, in the moment.\n\nThe game remembers. Do you?",
+    "SAFETY & OPERATIONS LOG\n\nTap a choice to answer it. Tap BACK to leave a screen.\n\nQ: Are local effects dangerous?\nA: No. Effects are cosmetic: flicker, sound, movement on the screen.\n\nQ: Are answers transmitted?\nA: The questions are generated remotely. Your answers stay local.\n\nQ: What does it do with my answers?\nA: It remembers them.",
+    "THE ROOM\n\nONLINE IS A BETA. IT CAN STILL BREAK.\n\nQ: What is the room?\nA: A list of who is playing. The game checks in with it every few seconds. The room lives on the server that runs the game. Nothing is installed on your machine.\n\nQ: Where do the questions come from?\nA: Most are written by the program. Some are written by hand, by the operator. Those join the queue between the others and look exactly the same.\n\nQ: Can I write to the room?\nA: No. You can see it and be seen in it. Things can also be sent to you — questions, messages and effects. The writing half belongs to the operator.",
 ]
 
 # The ONLINE screen explains the room in the game's own voice: what it is, what
@@ -48,11 +48,13 @@ ONLINE_EXPLAINER = [
     "THE GAME CHECKS IN WITH THE ROOM EVERY FEW SECONDS — THAT",
     "IS HOW YOU ARE FOUND BY THE OTHERS. THE ROOM LIVES ON THE",
     "SERVER THAT RUNS THE GAME, NOT ON YOUR MACHINE.",
-    "QUESTIONS WRITTEN BY HAND BY SOMEONE ELSE CAN JOIN THE",
+    "QUESTIONS WRITTEN BY HAND BY THE OPERATOR CAN JOIN THE",
     "QUEUE BETWEEN THE ORDINARY ONES. THEY LOOK THE SAME, AND",
     "NOBODY ANNOUNCES THEM.",
+    "THE OPERATOR CAN ALSO SEND SHORT MESSAGES AND EFFECTS.",
+    "MESSAGES APPEAR AS TRANSMISSIONS. EFFECTS SIMPLY HAPPEN.",
     "YOU CAN SEE THE ROOM AND BE SEEN IN IT. YOU CANNOT WRITE",
-    "TO IT — THAT HALF IS NOT IN THIS BUILD.",
+    "TO IT — THAT HALF BELONGS TO THE OPERATOR.",
 ]
 
 # Names that mean "the operator's sender is connected". Matching is on the peer
@@ -127,7 +129,7 @@ def _account_name():
     """The name of the account this copy of the game is running under.
 
     That is what the room shows, unless the player picks a name of their own
-    with [N] on the ONLINE screen.
+    with RENAME on the ONLINE screen.
     """
     name = ""
     try:
@@ -205,6 +207,12 @@ class Game:
                 info = pygame.display.Info()
                 disp = pygame.display.set_mode(
                     (info.current_w, info.current_h), pygame.FULLSCREEN)
+                # Device diagnostics: the old crash-on-launch took a week of
+                # guesswork, so leave the sizes that touch maths depends on in
+                # logcat. Cheap, once, and only on the phone.
+                print("TQG_DISPLAY android=%s info=%sx%s window=%sx%s"
+                      % (IS_ANDROID, info.current_w, info.current_h,
+                         disp.get_size()[0], disp.get_size()[1]), flush=True)
                 self._video_applied = self._video_wanted()
                 return disp
             except Exception:
@@ -303,6 +311,16 @@ class Game:
         # made: a player who asked for fullscreen, a different resolution or a
         # different UI scale gets it on the first run, not after a restart.
         self.game_state = persistence.load_game_state()
+        if IS_ANDROID:
+            # Existing phone installs carried the desktop "Medium" default
+            # from before the port. Move them to the cheaper phone default
+            # once, but never override a mode the player chose afterwards.
+            sset = self.game_state.setdefault("settings", {})
+            if sset.get("performance_mode") == "Medium" \
+                    and not sset.get("_android_perf_default"):
+                sset["performance_mode"] = "Low"
+                sset["_android_perf_default"] = True
+                persistence.save_game_state(self.game_state)
         self.run_count = self.game_state.get("run_count", 1)
         try:
             self.settings_idx = self._load_settings_idx()
@@ -314,6 +332,11 @@ class Game:
         # Everything from here on draws into this surface; _draw() copies it
         # onto the window. See the `screen` property above for why.
         self._frame = self._new_frame(self._render_size(self._display.get_size()))
+        if IS_ANDROID:
+            print("TQG_FRAME frame=%sx%s window=%sx%s"
+                  % (self._frame.get_size()[0], self._frame.get_size()[1],
+                     self._display.get_size()[0], self._display.get_size()[1]),
+                  flush=True)
         # The window surface we last painted opaque (see _make_window_opaque).
         self._opaque_surface = None
         try:
@@ -342,6 +365,11 @@ class Game:
         self.selected_answer = 0
         # Tap targets recorded while drawing; hit-tested by _handle_touch.
         self._touch_zones = []
+        # Touches are queued from the event loop and dispatched *after* the
+        # draw pass, so the hit boxes always describe the screen the player
+        # actually tapped (not the previous state or a stale frame size).
+        self._pending_touch = None
+        self._touch_log_count = 0
         self.wait_start_time = 0
         self.pending_exit = False
         self.exit_message_at = 0
@@ -399,7 +427,7 @@ class Game:
         if self.game_state.get("logs_unlocked") and "LOGS" not in self.menu_options:
             self.menu_options.insert(len(self.menu_options) - 1, "LOGS")
         self.selected_option = 0
-        self.settings_categories = ["AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY", "CONTROLS", "OTHER"]
+        self.settings_categories = ["AUDIO", "VIDEO", "GRAPHICS", "GAMEPLAY", "ACCESSIBILITY", "OTHER"]
         self.settings_category_selected = 0
         self.settings_options_by_category = {
             "AUDIO": ["Master Volume", "SFX Volume", "Ambience Volume", "Music Volume"],
@@ -407,7 +435,6 @@ class Game:
             "GRAPHICS": ["Performance Mode", "CRT Effects", "CRT Intensity", "Scanlines", "Vignette", "Dust", "Static Line", "Tube Curvature", "Phosphor Mask"],
             "GAMEPLAY": ["Font", "Text Speed", "Text Size", "Text Sway", "AI Source"],
             "ACCESSIBILITY": ["Reduce Flashes", "Disable Screen Shake", "Disable Webcam Scares", "Disable Desktop Scares"],
-            "CONTROLS": ["Rebind: Up", "Rebind: Down", "Rebind: Confirm", "Rebind: Back/Pause"],
             "OTHER": ["VHS Effects", "Reset All Data", "< Back"],
         }
         self.settings_options = self.settings_options_by_category[self.settings_categories[self.settings_category_selected]]
@@ -467,6 +494,7 @@ class Game:
         # it exists.
         self.social = None
         self.social_notes = []          # [{text, at, tone}] transient notices
+        self.transmissions = []         # operator messages waiting on screen
         self.online_edit = None         # {"text": ...} while renaming yourself
         self.online_options = ["TEST CONNECTION", "BACK"]
         self.online_selected = 0
@@ -505,8 +533,8 @@ class Game:
         self.help_text = random.choice(HELP_VARIATIONS)
         if IS_ANDROID:
             self.help_text += ("\n\nON THIS DEVICE\n\nTap an option — it selects and confirms in one "
-                               "gesture, no TAB/ENTER needed.\nSwipe back (or use the system Back "
-                               "button) to leave a screen.\n\nANSWER ALL QUESTIONS TRUTHFULLY.")
+                               "gesture.\nUse the on-screen BACK button or the device back gesture to "
+                               "leave a screen.\n\nANSWER ALL QUESTIONS TRUTHFULLY.")
 
         self.starfield = ui.build_starfield(config.WINDOW_W, config.WINDOW_H)
         self.clock = pygame.time.Clock()
@@ -1168,6 +1196,27 @@ class Game:
             pending = 0
         self._social_pending_cache = pending
         self._play_social_effects()
+        self._receive_social_messages()
+
+    def _receive_social_messages(self):
+        """Show short operator transmissions without hijacking the question."""
+        if self.social is None:
+            return
+        try:
+            items = self.social.take_messages()
+        except Exception:
+            return
+        for item in items:
+            text = str(item.get("message") or "").strip()
+            if not text:
+                continue
+            who = str(item.get("from_name") or "OPERATOR").strip().upper()
+            self.transmissions.append({
+                "text": text[:config.SOCIAL_MESSAGE_MAX],
+                "from": who[:config.SOCIAL_NAME_MAX] or "OPERATOR",
+                "until": self.now + 12.0,
+            })
+        del self.transmissions[:-3]
 
     # --- updates -------------------------------------------------------------
     def _poll_update_check(self):
@@ -1257,13 +1306,22 @@ class Game:
                                         item.get("intensity") or 1.0)
 
     def _social_step_from(self, item):
-        """Convert a relay question into a playable script step."""
-        opts = list(item.get("opts") or [])
+        """Convert a relay question into a playable script step.
+
+        social.py validates at the boundary, but this second pass keeps a bad
+        saved/queued item from ever putting a non-string into the renderer.
+        """
+        raw_opts = item.get("opts") if isinstance(item, dict) else None
+        opts = [str(o)[:config.SOCIAL_OPT_MAX] for o in (raw_opts or [])
+                if isinstance(o, (str, int, float))]
+        opts = [o for o in opts if o.strip()]
         if len(opts) < 2:
             opts = ["...", "..."]
+        q = str(item.get("q") or "...")[:config.SOCIAL_Q_MAX] \
+            if isinstance(item, dict) else "..."
         return {
             "type": "choice",
-            "q": item.get("q") or "...",
+            "q": q,
             "opts": opts,
             "_id": "social_" + str(item.get("id") or "q"),
             "_social": item,
@@ -1739,51 +1797,9 @@ class Game:
             self._cheat_buffer = []
 
     def _settings_key(self, key):
-        if getattr(self, "rebinding", None):
-            s = self.game_state.setdefault("settings", {})
-            kb = s.setdefault("keybinds", {})
-            keyname = pygame.key.name(key).upper()
-            # Avoid setting to modifiers in weird states, but just store
-            mapping = {
-                "Rebind: Up": "up",
-                "Rebind: Down": "down",
-                "Rebind: Confirm": "confirm",
-                "Rebind: Back/Pause": "back",
-            }
-            action = mapping.get(self.rebinding)
-            if action:
-                # A key can only drive one action. Reject the clash instead of
-                # letting it shadow the other binding.
-                clash = None
-                for other_action, other_key in kb.items():
-                    if other_action == action:
-                        continue
-                    if other_action == "pause" and action == "back":
-                        continue    # back and pause are one action
-                    if other_action == "back" and action == "pause":
-                        continue
-                    if other_key == keyname:
-                        clash = other_action
-                        break
-                if clash:
-                    self.rebind_error = "%s IS ALREADY BOUND" % keyname
-                    self.rebind_error_until = self.now + 3.0
-                    self.rebinding = None
-                    audio.play_ui_nav_sound()
-                    return
-                kb[action] = keyname
-                if action == "back":
-                    kb["pause"] = keyname
-                s["keybinds"] = kb
-                persistence.save_game_state(self.game_state)
-                self.rebind_error = ""
-            self.rebinding = None
-            audio.play_ui_select_sound()
-            return
         n = len(self.settings_options)
-        # Navigation honours the rebinds. The change key and the back key stay
-        # on ENTER and ESC here as well, so the player can never rebind
-        # themselves out of the screen they rebind in.
+        # Navigation honours saved bindings, but bindings can no longer be
+        # changed from the UI: every visible control is a tap target now.
         up = self._bound_key("up", pygame.K_UP)
         down = self._bound_key("down", pygame.K_DOWN)
         if key == pygame.K_TAB:
@@ -1823,9 +1839,6 @@ class Game:
                 self.settings_idx = self._load_settings_idx()
                 self._apply_settings()
                 audio.play_error_sound()
-            elif name.startswith("Rebind:"):
-                self.rebinding = name
-                audio.play_ui_nav_sound()
             else:
                 opts = config.SETTING_OPTIONS.get(name)
                 if not opts:
@@ -1834,10 +1847,6 @@ class Game:
                 self._apply_settings()
                 audio.play_ui_select_sound()
         elif key == pygame.K_ESCAPE:
-            if getattr(self, "rebinding", None):
-                self.rebinding = None
-                audio.play_ui_nav_sound()
-                return
             self.start_fade("TITLE")
 
     def _about_key(self, key):
@@ -1927,24 +1936,59 @@ class Game:
             return
         self._touch_zones.append((pygame.Rect(int(x), int(y), int(w), int(h)), kind, idx))
 
-    def _handle_touch(self, px, py):
+    def _queue_touch(self, nx, ny, source="finger"):
+        """Remember a touch in normalized window coordinates.
+
+        Dispatch is deferred until after _draw(), when _touch_zones describe
+        the frame actually on screen. Keeping the coordinates normalized also
+        makes them immune to a frame resize between the event and the draw.
+        """
+        self._pending_touch = (float(nx), float(ny), source)
+        if IS_ANDROID and self._touch_log_count < 8:
+            self._touch_log_count += 1
+            print("TQG_TOUCH_RAW %s %.3f %.3f state=%s zones=%d"
+                  % (source, nx, ny, self.state, len(self._touch_zones)),
+                  flush=True)
+
+    def _dispatch_pending_touch(self):
+        """Run the queued tap against the zones just rebuilt by _draw()."""
+        if self._pending_touch is None:
+            return
+        nx, ny, source = self._pending_touch
+        self._pending_touch = None
+        w_px, h_px = self.screen.get_size()
+        self._handle_touch(nx * w_px, ny * h_px, source)
+
+    def _handle_touch(self, px, py, source="touch"):
         """A finger went down: hit-test this frame's zones and run the action
         the equivalent key would have run.
 
         Options are tapped *directly* rather than TAB-cycled — on a phone,
         "tap the line you want" is the only comfortable way to play a menu
-        game. Taps are ignored mid-transition (fade) and during LOADING so a
-        stray double-tap can't fire twice.
+        game. A fade *out* is ignored (the old screen is going away); a fade
+        *in* is tappable, because on a slow phone that is when the player will
+        actually see and tap the new screen.
         """
-        if self.fade["active"] or self.state == "LOADING":
+        if self.state == "LOADING":
             return
-        for rect, kind, idx in self._touch_zones:
+        if self.fade["active"] and self.fade.get("dir") != "in":
+            return
+        # Topmost drawn zone wins: modal cards and pause rows sit on top of
+        # the full-screen menus rather than being shadowed by them.
+        for rect, kind, idx in reversed(self._touch_zones):
             if rect.collidepoint(int(px), int(py)):
                 try:
                     self._touch_action(kind, idx)
-                except Exception:
-                    pass  # a stray tap must never take the game down
+                except Exception as exc:
+                    # A stray tap must never take the game down, but a broken
+                    # action must not look like a dead touch screen either.
+                    print("TQG_TOUCH_ACTION %s/%s failed: %r" % (kind, idx, exc),
+                          flush=True)
                 return
+        if IS_ANDROID and self._touch_log_count < 12:
+            self._touch_log_count += 1
+            print("TQG_TOUCH_MISS %.1f %.1f state=%s zones=%d"
+                  % (px, py, self.state, len(self._touch_zones)), flush=True)
 
     def _touch_action(self, kind, idx):
         if kind == "title":
@@ -1953,6 +1997,13 @@ class Game:
         elif kind == "settings":
             self.settings_selected = idx
             self._handle_key(pygame.K_RETURN)
+        elif kind == "settings_cat":
+            total = len(self.settings_categories)
+            self.settings_category_selected = (self.settings_category_selected + idx) % total
+            cat = self.settings_categories[self.settings_category_selected]
+            self.settings_options = self.settings_options_by_category[cat]
+            self.settings_selected = 0
+            audio.play_ui_nav_sound()
         elif kind == "about":
             self.about_selected = idx
             self._handle_key(pygame.K_RETURN)
@@ -1963,6 +2014,21 @@ class Game:
                 return
             self.selected_answer = idx
             self._handle_key(pygame.K_RETURN)
+        elif kind == "pause":
+            self.pause_selected = idx
+            self._pause_key(pygame.K_RETURN)
+        elif kind == "pause_open":
+            # A visible pause target: gesture navigation does not reliably
+            # deliver K_AC_BACK, so gameplay needs a tap target of its own.
+            if not self.paused:
+                self.paused = True
+                self.pause_selected = 0
+                audio.play_ui_nav_sound()
+        elif kind == "transmission":
+            shown = self.transmissions[-2:]
+            if 0 <= idx < len(shown):
+                target = shown[idx]
+                self.transmissions = [m for m in self.transmissions if m is not target]
         elif kind == "back":
             self._handle_key(pygame.K_ESCAPE)
         elif kind == "update":
@@ -1971,6 +2037,15 @@ class Game:
             # The ONLINE screen has two real options now; a tap runs the
             # one that was tapped, exactly like the key would.
             self._online_activate(idx)
+        elif kind == "online_action":
+            if idx == 0 and self.online_edit is not None:
+                self._commit_online_name(self.online_edit["text"])
+                self.online_edit = None
+            elif idx == 1:
+                self.online_edit = None
+            elif idx == 2:
+                self.online_edit = {"text": self._social_name()}
+            audio.play_ui_select_sound()
 
     # --- update ---------------------------------------------------------------
     def _update(self):
@@ -2258,7 +2333,10 @@ class Game:
             ui.draw_scan_sweep(self.screen, w, h, self.now)
         if dust_enabled:
             ui.draw_dust(self.screen, w, h, self.now)
-        if vignette_enabled:
+        if vignette_enabled and not (IS_ANDROID and perf == "low"):
+            # A full-screen per-pixel alpha blend is one of the most expensive
+            # operations on a low-end ARM blitter. The vignette is pure mood,
+            # so Low mode drops it; players who want it can pick Medium/High.
             ui.apply_vignette(self.screen, w, h, self.now, strong=self.run_count >= 3)
         if self.state in ("PLAYING", "EXITFADE") and config.VHS_STATIC_LINE > 0 and static_line_enabled:
             ui.draw_static_line(self.screen, w, h, self.now, config.VHS_STATIC_LINE)
@@ -2291,7 +2369,7 @@ class Game:
         if self.close_msg_until > self.now:
             font_small = self._fonts()[2]
             msg = os_layer.get_close_intercept_message(self.close_attempts).replace("\n", " ")
-            surf = font_small.render(msg, True, config.COLOR_RED)
+            surf = ui.cached_render(font_small, msg, True, config.COLOR_RED)
             self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h - 50))
 
         if self.badge_toast_id and self.badge_toast_at:
@@ -2301,6 +2379,7 @@ class Game:
                 self.badge_toast_id = None
 
         self._draw_social_notes(w, h)
+        self._draw_transmissions(w, h)
 
         # Foreground CRT finish, applied over every state: VHS scanlines, then
         # the full stack (tracking, static, tube curvature, phosphor mask).
@@ -2334,17 +2413,21 @@ class Game:
                 # format and copy that over: scaling straight into the
                 # window surface would hand it a fresh, transparent alpha
                 # channel and the window would go invisible again.
-                scaled = pygame.transform.smoothscale(self._frame, disp.get_size())
+                # Phone builds use the cheap scaler: smoothscale is a full
+                # high-quality resample of every pixel on every frame, and a
+                # low-end ARM GPU is better spent on input latency.
+                scaler = pygame.transform.scale if IS_ANDROID else pygame.transform.smoothscale
+                scaled = scaler(self._frame, disp.get_size())
                 disp.blit(scaled, (0, 0))
         pygame.display.flip()
 
     def _draw_loading(self, w, h):
         font_large, font_med, font_small = self._fonts()
         t = self.now - self.loading_start
-        title = font_large.render(_TITLE, True, config.COLOR_RED)
-        sub = font_med.render(_TITLE_SUB, True, (150, 0, 0))
+        title = ui.cached_render(font_large, _TITLE, True, config.COLOR_RED)
+        sub = ui.cached_render(font_med, _TITLE_SUB, True, (150, 0, 0))
         dots = "..." if t < 0.4 else ("...." if t < 0.8 else ".....")
-        cal = font_small.render("CALIBRATING" + dots, True, (90, 90, 90))
+        cal = ui.cached_render(font_small, "CALIBRATING" + dots, True, (90, 90, 90))
         self.screen.blit(title, (w // 2 - title.get_width() // 2, h // 2 - 90))
         self.screen.blit(sub, (w // 2 - sub.get_width() // 2, h // 2 - 40))
         self.screen.blit(cal, (w // 2 - cal.get_width() // 2, h // 2 + 30))
@@ -2369,24 +2452,30 @@ class Game:
             title_lines = ["....", "...", "Leave."]
 
         base_y = int(h * 0.10)
+        # The bloom blits a large alpha halo per title line. It is pure polish
+        # and the glitch split below already gives the title its colour, so Low
+        # mode on a phone drops it to keep taps responsive.
+        low = IS_ANDROID and str((self.game_state.get("settings", {}) or {})
+                                 .get("performance_mode", "Low")).lower() == "low"
         # Occasional character scramble, straight from the website's title.
         scramble_on = (self.now % 7.0) < 0.45
         for i, line in enumerate(title_lines):
             sway_x = int(math.sin(self.now * 1.8 + i) * 6)
             sway_y = int(math.cos(self.now * 1.2 + i) * 3)
             draw_line = ui.scramble_text(line, self.now, 0.35) if scramble_on else line
-            ui.draw_glowing_text(self.screen, draw_line, font_large,
-                                 int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
-                                 self.now, color=title_color, glow_color=(150, 0, 0))
+            if not low:
+                ui.draw_glowing_text(self.screen, draw_line, font_large,
+                                     int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
+                                     self.now, color=title_color, glow_color=(150, 0, 0))
             # Website hero: red/cyan split copies jittering over the base.
             ui.render_glitch_text(self.screen, draw_line, font_large,
                                   int(w * 0.08) + sway_x, base_y + i * 65 + sway_y,
                                   self.now, color=title_color)
 
-        sub = font_med.render(_TITLE_SUB, True, (150, 0, 0))
+        sub = ui.cached_render(font_med, _TITLE_SUB, True, (150, 0, 0))
         self.screen.blit(sub, (int(w * 0.08), base_y + 3 * 65 + 8))
 
-        run_label = font_small.render("SESSION %d / 3" % self.run_count, True, (120, 40, 40))
+        run_label = ui.cached_render(font_small, "SESSION %d / 3" % self.run_count, True, (120, 40, 40))
         self.screen.blit(run_label, (int(w * 0.08), base_y + 3 * 65 + 8 + font_med.get_height() + 6))
 
         menu_y_start = h - 310 if len(self.menu_options) <= 5 else h - 348
@@ -2409,7 +2498,7 @@ class Game:
                 self._eye_focus_rect = (int(w * 0.08), menu_y_start + i * 45,
                                         max(1, tw), max(1, th))
             else:
-                surf = font_med.render(prefix, True, base_col)
+                surf = ui.cached_render(font_med, prefix, True, base_col)
                 try:
                     surf.set_alpha(alpha)
                 except Exception:
@@ -2422,18 +2511,18 @@ class Game:
             version = str(self.update_available.get("version") or "?")
             label = ("UPDATE %s AVAILABLE — TAP TO DOWNLOAD" % version
                      if IS_ANDROID
-                     else "UPDATE %s AVAILABLE — [U] DOWNLOAD" % version)
-            update_surf = font_small.render(label, True, (210, 185, 80))
+                     else "UPDATE %s AVAILABLE — TAP TO DOWNLOAD" % version)
+            update_surf = ui.cached_render(font_small, label, True, (210, 185, 80))
             ux = w // 2 - update_surf.get_width() // 2
             uy = h - 50
             self.screen.blit(update_surf, (ux, uy))
             self._touch_zone(ux - 8, uy - 4, update_surf.get_width() + 16,
                              update_surf.get_height() + 8, "update")
 
-        cred = font_small.render("NEPTUNE PRODUCTIONS (C)", True, (60, 60, 60))
+        cred = ui.cached_render(font_small, "NEPTUNE PRODUCTIONS (C)", True, (60, 60, 60))
         self.screen.blit(cred, (w // 2 - cred.get_width() // 2, h - 28))
 
-        ver = font_small.render("v" + config.VERSION, True, (60, 60, 60))
+        ver = ui.cached_render(font_small, "v" + config.VERSION, True, (60, 60, 60))
         # Top-right: the bottom-right corner belongs to the eye now.
         self.screen.blit(ver, (w - ver.get_width() - 12, 8))
 
@@ -2457,6 +2546,36 @@ class Game:
         # Retire anything long past its life so the list cannot grow.
         self.social_notes = [n for n in self.social_notes
                              if self.now - n["at"] < n.get("_ttl", 6.0) + 2.0]
+
+    def _draw_transmissions(self, w, h):
+        """Operator messages are cards, not chat: brief, readable, tappable away."""
+        if not self.transmissions:
+            return
+        self.transmissions = [m for m in self.transmissions if m["until"] > self.now]
+        if not self.transmissions:
+            return
+        _, _, small = self._fonts()
+        card_w = min(int(w * 0.62), 620)
+        x = w // 2 - card_w // 2
+        y = 58
+        for i, msg in enumerate(self.transmissions[-2:]):
+            label = "TRANSMISSION — %s" % str(msg.get("from") or "OPERATOR")
+            lines = ui.wrapped_line_count(str(msg.get("text") or ""), small,
+                                          (210, 205, 190), card_w - 28)
+            card_h = small.get_linesize() + 10 + lines * (small.get_linesize() + 4) + 30
+            cy = y + i * (card_h + 10)
+            rect = pygame.Rect(x, cy, card_w, card_h)
+            pygame.draw.rect(self.screen, (12, 12, 16), rect)
+            pygame.draw.rect(self.screen, (140, 110, 70), rect, 2)
+            self.screen.blit(ui.cached_render(small, label, True, (200, 170, 100)),
+                             (x + 14, cy + 8))
+            ui.render_text_block(self.screen, str(msg.get("text") or ""), small,
+                                 (210, 205, 190), x + 14,
+                                 cy + small.get_linesize() + 14, card_w - 28)
+            self.screen.blit(ui.cached_render(small, "TAP TO DISMISS", True, (100, 90, 75)),
+                             (x + card_w - 126, cy + card_h - 22))
+            self._touch_zone(rect.x, rect.y, rect.width, rect.height,
+                             "transmission", i)
 
     def _draw_online(self, w, h):
         """The ONLINE entry: the room this session has joined.
@@ -2483,8 +2602,8 @@ class Game:
         # This half of the game is brand new. Say so before anything else —
         # next to the heading, so it costs no vertical space.
         warn_x = cx + font_large.size("ONLINE")[0] + 34
-        self.screen.blit(font_small.render(
-            "AN ALPHA. IT WILL BREAK A LOT.",
+        self.screen.blit(ui.cached_render(font_small, 
+            "A BETA. IT CAN STILL BREAK.",
             True, (215, 160, 60)), (warn_x, int(h * 0.08) + font_large.get_height() // 2))
 
         status, others = self._online_status()
@@ -2498,7 +2617,7 @@ class Game:
             relay_txt, relay_col = "MULTIPLAYER IS OFF", (170, 170, 170)
         else:
             relay_txt, relay_col = "RELAY: OFFLINE", (200, 80, 80)
-        self.screen.blit(font_med.render(relay_txt, True, relay_col), (cx, y))
+        self.screen.blit(ui.cached_render(font_med, relay_txt, True, relay_col), (cx, y))
         # After a drop that recovered, say so — a silent reconnect looks like a
         # freeze, and this screen is where the player comes to check.
         try:
@@ -2506,28 +2625,33 @@ class Game:
         except Exception:
             reconnects = 0
         if reconnects and status == "online":
-            self.screen.blit(font_small.render(
+            self.screen.blit(ui.cached_render(font_small, 
                 "RECONNECTED x%d" % reconnects, True, (90, 160, 90)),
                 (cx + font_med.size(relay_txt)[0] + 26, y + 10))
 
         # The name the room knows you by, on the same line.
         if self.online_edit is not None:
             value = self.online_edit["text"] + "_"
-            hint = "[ENTER] SAVE  [ESC] CANCEL"
         else:
             value = str(self._social_name()).upper()
-            hint = "[N] RENAME"
         name_x = cx + font_med.size(relay_txt)[0] + 26
-        self.screen.blit(font_small.render("YOU", True, (110, 110, 110)),
+        self.screen.blit(ui.cached_render(font_small, "YOU", True, (110, 110, 110)),
                          (name_x, y + 10))
-        self.screen.blit(font_med.render(value, True, (205, 205, 205)),
+        self.screen.blit(ui.cached_render(font_med, value, True, (205, 205, 205)),
                          (name_x + 46, y))
-        self.screen.blit(font_small.render(hint, True, (80, 80, 80)),
-                         (name_x + 46 + font_med.size(value)[0] + 14, y + 10))
+        btn_y = y - 2
+        if self.online_edit is not None:
+            self._draw_small_button("SAVE", w - 210, btn_y, 92, 34, font_small,
+                                    "online_action", 0, (70, 120, 70))
+            self._draw_small_button("CANCEL", w - 110, btn_y, 98, 34, font_small,
+                                    "online_action", 1, (120, 70, 70))
+        else:
+            self._draw_small_button("RENAME", w - 110, btn_y, 98, 34, font_small,
+                                    "online_action", 2)
         y += font_med.get_linesize() + 8
 
         # Who else is in the room.
-        self.screen.blit(font_small.render(
+        self.screen.blit(ui.cached_render(font_small, 
             "IN THE ROOM NOW (%d)" % len(others), True, (100, 40, 40)), (cx, y))
         y += font_small.get_linesize() + 2
 
@@ -2539,18 +2663,18 @@ class Game:
         peer_slots = int((explain_top - y - reserve) // font_small.get_linesize())
         peer_slots = max(0, min(4, peer_slots))
         if not others:
-            self.screen.blit(font_small.render(
+            self.screen.blit(ui.cached_render(font_small, 
                 "NOBODY ELSE IS PLAYING RIGHT NOW", True, (80, 80, 80)), (cx, y))
             y += font_small.get_linesize() + 4
         else:
             for peer in others[:peer_slots]:
                 pname = str(peer.get("name", "?")).upper()
                 plat = str(peer.get("platform", "")).upper()
-                self.screen.blit(font_small.render(
+                self.screen.blit(ui.cached_render(font_small, 
                     "%s   (%s)" % (pname, plat), True, (170, 170, 170)), (cx, y))
                 y += font_small.get_linesize() + 2
             if len(others) > peer_slots:
-                self.screen.blit(font_small.render(
+                self.screen.blit(ui.cached_render(font_small, 
                     "... AND %d MORE" % (len(others) - peer_slots), True,
                     (80, 80, 80)), (cx, y))
                 y += font_small.get_linesize() + 2
@@ -2559,15 +2683,15 @@ class Game:
         # Lobbies: not built, shown anyway. A quiet section that names the shape
         # of what is coming, clearly marked SOON, so nothing here reads as a
         # feature you can press. It is deliberately not focusable.
-        self.screen.blit(font_small.render(
+        self.screen.blit(ui.cached_render(font_small, 
             "LOBBIES  —  COMING SOON", True, (100, 40, 40)), (cx, y))
         y += font_small.get_linesize() + 2
         for lobby_name, when in ONLINE_LOBBY_TEASER:
-            self.screen.blit(font_small.render("  " + lobby_name, True,
+            self.screen.blit(ui.cached_render(font_small, "  " + lobby_name, True,
                                                (70, 70, 70)), (cx, y))
             tag = str(when).upper()
             tx = cx + int(w * 0.30)
-            self.screen.blit(font_small.render("[" + tag + "]", True,
+            self.screen.blit(ui.cached_render(font_small, "[" + tag + "]", True,
                                                (60, 60, 60)), (tx, y))
             y += font_small.get_linesize() + 2
         y += 4
@@ -2577,7 +2701,7 @@ class Game:
             sel = (i == self.online_selected)
             prefix = "> " if sel else "  "
             col = config.COLOR_WHITE if sel else (110, 110, 110)
-            surf = font_med.render(prefix + option, True, col)
+            surf = ui.cached_render(font_med, prefix + option, True, col)
             self.screen.blit(surf, (cx, y))
             if sel:
                 self._eye_focus_rect = (cx, y, max(1, surf.get_width()),
@@ -2589,25 +2713,25 @@ class Game:
         # The result of the connection test, if there is one.
         test = self.online_test or {}
         if test.get("state") == "running":
-            self.screen.blit(font_small.render("TESTING...", True, (200, 180, 90)),
+            self.screen.blit(ui.cached_render(font_small, "TESTING...", True, (200, 180, 90)),
                              (cx, y))
         elif test.get("state") in ("ok", "fail"):
             col = (90, 200, 90) if test.get("state") == "ok" else (200, 80, 80)
-            self.screen.blit(font_small.render(
+            self.screen.blit(ui.cached_render(font_small, 
                 "CONNECTION: " + str(test.get("detail", "")).upper(), True, col),
                 (cx, y))
 
         # What the room is, in the game's own voice.
         ey = explain_top
-        self.screen.blit(font_tiny.render("HOW THIS WORKS", True, (120, 45, 45)),
+        self.screen.blit(ui.cached_render(font_tiny, "HOW THIS WORKS", True, (120, 45, 45)),
                          (cx, ey))
         ey += font_tiny.get_linesize()
         for line in ONLINE_EXPLAINER:
-            self.screen.blit(font_tiny.render(line, True, (140, 140, 140)),
+            self.screen.blit(ui.cached_render(font_tiny, line, True, (140, 140, 140)),
                              (cx, ey))
             ey += font_tiny.get_linesize()
         for line in ONLINE_LOBBY_BLURB:
-            self.screen.blit(font_tiny.render(line, True, (110, 90, 60)),
+            self.screen.blit(ui.cached_render(font_tiny, line, True, (110, 90, 60)),
                              (cx, ey))
             ey += font_tiny.get_linesize()
 
@@ -2615,9 +2739,10 @@ class Game:
         # still fits in the default window.
         self.online_layout_bottom = ey
 
-        self.screen.blit(font_small.render(
-            "[T] TEST CONNECTION   [N] RENAME   [UP/DOWN] MOVE   [ESC] BACK",
+        self.screen.blit(ui.cached_render(font_small, 
+            "TAP AN OPTION  •  TAP RENAME TO CHANGE YOUR NAME  •  TAP BACK TO RETURN",
             True, (80, 80, 80)), (cx, hint_y))
+        self._draw_back_button(w, font_small, y=hint_y - 6)
 
     def _draw_heading(self, text, w, h, font_large, y_factor=0.08):
         """Section titles get the website's glow + red/cyan glitch split."""
@@ -2627,12 +2752,35 @@ class Game:
         ui.render_glitch_text(self.screen, text, font_large, x, y, self.now,
                               color=config.COLOR_RED)
 
+    def _draw_back_button(self, w, font, y=12):
+        """A real, visible back target — never a hidden gesture alone."""
+        self._draw_small_button("BACK", w - 116, int(y), 104, 38, font,
+                                "back", dim=(90, 70, 70))
+
+    def _draw_small_button(self, text, x, y, width, height, font, kind,
+                           idx=0, dim=(70, 70, 78)):
+        rect = pygame.Rect(int(x), int(y), int(width), int(height))
+        pygame.draw.rect(self.screen, (24, 24, 28), rect)
+        pygame.draw.rect(self.screen, dim, rect, 1)
+        label = ui.cached_render(font, text, True, (190, 180, 180))
+        self.screen.blit(label, (rect.x + rect.width // 2 - label.get_width() // 2,
+                                 rect.y + rect.height // 2 - label.get_height() // 2))
+        self._touch_zone(rect.x, rect.y, rect.width, rect.height, kind, idx)
+
     def _draw_settings(self, w, h):
         font_large, font_med, font_small = self._fonts()
         self._draw_heading("SETTINGS", w, h, font_large)
         cat = self.settings_categories[self.settings_category_selected]
-        cat_surf = font_small.render("[ < ]  %s  [ > ]  (TAB to cycle)" % cat, True, (120, 120, 120))
-        self.screen.blit(cat_surf, (int(w * 0.08), int(h * 0.18)))
+        cat_y = int(h * 0.18)
+        cat_surf = ui.cached_render(font_small, "<    %s    >" % cat, True, (140, 120, 120))
+        self.screen.blit(cat_surf, (int(w * 0.08), cat_y))
+        # Category chips are tap targets in their own right; the arrows are not
+        # decoration any more.
+        self._touch_zone(int(w * 0.08) - 8, cat_y - 6, 40, cat_surf.get_height() + 12,
+                         "settings_cat", -1)
+        right_x = int(w * 0.08) + cat_surf.get_width() - 32
+        self._touch_zone(right_x, cat_y - 6, 40, cat_surf.get_height() + 12,
+                         "settings_cat", 1)
         start_y = int(h * 0.24)
         pitch = font_med.get_linesize() + 10
         hint_y = h - 60
@@ -2647,8 +2795,6 @@ class Game:
             scroll = self.settings_selected - visible + 1
         scroll = max(0, min(scroll, max(0, total - visible)))
         self.settings_scroll = scroll
-        s = self.game_state.get("settings", {})
-        kb = s.get("keybinds", {})
         for row, i in enumerate(range(scroll, min(total, scroll + visible))):
             option = self.settings_options[i]
             color = config.COLOR_WHITE if i == self.settings_selected else (110, 110, 110)
@@ -2657,22 +2803,9 @@ class Game:
                 idx = self.settings_idx.get(option, 0)
                 value = config.SETTING_OPTIONS[option][idx % len(config.SETTING_OPTIONS[option])]
                 label = "%s%s   [%s]" % (prefix, option, value)
-            elif option.startswith("Rebind:"):
-                keymap = {
-                    "Rebind: Up": kb.get("up", "UP"),
-                    "Rebind: Down": kb.get("down", "DOWN"),
-                    "Rebind: Confirm": kb.get("confirm", "RETURN"),
-                    "Rebind: Back/Pause": kb.get("back", "ESCAPE"),
-                }
-                val = keymap.get(option, "?")
-                if getattr(self, "rebinding", None) == option and i == self.settings_selected:
-                    label = "%s%s   [PRESS KEY...]" % (prefix, option)
-                    color = (200, 60, 60)
-                else:
-                    label = "%s%s   [%s]" % (prefix, option, val)
             else:
                 label = prefix + option
-            surf = font_med.render(label, True, color)
+            surf = ui.cached_render(font_med, label, True, color)
             y = start_y + row * pitch
             self.screen.blit(surf, (int(w * 0.08), y))
             if i == self.settings_selected:
@@ -2682,18 +2815,12 @@ class Game:
             self._touch_zone(int(w * 0.08) - 8, y, int(w * 0.8) + 16,
                              pitch - 2, "settings", i)
         if total > visible:
-            more = font_small.render("(%d/%d)" % (self.settings_selected + 1, total), True, (90, 90, 90))
+            more = ui.cached_render(font_small, "(%d/%d)" % (self.settings_selected + 1, total), True, (90, 90, 90))
             self.screen.blit(more, (w - more.get_width() - 12, int(h * 0.18)))
-        if getattr(self, "rebinding", None):
-            hint = font_small.render("Press any key to bind (ESC to cancel)", True, (160, 80, 80))
-        else:
-            hint = font_small.render("TAP: CHANGE/REBIND    [TAB/</>] CATEGORY    [ESC] BACK" if IS_ANDROID
-                                     else "[ENTER] CHANGE/REBIND    [TAB/LEFT/RIGHT] CATEGORY    [ESC] BACK", True, (80, 80, 80))
+        hint = ui.cached_render(font_small, "TAP A CATEGORY  •  TAP A VALUE TO CHANGE  •  TAP BACK TO RETURN",
+                                 True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
-        # A rejected rebind says so, and says why.
-        if getattr(self, "rebind_error", "") and self.now < getattr(self, "rebind_error_until", 0.0):
-            err = font_small.render("CANNOT BIND: %s" % self.rebind_error, True, (200, 60, 60))
-            self.screen.blit(err, (int(w * 0.08), h - 76))
+        self._draw_back_button(w, font_small)
 
     def _draw_about(self, w, h):
         font_large, font_med, font_small = self._fonts()
@@ -2702,7 +2829,7 @@ class Game:
         for i, option in enumerate(options):
             color = config.COLOR_WHITE if i == self.about_selected else (110, 110, 110)
             prefix = "> " if i == self.about_selected else "  "
-            surf = font_small.render(prefix + option, True, color)
+            surf = ui.cached_render(font_small, prefix + option, True, color)
             y = int(h * 0.16) + i * (font_small.get_linesize() + 6)
             self.screen.blit(surf, (int(w * 0.08), y))
             if i == self.about_selected:
@@ -2719,7 +2846,7 @@ class Game:
                                % (self.update_available.get("version", "?"),
                                   "Tap the banner on the title screen to download."
                                   if IS_ANDROID else
-                                  "Press U on the title screen to open the download page."))
+                                  "Tap the banner on the title screen to open the download page."))
             ui.render_text_block(self.screen, about_text, font_small, config.COLOR_WHITE,
                                  int(w * 0.08), int(h * 0.30), int(w * 0.8))
         elif self.about_selected == 1:
@@ -2731,9 +2858,9 @@ class Game:
         self._draw_heading("HELP", w, h, font_large)
         ui.render_text_block(self.screen, self.help_text, font_small, config.COLOR_WHITE,
                              int(w * 0.08), int(h * 0.22), int(w * 0.8))
-        hint = font_small.render("TAP ANYWHERE TO GO BACK" if IS_ANDROID else "[ESC] BACK",
-                                 True, (80, 80, 80))
+        hint = ui.cached_render(font_small, "TAP ANYWHERE TO RETURN", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        self._draw_back_button(w, font_small)
         self._touch_zone(0, 0, w, h, "back")   # read-only screen: any tap leaves
 
     def _draw_logs(self, w, h):
@@ -2749,30 +2876,36 @@ class Game:
                                      int(w * 0.08), y, int(w * 0.8))
                 y += ui.wrapped_line_count(line, font_small, color, int(w * 0.8)) * (font_small.get_linesize() + 4)
             y += 8
-        hint = font_small.render("TAP ANYWHERE TO GO BACK" if IS_ANDROID else "[ESC] BACK",
-                                 True, (80, 80, 80))
+        hint = ui.cached_render(font_small, "TAP ANYWHERE TO RETURN", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        self._draw_back_button(w, font_small)
         self._touch_zone(0, 0, w, h, "back")   # read-only screen: any tap leaves
 
     def _draw_pause(self, w, h):
         font_large, font_med, font_small = self._fonts()
-        overlay = pygame.Surface((w, h), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 170))
-        self.screen.blit(overlay, (0, 0))
-        title = font_large.render("PAUSED", True, config.COLOR_WHITE)
+        # A full-screen alpha blit costs ~150 ms on this phone's software
+        # blitter. A solid opaque fill is a straight RGB write and effectively
+        # free, so the pause screen uses a flat dark background instead of a
+        # translucent wash over the game.
+        self.screen.fill((18, 18, 22))
+        title = ui.cached_render(font_large, "PAUSED", True, config.COLOR_WHITE)
         self.screen.blit(title, (w // 2 - title.get_width() // 2, int(h * 0.22)))
         for i, opt in enumerate(self.pause_options):
             color = config.COLOR_WHITE if i == self.pause_selected else (110, 110, 110)
             prefix = "> " if i == self.pause_selected else "  "
-            surf = font_med.render(prefix + opt, True, color)
+            surf = ui.cached_render(font_med, prefix + opt, True, color)
             y = int(h * 0.38) + i * (font_med.get_linesize() + 14)
             self.screen.blit(surf, (int(w * 0.08), y))
             if i == self.pause_selected:
                 self._eye_focus_rect = (int(w * 0.08), y,
                                         max(1, surf.get_width()),
                                         max(1, surf.get_height()))
-        hint = font_small.render("[ESC] RESUME    [ENTER] SELECT", True, (80, 80, 80))
+            self._touch_zone(int(w * 0.08) - 8, y - 4,
+                             max(260, surf.get_width() + 20),
+                             font_med.get_linesize() + 8, "pause", i)
+        hint = ui.cached_render(font_small, "TAP AN OPTION  •  TAP RESUME TO RETURN", True, (80, 80, 80))
         self.screen.blit(hint, (int(w * 0.08), h - 50))
+        self._draw_back_button(w, font_small)
 
     # --- the watching eye ----------------------------------------------------
     # The eye never goes away. While the cursor is in the window it watches the
@@ -3112,7 +3245,7 @@ class Game:
             else:
                 msg = "close this window, then open it again for the next session."
             # Bright enough to read over the eye behind it.
-            surf = font_small.render(msg, True, (200, 32, 32))
+            surf = ui.cached_render(font_small, msg, True, (200, 32, 32))
             self.screen.blit(surf, (w // 2 - surf.get_width() // 2, h // 2 + 30))
             if self.now - self.exit_message_at > 2.0:
                 self.running = False
@@ -3153,7 +3286,7 @@ class Game:
                                      alpha_base=255, outline=config.TEXT_OUTLINE_COLOR)
                 if partial and int(self.now * 2.4) % 2 == 0:
                     cx, cy = ui.wrap_cursor_pos(partial, font_med, base_x, base_y, max_width)
-                    caret = font_med.render("_", True, t_color)
+                    caret = ui.cached_render(font_med, "_", True, t_color)
                     self.screen.blit(caret, (cx, cy))
             elif self.typing_state == "WAITING":
                 sway = self.game_state.get("settings", {}).get("sway_intensity", 1.0)
@@ -3179,8 +3312,14 @@ class Game:
                 # Readability wash: a calm patch of screen under the block, so
                 # the question doesn't drown in static and scanlines.
                 block_bottom = (opts_y + len(opts) * opts_gap) if opts else base_y + q_lines * line_h
-                ui.draw_readability_panel(self.screen, base_x - 20, base_y - 16,
-                                          max_width + 40, block_bottom - base_y + 30)
+                # Low mode has a plain black background (no vignette/dust), so
+                # a translucent black wash over it is invisible — skip the
+                # full-width alpha blit entirely.
+                low_perf = IS_ANDROID and str((self.game_state.get("settings", {}) or {})
+                                              .get("performance_mode", "Low")).lower() == "low"
+                if not low_perf:
+                    ui.draw_readability_panel(self.screen, base_x - 20, base_y - 16,
+                                              max_width + 40, block_bottom - base_y + 30)
                 # Website-style body text: red/cyan split + occasional jitter + sway.
                 ui.render_glitch_block(self.screen, text, font_med, t_color,
                                        base_x, base_y, max_width,
@@ -3213,7 +3352,7 @@ class Game:
             cam_x = w - cw - 20
             cam_y = h - chh - 40
             self.screen.blit(ui.webcam_surface, (cam_x, cam_y))
-            label = font_small.render("CAMERA FEED — ACTIVE", True, config.COLOR_RED)
+            label = ui.cached_render(font_small, "CAMERA FEED — ACTIVE", True, config.COLOR_RED)
             self.screen.blit(label, (cam_x, cam_y + chh + 2))
 
         # picture scare
@@ -3244,6 +3383,11 @@ class Game:
 
         self._draw_malware_overlays(w, h)
         self._draw_giant_eye(w, h)
+
+        # A real on-screen pause target. The back gesture is unreliable with
+        # gesture navigation, and the help text promises a visible way out.
+        self._draw_small_button("PAUSE", w - 124, 8, 116, 40, font_small,
+                                "pause_open", dim=(90, 70, 70))
 
     def _draw_giant_eye(self, w, h):
         """A scare that replaces the whole frame with one enormous angry eye."""
@@ -3432,11 +3576,18 @@ class Game:
                     # Subtle hover parallax — the window leans toward the cursor
                     sw, sh = self.screen.get_size()
                     os_layer.set_hover_offset(event.pos[0], event.pos[1], sw, sh)
-                elif event.type == pygame.FINGERDOWN and IS_ANDROID:
-                    # Touch: FINGER* coordinates are normalized 0..1 over the
-                    # window, so scale them to the current framebuffer.
-                    w_px, h_px = self.screen.get_size()
-                    self._handle_touch(event.x * w_px, event.y * h_px)
+                elif event.type == pygame.FINGERDOWN:
+                    # SDL reports 0..1 window coordinates. Do NOT gate this on
+                    # a platform string: if the bootstrap ever reports Linux
+                    # instead of Android, a gate makes every tap a no-op.
+                    self._queue_touch(event.x, event.y, "finger")
+                elif event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "touch", False):
+                    # SDL also sends primary touches as mouse events unless
+                    # separate-mouse-and-touch is set. Accept that path too.
+                    disp = self._display_surface()
+                    dw, dh = disp.get_size()
+                    self._queue_touch(event.pos[0] / max(1, dw),
+                                      event.pos[1] / max(1, dh), "mouse")
 
             os_layer.update_window_anim()
             os_layer.update_mouse_anim()
@@ -3448,6 +3599,9 @@ class Game:
 
             self._update()
             self._draw()
+            # Zones were rebuilt by _draw(), so this tap is tested against the
+            # frame the player actually saw rather than the previous one.
+            self._dispatch_pending_touch()
             self._maybe_check_updates()
 
         audio.stop_ambience()
