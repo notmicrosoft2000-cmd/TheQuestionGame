@@ -208,7 +208,7 @@ check("the evidence page separates the two remastered builds",
 
 print("== the itch.io description is HTML, not markdown ==")
 itch = read("store-assets/ITCH_IO.html")
-check("itch page is an HTML fragment", "<h1>" in itch and "<img" in itch)
+check("itch page is an HTML fragment", "<h1" in itch and "<img" in itch)
 # The upload instructions live in an HTML comment and may mention those tags.
 itch_body = re.sub(r"<!--.*?-->", "", itch, flags=re.S)
 check("itch page has no document wrapper",
